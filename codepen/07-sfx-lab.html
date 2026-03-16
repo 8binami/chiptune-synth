@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SFX Lab — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: SFX Lab                                ║
+  ║  Sound effect design laboratory with presets,    ║
+  ║  real-time parameter tweaking, dual visualizer,  ║
+  ║  and JSON config export                          ║
+  ║                                                  ║
+  ║  Exploits: playPreset, loadPreset, updateTrack,  ║
+  ║  updateEnvelope, getWaveformData,                ║
+  ║  getFrequencyData, pitchEnv, filter, vibrato     ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen Setup → Settings → JS → Add External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#c0c0c0;font-family:'Courier New',monospace;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden}
+
+/* ── Overlay ── */
+.overlay{position:fixed;inset:0;background:#0a0a0fee;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+.overlay h1{font-size:2rem;color:#00ff88;text-shadow:0 0 40px #00ff8844;letter-spacing:2px}
+.overlay .sub{color:#00ff8888;font-size:.7rem;margin-top:8px;letter-spacing:3px;text-transform:uppercase}
+.overlay .click{color:#00ff88;font-size:.9rem;margin-top:30px;animation:pulse 1.5s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.overlay .grid{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 39px,#00ff8808 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,#00ff8808 40px);pointer-events:none}
+.hidden{display:none!important}
+
+/* ── Header ── */
+.header{text-align:center;padding:10px 0 6px;border-bottom:1px solid #00ff8818}
+.header h1{font-size:1.1rem;color:#00ff88;text-shadow:0 0 20px #00ff8833;letter-spacing:1px}
+.header p{color:#333;font-size:.5rem;margin-top:2px}
+
+/* ── Main layout ── */
+.lab{display:flex;flex:1;min-height:0}
+
+/* ── Left: Presets ── */
+.presets{width:160px;padding:10px;border-right:1px solid #00ff8812;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.presets h3{font-size:.55rem;color:#00ff8866;text-transform:uppercase;letter-spacing:2px;margin-bottom:4px}
+.preset-btn{display:flex;align-items:center;gap:8px;background:#0d0d14;border:1px solid #1a1a28;border-radius:6px;padding:7px 10px;cursor:pointer;font:.6rem 'Courier New',monospace;color:#666;transition:.15s;user-select:none}
+.preset-btn:hover{border-color:#00ff8844;color:#00ff88aa;background:#0f0f18}
+.preset-btn.active{border-color:#00ff88;color:#00ff88;background:#00ff880a;box-shadow:0 0 12px #00ff8818}
+.preset-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.preset-name{flex:1}
+
+/* ── Center: Visualizers ── */
+.center{flex:1;display:flex;flex-direction:column;padding:10px;gap:8px;min-width:0}
+.viz-label{font-size:.5rem;color:#00ff8844;text-transform:uppercase;letter-spacing:2px}
+.viz-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:6px}
+.viz-wrap canvas{width:100%;flex:1;border-radius:8px;border:1px solid #00ff8810;background:#080810}
+.play-row{display:flex;gap:8px;align-items:center}
+.play-btn{background:#00ff8818;border:1px solid #00ff8844;color:#00ff88;padding:6px 20px;border-radius:6px;cursor:pointer;font:600 .65rem 'Courier New',monospace;transition:.15s;letter-spacing:1px}
+.play-btn:hover{background:#00ff8833;box-shadow:0 0 14px #00ff8822}
+.export-btn{background:#0d0d14;border:1px solid #1a1a28;color:#555;padding:6px 14px;border-radius:6px;cursor:pointer;font:.6rem 'Courier New',monospace;transition:.15s}
+.export-btn:hover{border-color:#00ff8844;color:#00ff88aa}
+
+/* ── Export code block ── */
+.export-block{background:#060610;border:1px solid #00ff8815;border-radius:6px;padding:8px 10px;font-size:.5rem;color:#00ff8888;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto;line-height:1.4}
+.export-block::-webkit-scrollbar{width:4px}
+.export-block::-webkit-scrollbar-thumb{background:#00ff8833;border-radius:2px}
+
+/* ── Right: Tweakers ── */
+.tweakers{width:200px;padding:10px;border-left:1px solid #00ff8812;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex-shrink:0}
+.tweakers::-webkit-scrollbar{width:3px}
+.tweakers::-webkit-scrollbar-thumb{background:#00ff8822;border-radius:2px}
+.twk-section{background:#0d0d14;border:1px solid #1a1a28;border-radius:8px;padding:8px 10px}
+.twk-title{font-size:.5rem;color:#00ff8855;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;border-bottom:1px solid #00ff8810;padding-bottom:4px}
+
+/* ── Waveform buttons ── */
+.wave-btns{display:flex;gap:3px;flex-wrap:wrap}
+.wave-btn{background:#0a0a14;border:1px solid #1a1a2e;color:#555;padding:4px 8px;border-radius:4px;cursor:pointer;font:.5rem 'Courier New',monospace;transition:.15s;flex:1;text-align:center;min-width:30px}
+.wave-btn:hover{color:#888;border-color:#333}
+.wave-btn.on{border-color:#00ff88;color:#00ff88;background:#00ff880a}
+
+/* ── Sliders ── */
+.twk-slider{display:flex;align-items:center;gap:6px;margin-top:4px}
+.twk-slider label{font-size:.45rem;color:#555;text-transform:uppercase;letter-spacing:1px;min-width:32px}
+.twk-slider input[type=range]{-webkit-appearance:none;flex:1;height:3px;background:#1a1a2e;border-radius:2px;outline:none;cursor:pointer}
+.twk-slider input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:radial-gradient(circle,#00ff88,#009955);border-radius:50%;cursor:pointer;box-shadow:0 0 8px #00ff8844}
+.twk-slider .sv{font-size:.45rem;color:#00ff8866;min-width:28px;text-align:right}
+
+/* ── ADSR vertical sliders ── */
+.adsr-row{display:flex;gap:6px;justify-content:center;align-items:flex-end;height:80px;margin-top:4px}
+.adsr-col{display:flex;flex-direction:column;align-items:center;gap:2px;flex:1}
+.adsr-col label{font-size:.45rem;color:#555;text-transform:uppercase;letter-spacing:1px}
+.adsr-col input[type=range]{-webkit-appearance:none;writing-mode:bt-lr;-webkit-appearance:slider-vertical;width:6px;height:60px;background:#1a1a2e;border-radius:2px;outline:none;cursor:pointer}
+.adsr-col input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:6px;background:#00ff88;border-radius:2px;cursor:pointer;box-shadow:0 0 6px #00ff8844}
+.adsr-col .sv{font-size:.4rem;color:#00ff8866}
+
+/* ── Filter toggle ── */
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.toggle{width:32px;height:16px;background:#1a1a2e;border-radius:8px;cursor:pointer;position:relative;transition:.2s;border:1px solid #222}
+.toggle.on{background:#00ff8833;border-color:#00ff8866}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;background:#555;border-radius:50%;transition:.2s}
+.toggle.on::after{left:17px;background:#00ff88;box-shadow:0 0 6px #00ff8844}
+.toggle-label{font-size:.5rem;color:#555;text-transform:uppercase;letter-spacing:1px}
+
+/* ── Knob ── */
+.knob-row{display:flex;gap:12px;justify-content:center;margin-top:4px}
+.knob-wrap{text-align:center}
+.knob-wrap label{display:block;font-size:.4rem;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.knob{width:44px;height:44px;border-radius:50%;background:conic-gradient(from 220deg,#1a1a2e 0deg,#00ff8833 0deg,#00ff8833 0deg,#1a1a2e 0deg);border:2px solid #1a1a2e;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center}
+.knob.active{border-color:#00ff8844}
+.knob-indicator{width:2px;height:14px;background:#00ff88;border-radius:1px;position:absolute;top:4px;transform-origin:bottom center;box-shadow:0 0 4px #00ff8844}
+.knob-wrap .sv{font-size:.4rem;color:#00ff8866;margin-top:2px}
+
+/* ── Footer ── */
+.foot{text-align:center;padding:6px;font-size:.45rem;color:#1a1a28;border-top:1px solid #00ff8808}
+.foot a{color:#00ff8844;text-decoration:none}
+.foot a:hover{color:#00ff88}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<!-- Click-to-start overlay -->
+<div class="overlay" id="overlay">
+  <div class="grid"></div>
+  <h1>SFX LAB</h1>
+  <div class="sub">Sound Design Laboratory</div>
+  <div class="click">&#9654; Click to initialize</div>
+</div>
+
+<div class="header">
+  <h1>&#9881; SFX Lab</h1>
+  <p>ChiptuneSynth Sound Effect Laboratory</p>
+</div>
+
+<div class="lab">
+  <!-- Left: Preset buttons -->
+  <div class="presets">
+    <h3>Presets</h3>
+    <div id="presetList"></div>
+  </div>
+
+  <!-- Center: Visualizers -->
+  <div class="center">
+    <div class="viz-wrap">
+      <span class="viz-label">Waveform</span>
+      <canvas id="cvWave"></canvas>
+      <span class="viz-label">Spectrum</span>
+      <canvas id="cvFreq"></canvas>
+    </div>
+    <div class="play-row">
+      <button class="play-btn" id="btnPlay">&#9654; PLAY</button>
+      <button class="export-btn" id="btnExport">&#123; &#125; Export Config</button>
+    </div>
+    <div id="exportArea" class="hidden">
+      <div class="export-block" id="exportCode"></div>
+    </div>
+  </div>
+
+  <!-- Right: Tweakers -->
+  <div class="tweakers">
+    <!-- Waveform -->
+    <div class="twk-section">
+      <div class="twk-title">Waveform</div>
+      <div class="wave-btns" id="waveBtns">
+        <button class="wave-btn" data-w="square">SQR</button>
+        <button class="wave-btn" data-w="sawtooth">SAW</button>
+        <button class="wave-btn" data-w="triangle">TRI</button>
+        <button class="wave-btn" data-w="sine">SIN</button>
+        <button class="wave-btn" data-w="noise">NSE</button>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div class="twk-section">
+      <div class="twk-title">Volume</div>
+      <div class="twk-slider">
+        <label>Vol</label>
+        <input type="range" id="sVol" min="0" max="100" value="30">
+        <span class="sv" id="vVol">0.30</span>
+      </div>
+    </div>
+
+    <!-- ADSR -->
+    <div class="twk-section">
+      <div class="twk-title">Envelope (ADSR)</div>
+      <div class="adsr-row">
+        <div class="adsr-col">
+          <input type="range" id="sA" min="1" max="500" value="1" orient="vertical">
+          <label>A</label>
+          <span class="sv" id="vA">1ms</span>
+        </div>
+        <div class="adsr-col">
+          <input type="range" id="sD" min="1" max="1000" value="200" orient="vertical">
+          <label>D</label>
+          <span class="sv" id="vD">200ms</span>
+        </div>
+        <div class="adsr-col">
+          <input type="range" id="sS" min="0" max="100" value="0" orient="vertical">
+          <label>S</label>
+          <span class="sv" id="vS">0.00</span>
+        </div>
+        <div class="adsr-col">
+          <input type="range" id="sR" min="1" max="1000" value="20" orient="vertical">
+          <label>R</label>
+          <span class="sv" id="vR">20ms</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="twk-section">
+      <div class="twk-title">Filter</div>
+      <div class="toggle-row">
+        <div class="toggle" id="filterToggle"></div>
+        <span class="toggle-label">Enable</span>
+      </div>
+      <div class="knob-row">
+        <div class="knob-wrap">
+          <label>Cutoff</label>
+          <div class="knob" id="knobCut" data-min="100" data-max="20000" data-val="20000">
+            <div class="knob-indicator" id="indCut"></div>
+          </div>
+          <div class="sv" id="vCut">20k</div>
+        </div>
+        <div class="knob-wrap">
+          <label>Reso</label>
+          <div class="knob" id="knobRes" data-min="0" data-max="25" data-val="1">
+            <div class="knob-indicator" id="indRes"></div>
+          </div>
+          <div class="sv" id="vRes">1.0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pitch Envelope -->
+    <div class="twk-section">
+      <div class="twk-title">Pitch Envelope</div>
+      <div class="twk-slider">
+        <label>Amt</label>
+        <input type="range" id="sPitch" min="-48" max="48" value="0">
+        <span class="sv" id="vPitch">0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a>
+  &mdash; @8bitforge/chiptune-synth &mdash;
+  <a href="https://www.npmjs.com/package/@8bitforge/chiptune-synth" target="_blank">npm</a>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+/**
+ * SFX Lab — powered by ChiptuneSynth
+ * Sound effect design laboratory with presets,
+ * real-time parameter tweaking, dual visualizer,
+ * and JSON config export.
+ */
+
+const synth = new ChiptuneSynth();
+let ready = false;
+
+/* ── Preset definitions with colors ── */
+const PRESET_META = [
+  { name: 'laser',     label: 'Laser',     color: '#ff3355' },
+  { name: 'coin',      label: 'Coin',      color: '#ffd700' },
+  { name: 'jump',      label: 'Jump',      color: '#33ccff' },
+  { name: 'explosion', label: 'Explosion', color: '#ff6633' },
+  { name: 'powerup',   label: 'Power Up',  color: '#aa55ff' },
+  { name: 'hit',       label: 'Hit',       color: '#ff4444' },
+  { name: 'blip',      label: 'Blip',      color: '#55ffaa' },
+  { name: 'bass',      label: 'Bass',      color: '#4488ff' },
+  { name: 'shoot',     label: 'Shoot',     color: '#ffaa33' },
+  { name: '1up',       label: '1-Up',      color: '#44ff44' }
+];
+
+/* ── Current state (mirrors what the synth is configured with) ── */
+let current = {
+  name: 'laser',
+  type: 'square',
+  vol: 0.35,
+  freq: 880,
+  dur: 0.25,
+  duty: 0.25,
+  pitchEnv: -24,
+  env: { attack: 0.001, decay: 0.20, sustain: 0.00, release: 0.02 },
+  filterEnabled: false,
+  filterCutoff: 20000,
+  filterQ: 1,
+  vib: { rate: 0, depth: 0 }
+};
+
+let activePreset = null;
+
+/* ── Build preset buttons ── */
+const presetList = document.getElementById('presetList');
+PRESET_META.forEach(pm => {
+  const btn = document.createElement('div');
+  btn.className = 'preset-btn';
+  btn.dataset.name = pm.name;
+  btn.innerHTML = '<div class="preset-dot" style="background:' + pm.color + '"></div><span class="preset-name">' + pm.label + '</span>';
+  btn.onclick = () => selectPreset(pm.name);
+  presetList.appendChild(btn);
+});
+
+/* ── Preset data lookup (read from the lib's internal presets) ── */
+function getPresetData(name) {
+  // We play the preset to configure the synth, then read back
+  // But we also have the known preset values hardcoded
+  const presets = {
+    laser:     { track:3, freq:880,    dur:0.25, type:'square',   vol:0.35, duty:0.25,  env:{attack:0.001,decay:0.20,sustain:0.00,release:0.02}, pitchEnv:-24, vib:null },
+    coin:      { track:0, freq:1318.5, dur:0.12, type:'square',   vol:0.30, duty:0.50,  env:{attack:0.001,decay:0.08,sustain:0.00,release:0.02}, pitchEnv:5,   vib:null },
+    jump:      { track:2, freq:200,    dur:0.20, type:'sine',     vol:0.50, duty:0.50,  env:{attack:0.001,decay:0.15,sustain:0.00,release:0.02}, pitchEnv:12,  vib:null },
+    explosion: { track:2, freq:100,    dur:0.50, type:'noise',    vol:0.55, duty:0.50,  env:{attack:0.001,decay:0.40,sustain:0.00,release:0.05}, pitchEnv:0,   vib:null },
+    powerup:   { track:3, freq:440,    dur:0.60, type:'square',   vol:0.30, duty:0.50,  env:{attack:0.01, decay:0.50,sustain:0.00,release:0.05}, pitchEnv:24,  vib:{rate:6,depth:8} },
+    hit:       { track:2, freq:150,    dur:0.15, type:'noise',    vol:0.60, duty:0.50,  env:{attack:0.001,decay:0.10,sustain:0.00,release:0.02}, pitchEnv:0,   vib:null },
+    blip:      { track:0, freq:1046.5, dur:0.06, type:'square',   vol:0.25, duty:0.50,  env:{attack:0.001,decay:0.04,sustain:0.00,release:0.01}, pitchEnv:0,   vib:null },
+    bass:      { track:1, freq:65.41,  dur:0.30, type:'triangle', vol:0.45, duty:0.50,  env:{attack:0.005,decay:0.20,sustain:0.00,release:0.05}, pitchEnv:0,   vib:null },
+    shoot:     { track:3, freq:1200,   dur:0.15, type:'square',   vol:0.30, duty:0.125, env:{attack:0.001,decay:0.12,sustain:0.00,release:0.01}, pitchEnv:-36, vib:null },
+    '1up':     { track:0, freq:659.25, dur:0.08, type:'square',   vol:0.28, duty:0.50,  env:{attack:0.001,decay:0.06,sustain:0.00,release:0.01}, pitchEnv:7,   vib:null }
+  };
+  return presets[name] || null;
+}
+
+/* ── Select and play a preset ── */
+function selectPreset(name) {
+  if (!ready) return;
+  const data = getPresetData(name);
+  if (!data) return;
+
+  // Mark active button
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector('.preset-btn[data-name="' + name + '"]');
+  if (btn) btn.classList.add('active');
+  activePreset = name;
+
+  // Copy into current state
+  current.name = name;
+  current.type = data.type;
+  current.vol = data.vol;
+  current.freq = data.freq;
+  current.dur = data.dur;
+  current.duty = data.duty;
+  current.pitchEnv = data.pitchEnv;
+  current.env = { attack: data.env.attack, decay: data.env.decay, sustain: data.env.sustain, release: data.env.release };
+  current.filterEnabled = false;
+  current.filterCutoff = 20000;
+  current.filterQ = 1;
+  current.vib = data.vib ? { rate: data.vib.rate, depth: data.vib.depth } : { rate: 0, depth: 0 };
+
+  // Update UI
+  syncUIFromCurrent();
+
+  // Play it
+  playCurrentSound();
+}
+
+/* ── Play the current tweaked settings ── */
+function playCurrentSound() {
+  if (!ready) return;
+  const tr = getTrackForCurrent();
+
+  synth.updateTrack(tr, {
+    type: current.type,
+    volume: current.vol,
+    dutyCycle: current.duty,
+    pitchEnv: current.pitchEnv,
+    filterEnabled: current.filterEnabled,
+    filterType: 'lowpass',
+    filterCutoff: current.filterCutoff,
+    filterQ: current.filterQ
+  });
+  synth.updateEnvelope(tr, {
+    attack: current.env.attack,
+    decay: current.env.decay,
+    sustain: current.env.sustain,
+    release: current.env.release
+  });
+  if (current.vib && (current.vib.rate > 0 || current.vib.depth > 0)) {
+    synth.updateVibrato(tr, { rate: current.vib.rate, depth: current.vib.depth });
+  } else {
+    synth.updateVibrato(tr, { rate: 0, depth: 0 });
+  }
+
+  // Handle 1up special case
+  if (activePreset === '1up') {
+    var t = synth.audioContext.currentTime;
+    synth.playNote(current.freq, tr, current.dur, t);
+    synth.playNote(current.freq * 1.26, tr, current.dur, t + 0.08);
+    synth.playNote(current.freq * 1.5, tr, current.dur, t + 0.16);
+  } else {
+    synth.playNote(current.freq, tr, current.dur);
+  }
+}
+
+function getTrackForCurrent() {
+  const data = getPresetData(activePreset || 'laser');
+  return data ? data.track : 0;
+}
+
+/* ── Sync UI controls from current state ── */
+function syncUIFromCurrent() {
+  // Waveform buttons
+  document.querySelectorAll('.wave-btn').forEach(b => {
+    b.classList.toggle('on', b.dataset.w === current.type);
+  });
+
+  // Volume
+  document.getElementById('sVol').value = Math.round(current.vol * 100);
+  document.getElementById('vVol').textContent = current.vol.toFixed(2);
+
+  // ADSR
+  document.getElementById('sA').value = Math.round(current.env.attack * 1000);
+  document.getElementById('vA').textContent = Math.round(current.env.attack * 1000) + 'ms';
+  document.getElementById('sD').value = Math.round(current.env.decay * 1000);
+  document.getElementById('vD').textContent = Math.round(current.env.decay * 1000) + 'ms';
+  document.getElementById('sS').value = Math.round(current.env.sustain * 100);
+  document.getElementById('vS').textContent = current.env.sustain.toFixed(2);
+  document.getElementById('sR').value = Math.round(current.env.release * 1000);
+  document.getElementById('vR').textContent = Math.round(current.env.release * 1000) + 'ms';
+
+  // Filter
+  const ft = document.getElementById('filterToggle');
+  ft.classList.toggle('on', current.filterEnabled);
+  updateKnob('knobCut', 'indCut', 'vCut', current.filterCutoff, 100, 20000);
+  updateKnob('knobRes', 'indRes', 'vRes', current.filterQ, 0, 25);
+
+  // Pitch envelope
+  document.getElementById('sPitch').value = current.pitchEnv;
+  document.getElementById('vPitch').textContent = current.pitchEnv;
+}
+
+/* ── Knob visual update ── */
+function updateKnob(knobId, indId, valId, val, min, max) {
+  const ratio = (val - min) / (max - min);
+  const angle = -135 + ratio * 270; // -135 to +135 degrees
+  document.getElementById(indId).style.transform = 'rotate(' + angle + 'deg)';
+  const knobEl = document.getElementById(knobId);
+  knobEl.dataset.val = val;
+  // Conic gradient for visual fill
+  const startDeg = 220;
+  const fillDeg = ratio * 270;
+  knobEl.style.background = 'conic-gradient(from ' + startDeg + 'deg, #1a1a2e 0deg, #00ff8833 0deg, #00ff8833 ' + fillDeg + 'deg, #1a1a2e ' + fillDeg + 'deg)';
+  // Value display
+  if (valId === 'vCut') {
+    document.getElementById(valId).textContent = val >= 10000 ? (val / 1000 | 0) + 'k' : Math.round(val);
+  } else {
+    document.getElementById(valId).textContent = (typeof val === 'number' ? val.toFixed(1) : val);
+  }
+}
+
+/* ── Waveform buttons ── */
+document.querySelectorAll('.wave-btn').forEach(b => {
+  b.onclick = () => {
+    document.querySelectorAll('.wave-btn').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    current.type = b.dataset.w;
+    applyTweaks();
+  };
+});
+
+/* ── Slider handlers ── */
+function bindSlider(id, valId, fmt, apply) {
+  const el = document.getElementById(id);
+  el.addEventListener('input', () => {
+    const v = +el.value;
+    document.getElementById(valId).textContent = fmt(v);
+    apply(v);
+    applyTweaks();
+  });
+}
+
+bindSlider('sVol', 'vVol', v => (v / 100).toFixed(2), v => { current.vol = v / 100; });
+bindSlider('sA', 'vA', v => v + 'ms', v => { current.env.attack = v / 1000; });
+bindSlider('sD', 'vD', v => v + 'ms', v => { current.env.decay = v / 1000; });
+bindSlider('sS', 'vS', v => (v / 100).toFixed(2), v => { current.env.sustain = v / 100; });
+bindSlider('sR', 'vR', v => v + 'ms', v => { current.env.release = v / 1000; });
+bindSlider('sPitch', 'vPitch', v => '' + v, v => { current.pitchEnv = v; });
+
+/* ── Apply current tweaks to the synth track (without playing) ── */
+function applyTweaks() {
+  if (!ready) return;
+  const tr = getTrackForCurrent();
+  synth.updateTrack(tr, {
+    type: current.type,
+    volume: current.vol,
+    dutyCycle: current.duty,
+    pitchEnv: current.pitchEnv,
+    filterEnabled: current.filterEnabled,
+    filterType: 'lowpass',
+    filterCutoff: current.filterCutoff,
+    filterQ: current.filterQ
+  });
+  synth.updateEnvelope(tr, {
+    attack: current.env.attack,
+    decay: current.env.decay,
+    sustain: current.env.sustain,
+    release: current.env.release
+  });
+  synth.updateVibrato(tr, current.vib || { rate: 0, depth: 0 });
+}
+
+/* ── Filter toggle ── */
+document.getElementById('filterToggle').onclick = function () {
+  current.filterEnabled = !current.filterEnabled;
+  this.classList.toggle('on', current.filterEnabled);
+  applyTweaks();
+};
+
+/* ── Knob interaction (drag up/down) ── */
+function setupKnob(knobId, indId, valId, min, max, step, apply) {
+  const knobEl = document.getElementById(knobId);
+  let dragging = false, startY = 0, startVal = 0;
+
+  function onDown(e) {
+    dragging = true;
+    startY = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+    startVal = +knobEl.dataset.val;
+    knobEl.classList.add('active');
+    e.preventDefault();
+  }
+  function onMove(e) {
+    if (!dragging) return;
+    const y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+    const delta = (startY - y) * ((max - min) / 200);
+    let val = Math.max(min, Math.min(max, startVal + delta));
+    val = Math.round(val / step) * step;
+    updateKnob(knobId, indId, valId, val, min, max);
+    apply(val);
+    applyTweaks();
+  }
+  function onUp() {
+    dragging = false;
+    knobEl.classList.remove('active');
+  }
+
+  knobEl.addEventListener('mousedown', onDown);
+  knobEl.addEventListener('touchstart', onDown, { passive: false });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchend', onUp);
+}
+
+setupKnob('knobCut', 'indCut', 'vCut', 100, 20000, 100, v => { current.filterCutoff = v; });
+setupKnob('knobRes', 'indRes', 'vRes', 0, 25, 0.5, v => { current.filterQ = v; });
+
+/* ── Play button ── */
+document.getElementById('btnPlay').onclick = () => { playCurrentSound(); };
+
+/* ── Export button ── */
+document.getElementById('btnExport').onclick = () => {
+  const area = document.getElementById('exportArea');
+  area.classList.toggle('hidden');
+  if (!area.classList.contains('hidden')) {
+    const config = {
+      preset: current.name,
+      waveform: current.type,
+      volume: +current.vol.toFixed(3),
+      frequency: current.freq,
+      duration: current.dur,
+      dutyCycle: current.duty,
+      pitchEnvelope: current.pitchEnv,
+      envelope: {
+        attack: current.env.attack,
+        decay: current.env.decay,
+        sustain: current.env.sustain,
+        release: current.env.release
+      },
+      filter: {
+        enabled: current.filterEnabled,
+        cutoff: current.filterCutoff,
+        resonance: current.filterQ
+      },
+      vibrato: current.vib
+    };
+    document.getElementById('exportCode').textContent = JSON.stringify(config, null, 2);
+  }
+};
+
+/* ── Dual Visualizer ── */
+const cvWave = document.getElementById('cvWave');
+const cvFreq = document.getElementById('cvFreq');
+const ctxW = cvWave.getContext('2d');
+const ctxF = cvFreq.getContext('2d');
+
+function resizeCanvases() {
+  const r = window.devicePixelRatio || 1;
+  [cvWave, cvFreq].forEach(cv => {
+    const rect = cv.getBoundingClientRect();
+    cv.width = rect.width * r;
+    cv.height = rect.height * r;
+    cv.getContext('2d').setTransform(r, 0, 0, r, 0, 0);
+  });
+}
+
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(resizeCanvases, 100);
+});
+
+/* ── Animation loop ── */
+function vizLoop() {
+  requestAnimationFrame(vizLoop);
+
+  const wRect = cvWave.getBoundingClientRect();
+  const fRect = cvFreq.getBoundingClientRect();
+  const wW = wRect.width, wH = wRect.height;
+  const fW = fRect.width, fH = fRect.height;
+
+  // Waveform
+  ctxW.fillStyle = '#080810';
+  ctxW.fillRect(0, 0, wW, wH);
+
+  const wd = synth.getWaveformData();
+  if (wd) {
+    // Center line
+    ctxW.strokeStyle = '#00ff8812';
+    ctxW.lineWidth = 1;
+    ctxW.beginPath();
+    ctxW.moveTo(0, wH / 2);
+    ctxW.lineTo(wW, wH / 2);
+    ctxW.stroke();
+
+    // Waveform line
+    ctxW.beginPath();
+    ctxW.strokeStyle = '#00ff88';
+    ctxW.lineWidth = 1.5;
+    ctxW.shadowColor = '#00ff88';
+    ctxW.shadowBlur = 6;
+    const step = wW / wd.length;
+    for (let i = 0; i < wd.length; i++) {
+      const y = wd[i] / 255 * wH;
+      i === 0 ? ctxW.moveTo(0, y) : ctxW.lineTo(i * step, y);
+    }
+    ctxW.stroke();
+    ctxW.shadowBlur = 0;
+  }
+
+  // Frequency spectrum
+  ctxF.fillStyle = '#080810';
+  ctxF.fillRect(0, 0, fW, fH);
+
+  const fd = synth.getFrequencyData();
+  if (fd) {
+    const bars = Math.min(128, fd.length);
+    const bw = fW / bars;
+    for (let i = 0; i < bars; i++) {
+      const v = fd[i * 2] / 255;
+      const h = v * fH * 0.9;
+      // Gradient green: darker at bottom, bright at top
+      const grad = ctxF.createLinearGradient(0, fH - h, 0, fH);
+      grad.addColorStop(0, '#00ff88');
+      grad.addColorStop(0.5, '#00cc66');
+      grad.addColorStop(1, '#005533');
+      ctxF.fillStyle = grad;
+      ctxF.fillRect(i * bw + 0.5, fH - h, bw - 1, h);
+    }
+  }
+}
+
+/* ── Init on overlay click ── */
+document.getElementById('overlay').addEventListener('click', async () => {
+  await synth.init();
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+  resizeCanvases();
+  vizLoop();
+  // Default: select laser
+  selectPreset('laser');
+});
+
+/* ── Initialize knob visuals ── */
+updateKnob('knobCut', 'indCut', 'vCut', 20000, 100, 20000);
+updateKnob('knobRes', 'indRes', 'vRes', 1, 0, 25);
+</script>
+</body>
+</html>

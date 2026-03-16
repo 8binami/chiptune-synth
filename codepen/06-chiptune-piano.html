@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Chiptune Piano — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: Chiptune Piano                         ║
+  ║  2-octave playable keyboard with 12 instrument   ║
+  ║  presets, waveform visualizer, sustain & octave   ║
+  ║  controls, full keyboard mapping                  ║
+  ║                                                  ║
+  ║  Uses: init, loadInstrument, playNoteByName,     ║
+  ║  stopNote, getWaveformData, updateVibrato        ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+  background:#0a0a0f;color:#fff;
+  font-family:'Courier New',monospace;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;overflow:hidden;user-select:none;
+}
+
+/* ── Header ── */
+.header{text-align:center;margin-bottom:14px}
+.header h1{font-size:1.4rem;color:#00f0ff;text-shadow:0 0 20px #00f0ff33;letter-spacing:2px}
+.header p{font-size:.55rem;color:#444;margin-top:4px}
+
+/* ── Container ── */
+.container{
+  background:#0e0e18;border:1px solid #00f0ff12;border-radius:16px;
+  padding:20px 24px;box-shadow:0 0 80px #00f0ff06;
+  width:min(720px,95vw);
+}
+
+/* ── Instrument Selector ── */
+.instruments{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin-bottom:14px}
+.inst-btn{
+  padding:5px 10px;border-radius:6px;border:1px solid #1a1a2e;
+  background:#0c0c18;color:#666;font-size:.55rem;font-family:inherit;
+  cursor:pointer;transition:.15s;
+}
+.inst-btn:hover{border-color:#a855f744;color:#a855f7}
+.inst-btn.active{
+  border-color:#a855f7;color:#fff;background:#a855f718;
+  box-shadow:0 0 12px #a855f722;
+}
+
+/* ── Controls Row ── */
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.ctrl-btn{
+  padding:4px 12px;border-radius:6px;border:1px solid #1a1a2e;
+  background:#0c0c18;color:#666;font-size:.6rem;font-family:inherit;
+  cursor:pointer;transition:.15s;
+}
+.ctrl-btn:hover{border-color:#00f0ff44;color:#00f0ff}
+.ctrl-btn.active{border-color:#00f0ff;color:#00f0ff;background:#00f0ff12;box-shadow:0 0 10px #00f0ff22}
+.note-display{
+  font-size:.65rem;color:#00f0ff;min-width:140px;text-align:center;
+  background:#0a0a12;border:1px solid #00f0ff18;border-radius:6px;padding:4px 10px;
+}
+
+/* ── Waveform Canvas ── */
+canvas#waveform{
+  width:100%;height:60px;border-radius:8px;border:1px solid #ffffff06;
+  margin-bottom:14px;display:block;
+}
+
+/* ── Piano Keyboard ── */
+.keyboard{
+  position:relative;display:flex;height:140px;margin:0 auto;
+  justify-content:center;
+}
+.key{
+  position:relative;border-radius:0 0 6px 6px;cursor:pointer;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:8px;font-size:.45rem;transition:background .08s,box-shadow .08s;
+}
+.key-white{
+  width:40px;height:140px;
+  background:linear-gradient(180deg,#e8e8e8 0%,#fff 10%,#f4f4f4 100%);
+  border:1px solid #333;border-top:none;
+  color:#555;z-index:1;
+}
+.key-white:hover{background:linear-gradient(180deg,#d8d8d8 0%,#eee 10%,#e4e4e4 100%)}
+.key-white.pressed{
+  background:linear-gradient(180deg,#00d0dd 0%,#00f0ff 20%,#00e0ee 100%);
+  box-shadow:0 0 20px #00f0ff44,inset 0 0 10px #00f0ff22;
+  color:#004455;
+}
+.key-black{
+  width:26px;height:90px;
+  background:linear-gradient(180deg,#222 0%,#111 100%);
+  border:1px solid #000;border-top:none;
+  color:#444;z-index:2;
+  margin-left:-13px;margin-right:-13px;
+}
+.key-black:hover{background:linear-gradient(180deg,#333 0%,#222 100%)}
+.key-black.pressed{
+  background:linear-gradient(180deg,#0088aa 0%,#006688 100%);
+  box-shadow:0 0 16px #00f0ff44;
+  color:#00f0ff;
+}
+.key .bind{font-size:.4rem;color:inherit;opacity:.5;margin-top:2px;display:block;text-align:center}
+
+/* ── Click Overlay ── */
+.overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;z-index:999;
+  background:rgba(10,10,15,.95);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.overlay h2{font-size:1.6rem;color:#00f0ff;text-shadow:0 0 30px #00f0ff44;margin-bottom:8px}
+.overlay p{color:#555;font-size:.7rem}
+.overlay.hidden{display:none}
+
+/* ── Footer ── */
+.foot{text-align:center;margin-top:14px;font-size:.5rem;color:#222}
+.foot a{color:#00f0ff33;text-decoration:none}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<div class="overlay" id="overlay">
+  <h2>&#127929; Chiptune Piano</h2>
+  <p>Click anywhere to start</p>
+</div>
+
+<div class="header">
+  <h1>&#127929; Chiptune Piano</h1>
+  <p>12 instruments &bull; 2 octaves &bull; keyboard mapped &bull; sustain &amp; octave shift</p>
+</div>
+
+<div class="container">
+  <div class="instruments" id="instruments"></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="octDown">OCT -</button>
+    <span class="note-display" id="noteDisplay">--</span>
+    <button class="ctrl-btn" id="octUp">OCT +</button>
+    <button class="ctrl-btn" id="sustainBtn">SUSTAIN: OFF</button>
+  </div>
+  <canvas id="waveform"></canvas>
+  <div class="keyboard" id="keyboard"></div>
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> &mdash; @8bitforge</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+const synth = new ChiptuneSynth();
+let ready = false;
+let currentInstrument = 'piano';
+let octaveShift = 0;
+let sustainOn = false;
+const activeKeys = new Map();   // noteKey -> noteId from synth
+const pressedKeys = new Set();  // currently held keyboard keys
+
+/* ── Instrument list ── */
+const INSTRUMENTS = [
+  { id:'piano',         label:'Piano'     },
+  { id:'violin',        label:'Violin'    },
+  { id:'cello',         label:'Cello'     },
+  { id:'flute',         label:'Flute'     },
+  { id:'organ',         label:'Organ'     },
+  { id:'brass',         label:'Brass'     },
+  { id:'harmonica',     label:'Harmonica' },
+  { id:'synthLead',     label:'SynthLead' },
+  { id:'synthPad',      label:'SynthPad'  },
+  { id:'synthBass',     label:'SynthBass' },
+  { id:'marimba',       label:'Marimba'   },
+  { id:'electricGuitar',label:'ElecGuitar'}
+];
+
+/* ── Note definitions for 2 octaves (C3..B4 at octaveShift=0) ── */
+const NOTES = [
+  // Octave 1 (C3)
+  { note:'C',  octave:3, black:false },
+  { note:'C#', octave:3, black:true  },
+  { note:'D',  octave:3, black:false },
+  { note:'D#', octave:3, black:true  },
+  { note:'E',  octave:3, black:false },
+  { note:'F',  octave:3, black:false },
+  { note:'F#', octave:3, black:true  },
+  { note:'G',  octave:3, black:false },
+  { note:'G#', octave:3, black:true  },
+  { note:'A',  octave:3, black:false },
+  { note:'A#', octave:3, black:true  },
+  { note:'B',  octave:3, black:false },
+  // Octave 2 (C4)
+  { note:'C',  octave:4, black:false },
+  { note:'C#', octave:4, black:true  },
+  { note:'D',  octave:4, black:false },
+  { note:'D#', octave:4, black:true  },
+  { note:'E',  octave:4, black:false },
+  { note:'F',  octave:4, black:false },
+  { note:'F#', octave:4, black:true  },
+  { note:'G',  octave:4, black:false },
+  { note:'G#', octave:4, black:true  },
+  { note:'A',  octave:4, black:false },
+  { note:'A#', octave:4, black:true  },
+  { note:'B',  octave:4, black:false }
+];
+
+/* ── Keyboard mapping ── */
+// Lower octave whites: Z X C V B N M
+// Lower octave blacks: S D _ G H J
+// Upper octave whites: Q W E R T Y U I
+// Upper octave blacks: 2 3 _ 5 6 7
+const KEY_MAP = {
+  // Lower octave - white keys
+  'z': 0,  'x': 2,  'c': 4,  'v': 5,  'b': 7,  'n': 9,  'm': 11,
+  // Lower octave - black keys
+  's': 1,  'd': 3,  'g': 6,  'h': 8,  'j': 10,
+  // Upper octave - white keys
+  'q': 12, 'w': 14, 'e': 16, 'r': 17, 't': 19, 'y': 21, 'u': 23,
+  // Upper octave - black keys
+  '2': 13, '3': 15, '5': 18, '6': 20, '7': 22
+};
+
+const KEY_LABELS = {};
+Object.entries(KEY_MAP).forEach(([k, v]) => {
+  if (!KEY_LABELS[v]) KEY_LABELS[v] = k.toUpperCase();
+});
+
+/* ── Frequency calculation ── */
+function noteFreq(note, octave) {
+  const map = {C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+  const steps = (octave - 4) * 12 + (map[note] - 9);
+  return 440 * Math.pow(2, steps / 12);
+}
+
+/* ── Build instrument buttons ── */
+const instEl = document.getElementById('instruments');
+INSTRUMENTS.forEach(inst => {
+  const btn = document.createElement('button');
+  btn.className = 'inst-btn' + (inst.id === currentInstrument ? ' active' : '');
+  btn.textContent = inst.label;
+  btn.dataset.inst = inst.id;
+  btn.addEventListener('pointerdown', async (e) => {
+    e.preventDefault();
+    await ensureReady();
+    selectInstrument(inst.id);
+  });
+  instEl.appendChild(btn);
+});
+
+function selectInstrument(id) {
+  currentInstrument = id;
+  synth.loadInstrument(id, 0);
+  document.querySelectorAll('.inst-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.inst === id);
+  });
+}
+
+/* ── Build piano keyboard ── */
+const kbEl = document.getElementById('keyboard');
+const keyElements = [];
+
+NOTES.forEach((n, i) => {
+  const el = document.createElement('div');
+  el.className = 'key ' + (n.black ? 'key-black' : 'key-white');
+  const lbl = KEY_LABELS[i] || '';
+  el.innerHTML = (n.black ? '' : `<span>${n.note}${n.octave}<br><span class="bind">${lbl}</span></span>`);
+  if (n.black && lbl) el.innerHTML = `<span class="bind">${lbl}</span>`;
+  el.dataset.index = i;
+
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); pressNote(i); });
+  el.addEventListener('pointerup', (e) => { e.preventDefault(); releaseNote(i); });
+  el.addEventListener('pointerleave', (e) => { if (activeKeys.has(i) && !sustainOn) releaseNote(i); });
+
+  keyElements.push(el);
+  kbEl.appendChild(el);
+});
+
+/* ── Note play/stop ── */
+async function ensureReady() {
+  if (!ready) {
+    await synth.init();
+    synth.loadInstrument(currentInstrument, 0);
+    ready = true;
+    document.getElementById('overlay').classList.add('hidden');
+  }
+}
+
+async function pressNote(index) {
+  await ensureReady();
+  if (activeKeys.has(index)) {
+    // Already playing - stop old one first
+    synth.stopNote(activeKeys.get(index));
+    activeKeys.delete(index);
+  }
+
+  const n = NOTES[index];
+  const oct = n.octave + octaveShift;
+  const dur = sustainOn ? 10 : 0.5;
+  const noteId = synth.playNoteByName(n.note, oct, 0, dur);
+  activeKeys.set(index, noteId);
+  keyElements[index].classList.add('pressed');
+
+  // Update display
+  const freq = noteFreq(n.note, oct);
+  document.getElementById('noteDisplay').textContent = `${n.note}${oct} - ${freq.toFixed(2)} Hz`;
+}
+
+function releaseNote(index) {
+  if (!activeKeys.has(index)) return;
+  if (sustainOn) {
+    // Let sustained notes ring
+    return;
+  }
+  synth.stopNote(activeKeys.get(index));
+  activeKeys.delete(index);
+  keyElements[index].classList.remove('pressed');
+}
+
+function releaseAll() {
+  activeKeys.forEach((noteId, index) => {
+    synth.stopNote(noteId);
+    keyElements[index].classList.remove('pressed');
+  });
+  activeKeys.clear();
+}
+
+/* ── Octave controls ── */
+document.getElementById('octDown').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (octaveShift > -2) { octaveShift--; releaseAll(); updateOctDisplay(); }
+});
+document.getElementById('octUp').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (octaveShift < 3) { octaveShift++; releaseAll(); updateOctDisplay(); }
+});
+
+function updateOctDisplay() {
+  const disp = document.getElementById('noteDisplay');
+  const lo = 3 + octaveShift;
+  const hi = 4 + octaveShift;
+  disp.textContent = `C${lo} - B${hi}`;
+}
+
+/* ── Sustain toggle ── */
+const sustainBtn = document.getElementById('sustainBtn');
+sustainBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  sustainOn = !sustainOn;
+  sustainBtn.textContent = 'SUSTAIN: ' + (sustainOn ? 'ON' : 'OFF');
+  sustainBtn.classList.toggle('active', sustainOn);
+  if (!sustainOn) releaseAll();
+});
+
+/* ── Keyboard input ── */
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  if (k in KEY_MAP) {
+    e.preventDefault();
+    pressedKeys.add(k);
+    pressNote(KEY_MAP[k]);
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  const k = e.key.toLowerCase();
+  if (k in KEY_MAP) {
+    e.preventDefault();
+    pressedKeys.delete(k);
+    releaseNote(KEY_MAP[k]);
+  }
+});
+
+/* ── Click overlay ── */
+document.getElementById('overlay').addEventListener('click', async () => {
+  await ensureReady();
+});
+
+/* ── Waveform visualizer ── */
+const cvs = document.getElementById('waveform');
+const ctx = cvs.getContext('2d');
+
+function resizeCanvas() {
+  const r = cvs.parentElement.getBoundingClientRect();
+  cvs.width = Math.floor(r.width - 48);
+  cvs.height = 60;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+(function drawWaveform() {
+  requestAnimationFrame(drawWaveform);
+  const w = cvs.width, h = cvs.height;
+
+  ctx.fillStyle = '#0a0a12';
+  ctx.fillRect(0, 0, w, h);
+
+  const data = synth.getWaveformData();
+  if (!data) {
+    // Draw flat line
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h / 2);
+    ctx.lineTo(w, h / 2);
+    ctx.stroke();
+    return;
+  }
+
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#00f0ff');
+  grad.addColorStop(0.5, '#a855f7');
+  grad.addColorStop(1, '#00f0ff');
+
+  ctx.beginPath();
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 6;
+
+  const step = data.length / w;
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor(i * step);
+    const v = data[idx] / 255;
+    const y = v * h;
+    if (i === 0) ctx.moveTo(i, y);
+    else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+})();
+</script>
+</body>
+</html>

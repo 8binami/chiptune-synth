@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Retro Display — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: Retro Display Groovebox               ║
+  ║  Roland D2-inspired: orange LCD, silver body,    ║
+  ║  8 preset pads, waveform selector, ADSR knobs,  ║
+  ║  D-FIELD circular touch pad with visualizer      ║
+  ║                                                  ║
+  ║  Lib: @8bitforge/chiptune-synth                  ║
+  ║  https://chiptune-synth.8binami.com              ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen Setup → Settings → JS → Add External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███  (CodePen → CSS panel)
+     ═══════════════════════════════════════════ -->
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a1a;color:#fff;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;overflow:hidden;user-select:none}
+
+/* ── Click overlay ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;z-index:100;cursor:pointer}
+.overlay-inner{text-align:center}
+.overlay-inner h2{font-size:1.4rem;color:#ff8c00;text-shadow:0 0 20px #ff8c0066;margin-bottom:10px}
+.overlay-inner p{color:#888;font-size:.65rem}
+.overlay.hidden{display:none}
+
+/* ── Device body ── */
+.device{background:linear-gradient(180deg,#d8d8d8 0%,#b0b0b0 4%,#c8c8c8 8%,#a8a8a8 100%);border-radius:18px;padding:20px 22px 16px;box-shadow:0 8px 40px #0008,inset 0 1px 0 #e8e8e8,inset 0 -1px 0 #888;position:relative;width:460px;border:2px solid #999}
+.device::before{content:'';position:absolute;top:2px;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,#ffffff88,transparent);border-radius:2px}
+
+/* ── Brand label ── */
+.brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 4px}
+.brand-name{font-size:.7rem;font-weight:700;color:#555;letter-spacing:3px;text-transform:uppercase;text-shadow:0 1px 0 #ddd}
+.brand-model{font-size:.55rem;color:#ff8c00;font-weight:700;letter-spacing:1px}
+
+/* ── LCD Display ── */
+.lcd{background:linear-gradient(180deg,#1a0f00,#2a1800 30%,#1a0f00);border:3px solid #444;border-radius:8px;padding:12px 16px;margin-bottom:14px;box-shadow:inset 0 2px 8px #000a,0 1px 0 #bbb;position:relative;overflow:hidden}
+.lcd::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,#ff8c0005 2px,#ff8c0005 4px);pointer-events:none}
+.lcd-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.lcd-row:last-child{margin-bottom:0}
+.lcd-label{font-size:.45rem;color:#ff8c0066;text-transform:uppercase;letter-spacing:1px}
+.lcd-value{font-size:.75rem;color:#ff8c00;text-shadow:0 0 8px #ff8c0066;font-weight:700;letter-spacing:1px}
+.lcd-big{font-size:1.1rem;color:#ff8c00;text-shadow:0 0 12px #ff8c0088;font-weight:700;letter-spacing:2px;text-align:center;margin-bottom:6px}
+.lcd-bar{height:3px;background:#ff8c0022;border-radius:2px;overflow:hidden;margin-top:4px}
+.lcd-bar-fill{height:100%;background:#ff8c00;border-radius:2px;transition:width .1s;box-shadow:0 0 6px #ff8c0066}
+
+/* ── Preset buttons ── */
+.section-label{font-size:.45rem;color:#666;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px;padding-left:2px;text-shadow:0 1px 0 #ddd}
+.presets{display:flex;gap:5px;margin-bottom:14px}
+.preset-btn{flex:1;height:34px;border-radius:6px;border:none;cursor:pointer;font:700 .5rem/1 'Courier New',monospace;letter-spacing:.5px;text-transform:uppercase;color:#1a0f00;background:linear-gradient(180deg,#ff9b20,#e07000);box-shadow:0 2px 4px #0004,inset 0 1px 0 #ffb84d;transition:.1s;position:relative;overflow:hidden}
+.preset-btn::before{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#ffffff22,transparent 50%);border-radius:6px}
+.preset-btn:active,.preset-btn.on{transform:translateY(1px);box-shadow:0 1px 2px #0004,inset 0 1px 4px #0006;background:linear-gradient(180deg,#ffb040,#ff8c00)}
+.preset-btn.on{color:#fff;text-shadow:0 0 8px #fff8}
+
+/* ── Waveform buttons ── */
+.wave-section{display:flex;gap:5px;margin-bottom:14px}
+.wave-btn{flex:1;height:30px;border-radius:5px;border:2px solid #888;background:linear-gradient(180deg,#c0c0c0,#a0a0a0);cursor:pointer;font:600 .5rem/1 'Courier New',monospace;color:#444;box-shadow:0 2px 3px #0003,inset 0 1px 0 #ddd;transition:.15s}
+.wave-btn:active,.wave-btn.on{border-color:#ff8c00;color:#ff8c00;background:linear-gradient(180deg,#d0d0d0,#b8b8b8);box-shadow:0 0 8px #ff8c0022}
+
+/* ── ADSR Knobs ── */
+.knobs-section{display:flex;gap:16px;justify-content:center;margin-bottom:14px}
+.knob-group{display:flex;flex-direction:column;align-items:center;gap:3px}
+.knob-group label{font-size:.42rem;color:#555;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;text-shadow:0 1px 0 #ddd}
+.knob-wrap{width:48px;height:48px;position:relative;cursor:pointer}
+.knob-ring{width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#b0b0b0,#888);box-shadow:0 2px 6px #0004,inset 0 1px 0 #d0d0d0;position:relative}
+.knob-inner{position:absolute;top:4px;left:4px;width:40px;height:40px;border-radius:50%;background:linear-gradient(145deg,#d8d8d8,#999);box-shadow:inset 0 1px 3px #0003}
+.knob-indicator{position:absolute;top:4px;left:50%;width:2px;height:14px;background:#ff8c00;border-radius:1px;transform-origin:bottom center;box-shadow:0 0 4px #ff8c0066}
+.knob-value{font-size:.5rem;color:#ff8c00;font-weight:700;text-shadow:0 0 4px #ff8c0033}
+
+/* ── D-FIELD ── */
+.dfield-section{display:flex;gap:14px;align-items:center;margin-bottom:12px}
+.dfield-wrap{position:relative}
+.dfield-label{font-size:.42rem;color:#555;text-transform:uppercase;letter-spacing:2px;font-weight:700;text-align:center;margin-bottom:4px;text-shadow:0 1px 0 #ddd}
+.dfield{border-radius:50%;border:3px solid #666;cursor:crosshair;box-shadow:0 2px 8px #0004,inset 0 0 20px #0003;background:#0a0a0a}
+.dfield-info{flex:1;display:flex;flex-direction:column;gap:6px}
+.dfield-stat{background:#1a0f00;border:1px solid #333;border-radius:4px;padding:5px 8px}
+.dfield-stat .lbl{font-size:.4rem;color:#ff8c0066;text-transform:uppercase;letter-spacing:1px}
+.dfield-stat .val{font-size:.6rem;color:#ff8c00;text-shadow:0 0 6px #ff8c0044;font-weight:700}
+
+/* ── Speaker grille ── */
+.speaker{margin-top:6px;height:28px;background:repeating-linear-gradient(90deg,#999 0px,#999 2px,#777 2px,#777 4px);border-radius:4px;box-shadow:inset 0 1px 3px #0004;opacity:.5}
+
+/* ── Footer ── */
+.foot{text-align:center;margin-top:14px;font-size:.5rem;color:#555}
+.foot a{color:#ff8c00aa;text-decoration:none}
+.foot a:hover{color:#ff8c00}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███  (CodePen → HTML panel)
+     ═══════════════════════════════════════════ -->
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-inner">
+    <h2>&#9654; RETRO DISPLAY</h2>
+    <p>Click anywhere to power on</p>
+  </div>
+</div>
+
+<div class="device">
+  <div class="brand">
+    <span class="brand-name">8Bitforge</span>
+    <span class="brand-model">D-FIELD</span>
+  </div>
+
+  <!-- LCD -->
+  <div class="lcd">
+    <div class="lcd-big" id="lcdPreset">- READY -</div>
+    <div class="lcd-row">
+      <span><span class="lcd-label">WAVE </span><span class="lcd-value" id="lcdWave">SQUARE</span></span>
+      <span><span class="lcd-label">FREQ </span><span class="lcd-value" id="lcdFreq">440Hz</span></span>
+      <span><span class="lcd-label">NOTE </span><span class="lcd-value" id="lcdNote">--</span></span>
+    </div>
+    <div class="lcd-bar"><div class="lcd-bar-fill" id="lcdBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Presets -->
+  <div class="section-label">Presets</div>
+  <div class="presets" id="presets"></div>
+
+  <!-- Waveform selector -->
+  <div class="section-label">Waveform</div>
+  <div class="wave-section" id="waves"></div>
+
+  <!-- ADSR Knobs -->
+  <div class="section-label">Envelope</div>
+  <div class="knobs-section" id="knobs"></div>
+
+  <!-- D-FIELD + info -->
+  <div class="dfield-section">
+    <div class="dfield-wrap">
+      <div class="dfield-label">D-Field</div>
+      <canvas class="dfield" id="dfield" width="180" height="180"></canvas>
+    </div>
+    <div class="dfield-info">
+      <div class="dfield-stat"><span class="lbl">Position</span><div class="val" id="dfPos">- , -</div></div>
+      <div class="dfield-stat"><span class="lbl">Pitch</span><div class="val" id="dfPitch">--</div></div>
+      <div class="dfield-stat"><span class="lbl">Duration</span><div class="val" id="dfDur">--</div></div>
+      <div class="dfield-stat"><span class="lbl">Velocity</span><div class="val" id="dfVel">--</div></div>
+    </div>
+  </div>
+
+  <!-- Speaker -->
+  <div class="speaker"></div>
+</div>
+
+<div class="foot">
+  <a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a>
+  &mdash; @8bitforge/chiptune-synth &mdash;
+  <a href="https://www.npmjs.com/package/@8bitforge/chiptune-synth" target="_blank">npm</a>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███  (CodePen → JS panel)
+     ═══════════════════════════════════════════ -->
+<script>
+/**
+ * Retro Display Groovebox — powered by ChiptuneSynth
+ * Roland D2-inspired: orange LCD, metallic body,
+ * ADSR knobs, D-FIELD touch pad, preset pads
+ *
+ * Exploits: init, playPreset, playNoteByName,
+ * updateTrack, updateEnvelope, getWaveformData,
+ * getFrequencyData
+ */
+
+const synth = new ChiptuneSynth();
+let ready = false;
+
+/* ── State ── */
+let currentPreset = -1;
+let currentWave = 'square';
+let adsr = { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 };
+let lastFreq = 440;
+
+/* ── Preset definitions ── */
+const PRESETS = [
+  { name: 'LASER',  id: 'laser' },
+  { name: 'COIN',   id: 'coin' },
+  { name: 'JUMP',   id: 'jump' },
+  { name: 'EXPLOD', id: 'explosion' },
+  { name: 'PWR UP', id: 'powerup' },
+  { name: 'HIT',    id: 'hit' },
+  { name: 'BLIP',   id: 'blip' },
+  { name: '1-UP',   id: '1up' }
+];
+
+/* ── Waveform definitions ── */
+const WAVES = [
+  { name: 'Square',   type: 'square',   sym: '\u25A0' },
+  { name: 'Triangle', type: 'triangle', sym: '\u25B3' },
+  { name: 'Saw',      type: 'sawtooth', sym: '\u25B2' },
+  { name: 'Sine',     type: 'sine',     sym: '\u25CB' },
+  { name: 'Noise',    type: 'noise',    sym: '\u2591' }
+];
+
+/* ── Notes for D-FIELD ── */
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+/* ── Build preset buttons ── */
+const presetsEl = document.getElementById('presets');
+PRESETS.forEach((p, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.textContent = p.name;
+  btn.addEventListener('pointerdown', () => triggerPreset(i));
+  presetsEl.appendChild(btn);
+});
+
+/* ── Build waveform buttons ── */
+const wavesEl = document.getElementById('waves');
+WAVES.forEach((w, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'wave-btn' + (i === 0 ? ' on' : '');
+  btn.textContent = w.sym + ' ' + w.name;
+  btn.addEventListener('pointerdown', () => selectWave(i));
+  wavesEl.appendChild(btn);
+});
+
+/* ── Build ADSR knobs ── */
+const KNOB_DEFS = [
+  { label: 'Attack',  key: 'attack',  min: 0.001, max: 1,   val: 0.01,  fmt: v => (v*1000|0)+'ms' },
+  { label: 'Decay',   key: 'decay',   min: 0.01,  max: 1,   val: 0.1,   fmt: v => (v*1000|0)+'ms' },
+  { label: 'Sustain', key: 'sustain', min: 0,     max: 1,   val: 0.7,   fmt: v => (v*100|0)+'%' },
+  { label: 'Release', key: 'release', min: 0.01,  max: 2,   val: 0.3,   fmt: v => (v*1000|0)+'ms' }
+];
+
+const knobsEl = document.getElementById('knobs');
+const knobEls = [];
+
+KNOB_DEFS.forEach((kd, i) => {
+  const group = document.createElement('div');
+  group.className = 'knob-group';
+
+  const label = document.createElement('label');
+  label.textContent = kd.label;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'knob-wrap';
+
+  const ring = document.createElement('div');
+  ring.className = 'knob-ring';
+
+  const inner = document.createElement('div');
+  inner.className = 'knob-inner';
+
+  const indicator = document.createElement('div');
+  indicator.className = 'knob-indicator';
+
+  ring.appendChild(inner);
+  ring.appendChild(indicator);
+  wrap.appendChild(ring);
+
+  const valEl = document.createElement('div');
+  valEl.className = 'knob-value';
+  valEl.textContent = kd.fmt(kd.val);
+
+  group.appendChild(label);
+  group.appendChild(wrap);
+  group.appendChild(valEl);
+  knobsEl.appendChild(group);
+
+  const state = { value: kd.val, angle: valToAngle(kd.val, kd.min, kd.max), dragging: false, startY: 0, startAngle: 0 };
+  knobEls.push({ el: wrap, indicator, valEl, def: kd, state });
+
+  updateKnobVisual(indicator, state.angle);
+
+  /* Knob drag */
+  wrap.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    state.dragging = true;
+    state.startY = e.clientY;
+    state.startAngle = state.angle;
+    wrap.setPointerCapture(e.pointerId);
+  });
+  wrap.addEventListener('pointermove', e => {
+    if (!state.dragging) return;
+    const dy = state.startY - e.clientY;
+    const newAngle = Math.max(-135, Math.min(135, state.startAngle + dy * 1.5));
+    state.angle = newAngle;
+    state.value = angleToVal(newAngle, kd.min, kd.max);
+    adsr[kd.key] = state.value;
+    valEl.textContent = kd.fmt(state.value);
+    updateKnobVisual(indicator, newAngle);
+    if (ready) synth.updateEnvelope(0, adsr);
+  });
+  wrap.addEventListener('pointerup', () => { state.dragging = false; });
+  wrap.addEventListener('pointercancel', () => { state.dragging = false; });
+});
+
+function valToAngle(v, min, max) {
+  return ((v - min) / (max - min)) * 270 - 135;
+}
+function angleToVal(a, min, max) {
+  return min + ((a + 135) / 270) * (max - min);
+}
+function updateKnobVisual(indicator, angle) {
+  indicator.style.transform = 'rotate(' + angle + 'deg)';
+}
+
+/* ── D-FIELD canvas ── */
+const dfCanvas = document.getElementById('dfield');
+const dfCtx = dfCanvas.getContext('2d');
+let dfActive = false;
+
+dfCanvas.addEventListener('pointerdown', e => { dfActive = true; dfPlay(e); dfCanvas.setPointerCapture(e.pointerId); });
+dfCanvas.addEventListener('pointermove', e => { if (dfActive) dfPlay(e); });
+dfCanvas.addEventListener('pointerup', () => { dfActive = false; });
+dfCanvas.addEventListener('pointercancel', () => { dfActive = false; });
+
+function dfPlay(e) {
+  if (!ready) return;
+  const rect = dfCanvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top) / rect.height;
+
+  /* Distance from center */
+  const dx = x - 0.5, dy = y - 0.5;
+  const dist = Math.sqrt(dx * dx + dy * dy) * 2;
+  if (dist > 1.05) return;
+
+  /* Map X to note index (2 octaves, C3-B4) */
+  const noteIdx = Math.floor(x * 24);
+  const octave = 3 + Math.floor(noteIdx / 12);
+  const note = NOTES[noteIdx % 12];
+
+  /* Map Y to duration */
+  const duration = 0.05 + (1 - y) * 0.6;
+
+  /* Velocity from distance to center */
+  const velocity = Math.max(0.2, 1 - dist);
+
+  synth.playNoteByName(note, octave, 0, duration);
+
+  /* Approximate frequency */
+  const semitone = noteIdx;
+  lastFreq = 130.81 * Math.pow(2, semitone / 12);
+
+  /* Update LCD */
+  document.getElementById('lcdNote').textContent = note + octave;
+  document.getElementById('lcdFreq').textContent = (lastFreq | 0) + 'Hz';
+  document.getElementById('lcdPreset').textContent = note + octave + '  ' + currentWave.toUpperCase();
+
+  /* Update D-FIELD info */
+  document.getElementById('dfPos').textContent = (x * 100 | 0) + ' , ' + (y * 100 | 0);
+  document.getElementById('dfPitch').textContent = note + octave;
+  document.getElementById('dfDur').textContent = (duration * 1000 | 0) + 'ms';
+  document.getElementById('dfVel').textContent = (velocity * 100 | 0) + '%';
+
+  /* Animate bar */
+  const bar = document.getElementById('lcdBar');
+  bar.style.width = (velocity * 100) + '%';
+  setTimeout(() => { bar.style.width = '0%'; }, duration * 1000);
+}
+
+/* ── Trigger preset ── */
+async function triggerPreset(i) {
+  if (!ready) { await synth.init(); ready = true; }
+  currentPreset = i;
+  synth.playPreset(PRESETS[i].id);
+
+  /* Update buttons */
+  const btns = presetsEl.children;
+  for (let b = 0; b < btns.length; b++) btns[b].classList.remove('on');
+  btns[i].classList.add('on');
+  setTimeout(() => btns[i].classList.remove('on'), 300);
+
+  /* Update LCD */
+  document.getElementById('lcdPreset').textContent = PRESETS[i].name;
+  document.getElementById('lcdNote').textContent = 'SFX';
+  const bar = document.getElementById('lcdBar');
+  bar.style.width = '100%';
+  setTimeout(() => { bar.style.width = '0%'; }, 400);
+}
+
+/* ── Select waveform ── */
+function selectWave(i) {
+  currentWave = WAVES[i].type;
+  const btns = wavesEl.children;
+  for (let b = 0; b < btns.length; b++) btns[b].classList.remove('on');
+  btns[i].classList.add('on');
+  if (ready) synth.updateTrack(0, { type: currentWave });
+  document.getElementById('lcdWave').textContent = WAVES[i].name.toUpperCase();
+}
+
+/* ── Click-to-start overlay ── */
+document.getElementById('overlay').addEventListener('click', async () => {
+  await synth.init();
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+  synth.playPreset('coin');
+  document.getElementById('lcdPreset').textContent = 'COIN';
+  document.getElementById('lcdNote').textContent = 'SFX';
+  const bar = document.getElementById('lcdBar');
+  bar.style.width = '100%';
+  setTimeout(() => { bar.style.width = '0%'; }, 400);
+});
+
+/* ── D-FIELD visualizer loop ── */
+(function vizLoop() {
+  requestAnimationFrame(vizLoop);
+  const W = dfCanvas.width, H = dfCanvas.height;
+  const cx = W / 2, cy = H / 2, R = W / 2 - 4;
+
+  dfCtx.fillStyle = '#0a0a0a';
+  dfCtx.fillRect(0, 0, W, H);
+
+  /* Circular clip */
+  dfCtx.save();
+  dfCtx.beginPath();
+  dfCtx.arc(cx, cy, R, 0, Math.PI * 2);
+  dfCtx.clip();
+
+  /* Subtle grid */
+  dfCtx.strokeStyle = '#ff8c0010';
+  dfCtx.lineWidth = 0.5;
+  for (let r = 15; r < R; r += 20) {
+    dfCtx.beginPath();
+    dfCtx.arc(cx, cy, r, 0, Math.PI * 2);
+    dfCtx.stroke();
+  }
+  for (let a = 0; a < Math.PI * 2; a += Math.PI / 6) {
+    dfCtx.beginPath();
+    dfCtx.moveTo(cx, cy);
+    dfCtx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
+    dfCtx.stroke();
+  }
+
+  /* Waveform radial viz */
+  const wd = synth.getWaveformData();
+  if (wd) {
+    const step = Math.PI * 2 / wd.length;
+    dfCtx.beginPath();
+    dfCtx.strokeStyle = '#ff8c00';
+    dfCtx.lineWidth = 1.5;
+    for (let i = 0; i < wd.length; i++) {
+      const v = wd[i] / 255;
+      const r = 20 + v * (R - 25);
+      const a = i * step - Math.PI / 2;
+      const px = cx + Math.cos(a) * r;
+      const py = cy + Math.sin(a) * r;
+      i === 0 ? dfCtx.moveTo(px, py) : dfCtx.lineTo(px, py);
+    }
+    dfCtx.closePath();
+    dfCtx.stroke();
+
+    /* Glow fill */
+    dfCtx.fillStyle = '#ff8c0012';
+    dfCtx.fill();
+  }
+
+  /* Frequency bars as radial spikes */
+  const fd = synth.getFrequencyData();
+  if (fd) {
+    const bars = 36;
+    const aStep = Math.PI * 2 / bars;
+    for (let i = 0; i < bars; i++) {
+      const v = (fd[i * 2] || 0) / 255;
+      const a = i * aStep - Math.PI / 2;
+      const rInner = 15;
+      const rOuter = rInner + v * (R - 20);
+      dfCtx.beginPath();
+      dfCtx.strokeStyle = 'rgba(255,140,0,' + (0.2 + v * 0.6) + ')';
+      dfCtx.lineWidth = 3;
+      dfCtx.moveTo(cx + Math.cos(a) * rInner, cy + Math.sin(a) * rInner);
+      dfCtx.lineTo(cx + Math.cos(a) * rOuter, cy + Math.sin(a) * rOuter);
+      dfCtx.stroke();
+    }
+  }
+
+  /* Center dot */
+  dfCtx.beginPath();
+  dfCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+  dfCtx.fillStyle = '#ff8c00';
+  dfCtx.fill();
+
+  dfCtx.restore();
+
+  /* Ring border */
+  dfCtx.beginPath();
+  dfCtx.arc(cx, cy, R, 0, Math.PI * 2);
+  dfCtx.strokeStyle = '#555';
+  dfCtx.lineWidth = 2;
+  dfCtx.stroke();
+})();
+</script>
+</body>
+</html>

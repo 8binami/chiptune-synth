@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nanobox Step Sequencer - ChiptuneSynth</title>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CSS
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #0d0d0f;
+  --surface: #1a1a20;
+  --surface2: #222230;
+  --accent: #ff1493;
+  --accent2: #e91e8b;
+  --accent-glow: rgba(255, 20, 147, 0.5);
+  --text: #e0e0e8;
+  --text-dim: #777788;
+  --cell-off: #2a2a35;
+  --cell-on: #ff1493;
+  --cell-on-glow: 0 0 8px rgba(255,20,147,0.6), inset 0 0 4px rgba(255,255,255,0.15);
+  --playhead-glow: rgba(255,20,147,0.18);
+  --radius: 6px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* ── Device Shell ────────────────────────────────────────────────────── */
+#device {
+  background: linear-gradient(145deg, #1e1e26, #151519);
+  border: 2px solid #2a2a35;
+  border-radius: 18px;
+  padding: 22px 26px 18px;
+  width: 580px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 60px rgba(255,20,147,0.05);
+  position: relative;
+}
+
+/* brand */
+#device-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+#device-header h1 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+#device-header span {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+/* ── Controls Row ────────────────────────────────────────────────────── */
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+/* Play/Stop Button */
+#play-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+#play-btn:hover {
+  background: rgba(255,20,147,0.12);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+#play-btn.playing {
+  animation: pulse-btn 0.8s ease-in-out infinite alternate;
+  background: rgba(255,20,147,0.15);
+  box-shadow: 0 0 18px var(--accent-glow);
+}
+@keyframes pulse-btn {
+  0%   { box-shadow: 0 0 10px var(--accent-glow); }
+  100% { box-shadow: 0 0 24px var(--accent-glow), 0 0 40px rgba(255,20,147,0.2); }
+}
+
+/* Rotary Knobs */
+.knob-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.knob-label {
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+.knob-value {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+  min-width: 30px;
+  text-align: center;
+}
+.knob {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: conic-gradient(from 220deg, #333 0%, #555 40%, #333 100%);
+  border: 2px solid #444;
+  position: relative;
+  cursor: grab;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.knob::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 10px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 4px var(--accent-glow);
+  transform-origin: 50% 18px;
+}
+.knob[data-angle]::after {
+  transform: translateX(-50%) rotate(calc(var(--angle) * 1deg));
+}
+
+/* BPM Slider (hidden, knob is visual) */
+.knob-slider {
+  width: 48px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  height: 3px;
+}
+
+/* Spacer */
+.ctrl-spacer { flex: 1; }
+
+/* Step indicators row */
+#step-numbers {
+  display: grid;
+  grid-template-columns: 52px repeat(16, 1fr);
+  gap: 3px;
+  margin-bottom: 2px;
+  padding: 0 1px;
+}
+#step-numbers span {
+  text-align: center;
+  font-size: 8px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sequencer Grid ──────────────────────────────────────────────────── */
+#grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.seq-row {
+  display: grid;
+  grid-template-columns: 52px repeat(16, 1fr);
+  gap: 3px;
+  align-items: center;
+}
+
+.row-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding-right: 4px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: var(--cell-off);
+  border: 1px solid #333;
+  cursor: pointer;
+  transition: background 0.1s, box-shadow 0.1s;
+  position: relative;
+}
+.cell:hover {
+  background: #353545;
+  border-color: #555;
+}
+.cell.on {
+  background: var(--cell-on);
+  border-color: var(--accent2);
+  box-shadow: var(--cell-on-glow);
+}
+.cell.on::after {
+  content: '';
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+}
+
+/* Playhead column highlight */
+.cell.playhead {
+  box-shadow: 0 0 12px var(--playhead-glow), inset 0 0 8px var(--playhead-glow);
+  border-color: var(--accent) !important;
+}
+.cell.on.playhead {
+  background: #ff4daf;
+  box-shadow: 0 0 16px var(--accent-glow), inset 0 0 6px rgba(255,255,255,0.3);
+}
+
+/* ── Waveform ────────────────────────────────────────────────────────── */
+#waveform-wrap {
+  margin-top: 14px;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px;
+  border: 1px solid #2a2a35;
+}
+#waveform {
+  width: 100%;
+  height: 40px;
+  display: block;
+  border-radius: 4px;
+}
+
+/* ── Init Overlay ────────────────────────────────────────────────────── */
+#init-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13,13,15,0.92);
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  gap: 12px;
+  backdrop-filter: blur(4px);
+}
+#init-overlay.hidden { display: none; }
+#init-btn {
+  padding: 14px 36px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  box-shadow: 0 0 20px var(--accent-glow);
+  transition: all 0.2s;
+}
+#init-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px var(--accent-glow), 0 0 60px rgba(255,20,147,0.2);
+}
+#init-overlay p {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     HTML
+     ═══════════════════════════════════════════════════════════════════════ -->
+<div id="device">
+
+  <!-- Init overlay (AudioContext requires user gesture) -->
+  <div id="init-overlay">
+    <button id="init-btn">Power On</button>
+    <p>Click to initialize audio engine</p>
+  </div>
+
+  <!-- Header -->
+  <div id="device-header">
+    <h1>Nanobox</h1>
+    <span>ChiptuneSynth Step Sequencer</span>
+  </div>
+
+  <!-- Controls -->
+  <div id="controls">
+    <button id="play-btn" title="Play / Stop">&#9654;</button>
+
+    <div class="knob-group">
+      <span class="knob-label">BPM</span>
+      <div class="knob" id="knob-bpm"></div>
+      <span class="knob-value" id="bpm-val">120</span>
+      <input type="range" class="knob-slider" id="bpm-slider" min="60" max="200" value="120">
+    </div>
+
+    <div class="knob-group">
+      <span class="knob-label">Vol</span>
+      <div class="knob" id="knob-vol"></div>
+      <span class="knob-value" id="vol-val">80%</span>
+      <input type="range" class="knob-slider" id="vol-slider" min="0" max="100" value="80">
+    </div>
+
+    <div class="ctrl-spacer"></div>
+  </div>
+
+  <!-- Step numbers -->
+  <div id="step-numbers">
+    <span></span>
+    <span>1</span><span>2</span><span>3</span><span>4</span>
+    <span>5</span><span>6</span><span>7</span><span>8</span>
+    <span>9</span><span>10</span><span>11</span><span>12</span>
+    <span>13</span><span>14</span><span>15</span><span>16</span>
+  </div>
+
+  <!-- Sequencer Grid (built by JS) -->
+  <div id="grid"></div>
+
+  <!-- Waveform -->
+  <div id="waveform-wrap">
+    <canvas id="waveform"></canvas>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── Configuration ──────────────────────────────────────────────────
+  var STEPS = 16;
+  var ROWS = [
+    { name: 'Kick',  mode: 'preset', preset: 'bass' },
+    { name: 'Snare', mode: 'preset', preset: 'hit'  },
+    { name: 'HiHat', mode: 'preset', preset: 'blip' },
+    { name: 'Lead',  mode: 'note',   notes: ['C4','E4','G4','B4'] }
+  ];
+
+  // ── State ──────────────────────────────────────────────────────────
+  var synth = new ChiptuneSynth();
+  var grid = [];          // grid[row][step] = true/false
+  var cells = [];         // cells[row][step] = DOM element
+  var currentStep = -1;
+  var playing = false;
+  var intervalId = null;
+  var bpm = 120;
+
+  // ── DOM refs ───────────────────────────────────────────────────────
+  var gridEl     = document.getElementById('grid');
+  var playBtn    = document.getElementById('play-btn');
+  var bpmSlider  = document.getElementById('bpm-slider');
+  var bpmVal     = document.getElementById('bpm-val');
+  var volSlider  = document.getElementById('vol-slider');
+  var volVal     = document.getElementById('vol-val');
+  var knobBpm    = document.getElementById('knob-bpm');
+  var knobVol    = document.getElementById('knob-vol');
+  var canvas     = document.getElementById('waveform');
+  var ctx        = canvas.getContext('2d');
+  var overlay    = document.getElementById('init-overlay');
+  var initBtn    = document.getElementById('init-btn');
+
+  // ── Build Grid ─────────────────────────────────────────────────────
+  function buildGrid() {
+    for (var r = 0; r < ROWS.length; r++) {
+      grid[r] = [];
+      cells[r] = [];
+      var rowEl = document.createElement('div');
+      rowEl.className = 'seq-row';
+
+      var label = document.createElement('span');
+      label.className = 'row-label';
+      label.textContent = ROWS[r].name;
+      rowEl.appendChild(label);
+
+      for (var s = 0; s < STEPS; s++) {
+        grid[r][s] = false;
+        var cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = r;
+        cell.dataset.step = s;
+        cell.addEventListener('click', toggleCell);
+        rowEl.appendChild(cell);
+        cells[r][s] = cell;
+      }
+      gridEl.appendChild(rowEl);
+    }
+  }
+
+  function toggleCell(e) {
+    var r = parseInt(e.target.dataset.row);
+    var s = parseInt(e.target.dataset.step);
+    grid[r][s] = !grid[r][s];
+    e.target.classList.toggle('on', grid[r][s]);
+  }
+
+  // ── Knob Visuals ───────────────────────────────────────────────────
+  function updateKnob(knobEl, fraction) {
+    // Map 0..1 to -135..135 degrees
+    var angle = -135 + fraction * 270;
+    knobEl.style.setProperty('--angle', angle);
+    knobEl.setAttribute('data-angle', angle);
+  }
+
+  function syncKnobs() {
+    var bpmFrac = (bpm - 60) / (200 - 60);
+    updateKnob(knobBpm, bpmFrac);
+    var volFrac = parseInt(volSlider.value) / 100;
+    updateKnob(knobVol, volFrac);
+  }
+
+  // ── BPM / Volume Controls ─────────────────────────────────────────
+  bpmSlider.addEventListener('input', function () {
+    bpm = parseInt(this.value);
+    bpmVal.textContent = bpm;
+    syncKnobs();
+    if (playing) restartInterval();
+  });
+
+  volSlider.addEventListener('input', function () {
+    var v = parseInt(this.value);
+    volVal.textContent = v + '%';
+    synth.setMasterVolume(v / 100);
+    syncKnobs();
+  });
+
+  // ── Play / Stop ────────────────────────────────────────────────────
+  playBtn.addEventListener('click', function () {
+    if (!synth.initialized) return;
+    if (playing) {
+      stop();
+    } else {
+      start();
+    }
+  });
+
+  function start() {
+    playing = true;
+    currentStep = -1;
+    playBtn.innerHTML = '&#9632;'; // stop square
+    playBtn.classList.add('playing');
+    restartInterval();
+  }
+
+  function stop() {
+    playing = false;
+    playBtn.innerHTML = '&#9654;'; // play triangle
+    playBtn.classList.remove('playing');
+    if (intervalId) { clearInterval(intervalId); intervalId = null; }
+    clearPlayhead();
+    currentStep = -1;
+  }
+
+  function restartInterval() {
+    if (intervalId) clearInterval(intervalId);
+    var ms = (60 / bpm) * 1000 / 4; // 16th notes
+    intervalId = setInterval(tick, ms);
+  }
+
+  // ── Sequencer Tick ─────────────────────────────────────────────────
+  function tick() {
+    clearPlayhead();
+    currentStep = (currentStep + 1) % STEPS;
+
+    // Highlight current column
+    for (var r = 0; r < ROWS.length; r++) {
+      cells[r][currentStep].classList.add('playhead');
+    }
+
+    // Trigger sounds for active cells
+    for (var r = 0; r < ROWS.length; r++) {
+      if (!grid[r][currentStep]) continue;
+      var row = ROWS[r];
+      if (row.mode === 'preset') {
+        synth.playPreset(row.preset);
+      } else if (row.mode === 'note') {
+        var noteStr = row.notes[currentStep % row.notes.length];
+        var noteName = noteStr.replace(/[0-9]/g, '');
+        var octave = parseInt(noteStr.replace(/[^0-9]/g, ''));
+        synth.playNoteByName(noteName, octave, 0, 0.15);
+      }
+    }
+  }
+
+  function clearPlayhead() {
+    if (currentStep < 0) return;
+    for (var r = 0; r < ROWS.length; r++) {
+      cells[r][currentStep].classList.remove('playhead');
+    }
+  }
+
+  // ── Waveform Visualizer ────────────────────────────────────────────
+  function resizeCanvas() {
+    canvas.width = canvas.offsetWidth * (window.devicePixelRatio || 1);
+    canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+  }
+
+  function drawWaveform() {
+    requestAnimationFrame(drawWaveform);
+    var w = canvas.width;
+    var h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    var data = synth.getWaveformData();
+    if (!data) return;
+
+    ctx.beginPath();
+    ctx.strokeStyle = '#ff1493';
+    ctx.lineWidth = 1.5 * (window.devicePixelRatio || 1);
+    ctx.shadowColor = 'rgba(255,20,147,0.4)';
+    ctx.shadowBlur = 4;
+
+    var len = data.length;
+    var sliceW = w / len;
+    for (var i = 0; i < len; i++) {
+      var v = data[i] / 128.0;
+      var y = (v * h) / 2;
+      if (i === 0) ctx.moveTo(0, y);
+      else ctx.lineTo(i * sliceW, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // ── Initialize ─────────────────────────────────────────────────────
+  initBtn.addEventListener('click', async function () {
+    try {
+      await synth.init();
+      synth.setMasterVolume(0.8);
+      overlay.classList.add('hidden');
+      resizeCanvas();
+      drawWaveform();
+    } catch (e) {
+      console.error('Failed to init ChiptuneSynth:', e);
+      initBtn.textContent = 'Error - Retry';
+    }
+  });
+
+  // ── Load default pattern ───────────────────────────────────────────
+  function loadDefaultPattern() {
+    // Classic four-on-the-floor kick
+    var kickPattern  = [1,0,0,0, 1,0,0,0, 1,0,0,0, 1,0,0,0];
+    var snarePattern = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+    var hihatPattern = [1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,0];
+    var leadPattern  = [1,0,0,1, 0,0,1,0, 1,0,0,1, 0,0,1,0];
+    var patterns = [kickPattern, snarePattern, hihatPattern, leadPattern];
+    for (var r = 0; r < patterns.length; r++) {
+      for (var s = 0; s < STEPS; s++) {
+        if (patterns[r][s]) {
+          grid[r][s] = true;
+          cells[r][s].classList.add('on');
+        }
+      }
+    }
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────────
+  buildGrid();
+  loadDefaultPattern();
+  syncKnobs();
+  window.addEventListener('resize', resizeCanvas);
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MC-101 Groovebox — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: 8-Bit Groovebox                        ║
+  ║  Inspired by Roland MC-101                        ║
+  ║  4 channel faders, 16-pad grid, transport,        ║
+  ║  LCD display, waveform visualizer, demo loop      ║
+  ║                                                   ║
+  ║  Exploits: init, playPreset, playNoteByName,      ║
+  ║  loadInstrument, setMasterVolume, updateTrack,    ║
+  ║  getWaveformData, updateEnvelope, stopAllNotes    ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  CSS  ███  (CodePen → CSS panel)
+     ═══════════════════════════════════════════════════════ -->
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#fff;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;overflow:hidden;user-select:none}
+
+/* ── Overlay ── */
+#overlay{position:fixed;inset:0;background:#0a0a0fdd;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;cursor:pointer;transition:opacity .4s}
+#overlay.hide{opacity:0;pointer-events:none}
+#overlay h2{font-size:1.4rem;color:#00f0ff;text-shadow:0 0 30px #00f0ff44;margin-bottom:8px;letter-spacing:1px}
+#overlay p{color:#555;font-size:.65rem;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── Groovebox shell ── */
+.gb{background:linear-gradient(180deg,#111118 0%,#0c0c14 40%,#0a0a10 100%);border:2px solid #1a1a28;border-radius:20px;padding:20px 24px 18px;box-shadow:0 8px 60px #00000080,0 0 80px #00f0ff06,inset 0 1px 0 #ffffff08;position:relative;max-width:540px;width:100%}
+.gb::before{content:'';position:absolute;top:0;left:20px;right:20px;height:1px;background:linear-gradient(90deg,transparent,#00f0ff22,transparent)}
+
+/* ── Brand ── */
+.brand{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.brand .logo{font-size:.85rem;font-weight:700;color:#e0e0e0;letter-spacing:1px}
+.brand .logo span{color:#00f0ff;font-size:.6rem;vertical-align:super;margin-left:2px}
+.brand .model{font-size:.5rem;color:#444;letter-spacing:2px;text-transform:uppercase}
+
+/* ── Waveform canvas ── */
+#waveCanvas{width:100%;height:44px;border-radius:8px;border:1px solid #ffffff08;background:#08080c;display:block;margin-bottom:12px}
+
+/* ── LCD display ── */
+.lcd{background:#0b1a0b;border:2px solid #1a2a1a;border-radius:8px;padding:8px 14px;margin-bottom:14px;min-height:40px;display:flex;align-items:center;justify-content:space-between;box-shadow:inset 0 2px 8px #00000066}
+.lcd .msg{font-size:.65rem;color:#33ff66;text-shadow:0 0 8px #33ff6644;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.lcd .bpm-display{font-size:.55rem;color:#33ff6688;margin-left:12px;white-space:nowrap}
+
+/* ── Pad grid ── */
+.pads{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.pad{height:60px;border-radius:10px;border:2px solid #1e1e30;background:linear-gradient(180deg,#14141f 0%,#0e0e18 100%);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all .1s;position:relative;overflow:hidden}
+.pad::before{content:'';position:absolute;inset:0;border-radius:8px;background:radial-gradient(circle at 50% 30%,#ffffff08,transparent 60%);pointer-events:none}
+.pad:active{transform:scale(.93)}
+.pad .ico{font-size:.9rem;margin-bottom:1px}
+.pad .nm{font-size:.45rem;color:#555;letter-spacing:.5px}
+
+/* Pad glow states */
+.pad.glow{animation:padGlow .25s ease-out}
+@keyframes padGlow{0%{box-shadow:0 0 20px var(--glow);border-color:var(--glow);background:linear-gradient(180deg,color-mix(in srgb,var(--glow) 15%,#14141f),#0e0e18)}100%{box-shadow:none;border-color:#1e1e30;background:linear-gradient(180deg,#14141f,#0e0e18)}}
+.pad.active-hit{box-shadow:0 0 20px var(--glow);border-color:var(--glow);background:linear-gradient(180deg,color-mix(in srgb,var(--glow) 18%,#14141f),#0e0e18)}
+
+/* Row colors */
+.pad.r0{--glow:#ff6b6b}.pad.r1{--glow:#00f0ff}.pad.r2{--glow:#fbbf24}.pad.r3{--glow:#a855f7}
+
+/* ── Channel faders section ── */
+.faders-section{display:flex;gap:12px;align-items:flex-end;margin-bottom:14px;justify-content:center}
+.fader-ch{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:60px}
+.fader-ch .ch-label{font-size:.5rem;color:#666;text-transform:uppercase;letter-spacing:1px}
+.fader-ch .ch-color{width:8px;height:8px;border-radius:50%;margin-bottom:2px}
+.fader-track{position:relative;width:36px;height:100px;background:linear-gradient(180deg,#0c0c14,#08080e);border:1px solid #1a1a28;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.fader-track input[type=range]{-webkit-appearance:none;appearance:none;writing-mode:vertical-lr;direction:rtl;width:100px;height:28px;background:transparent;cursor:pointer;transform:rotate(0deg)}
+.fader-track input[type=range]::-webkit-slider-runnable-track{width:4px;height:100%;background:linear-gradient(to top,#1a1a28,#2a2a3e);border-radius:2px}
+.fader-track input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:10px;background:linear-gradient(180deg,#555,#333);border:1px solid #666;border-radius:3px;cursor:pointer;box-shadow:0 2px 6px #00000088;margin-left:-12px}
+.fader-ch .ch-val{font-size:.5rem;color:#444;margin-top:2px;width:36px;text-align:center}
+
+/* ── Transport controls ── */
+.transport{display:flex;gap:8px;align-items:center;justify-content:center;margin-bottom:10px}
+.t-btn{width:44px;height:36px;border-radius:8px;border:1px solid #2a2a3e;background:linear-gradient(180deg,#18182a,#0e0e1a);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;color:#888;transition:.15s}
+.t-btn:hover{border-color:#555;color:#ccc}
+.t-btn.play-on{border-color:#4ade80;color:#4ade80;box-shadow:0 0 12px #4ade8022}
+.t-btn.stop-on{border-color:#ff6b6b;color:#ff6b6b;box-shadow:0 0 12px #ff6b6b22}
+
+/* ── Master volume ── */
+.master{display:flex;align-items:center;gap:8px;justify-content:center}
+.master label{font-size:.5rem;color:#555;text-transform:uppercase;letter-spacing:1px}
+.master input[type=range]{-webkit-appearance:none;width:120px;height:3px;background:#1a1a2e;border-radius:2px;outline:none;cursor:pointer}
+.master input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:radial-gradient(circle,#00f0ff,#0088aa);border-radius:50%;cursor:pointer;box-shadow:0 0 10px #00f0ff44}
+.master .mv{font-size:.5rem;color:#00f0ff88;width:28px}
+
+/* ── Footer ── */
+.foot{text-align:center;margin-top:14px;font-size:.45rem;color:#222}.foot a{color:#00f0ff33;text-decoration:none}
+
+/* ── Responsive ── */
+@media(max-width:560px){.gb{padding:14px 12px;border-radius:14px}.pad{height:50px}.fader-track{height:80px}}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  HTML  ███  (CodePen → HTML panel)
+     ═══════════════════════════════════════════════════════ -->
+<body>
+
+<!-- Startup overlay -->
+<div id="overlay">
+  <h2>&#127911; 8-BIT GROOVEBOX</h2>
+  <p>&#9654; Click anywhere to start</p>
+</div>
+
+<!-- Groovebox -->
+<div class="gb" id="groovebox" style="opacity:0">
+  <!-- Brand -->
+  <div class="brand">
+    <div class="logo">GROOVEBOX<span>8-BIT</span></div>
+    <div class="model">MC-808 &bull; ChiptuneSynth</div>
+  </div>
+
+  <!-- Waveform visualizer -->
+  <canvas id="waveCanvas" width="500" height="44"></canvas>
+
+  <!-- LCD display -->
+  <div class="lcd">
+    <div class="msg" id="lcd">READY</div>
+    <div class="bpm-display">128 BPM</div>
+  </div>
+
+  <!-- 16-pad grid -->
+  <div class="pads" id="pads"></div>
+
+  <!-- Channel faders -->
+  <div class="faders-section" id="faders"></div>
+
+  <!-- Transport -->
+  <div class="transport">
+    <button class="t-btn" id="btnPlay" title="Play demo loop">&#9654;</button>
+    <button class="t-btn" id="btnStop" title="Stop">&#9632;</button>
+  </div>
+
+  <!-- Master volume -->
+  <div class="master">
+    <label>Master</label>
+    <input type="range" id="masterVol" min="0" max="100" value="70">
+    <div class="mv" id="mvVal">70%</div>
+  </div>
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> &mdash; @8bitforge</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  JS  ███  (CodePen → JS panel)
+     ═══════════════════════════════════════════════════════ -->
+<script>
+/* ══════════════════════════════════════════════════════════
+   8-Bit Groovebox — powered by ChiptuneSynth
+   4 channels: Lead (track 0), Bass (track 1),
+   Drums (track 2), FX (track 3)
+   ══════════════════════════════════════════════════════════ */
+
+const synth = new ChiptuneSynth();
+let inited = false;
+let isPlaying = false;
+let loopTimeouts = [];
+let currentStep = -1;
+
+const BPM = 128;
+const BEAT = 60 / BPM;
+const STEP = BEAT / 4; // sixteenth note
+
+/* ── Channel definitions ── */
+const channels = [
+  { name: 'LEAD', color: '#ff6b6b', volume: 75, track: 0 },
+  { name: 'BASS', color: '#00f0ff', volume: 80, track: 1 },
+  { name: 'DRUM', color: '#fbbf24', volume: 70, track: 2 },
+  { name: 'FX',   color: '#a855f7', volume: 50, track: 3 }
+];
+
+/* ── Pad definitions (4x4) ── */
+const padDefs = [
+  // Row 0: Lead notes (track 0, square)
+  { label:'C5',  ico:'\u{1F3B5}', row:0, fn:()=>synth.playNoteByName('C',5,0,0.3) },
+  { label:'E5',  ico:'\u{1F3B5}', row:0, fn:()=>synth.playNoteByName('E',5,0,0.3) },
+  { label:'G5',  ico:'\u{1F3B5}', row:0, fn:()=>synth.playNoteByName('G',5,0,0.3) },
+  { label:'A5',  ico:'\u{1F3B5}', row:0, fn:()=>synth.playNoteByName('A',5,0,0.3) },
+  // Row 1: Bass notes (track 1, triangle)
+  { label:'C3',  ico:'\u{1F50A}', row:1, fn:()=>synth.playNoteByName('C',3,1,0.4) },
+  { label:'E3',  ico:'\u{1F50A}', row:1, fn:()=>synth.playNoteByName('E',3,1,0.4) },
+  { label:'G2',  ico:'\u{1F50A}', row:1, fn:()=>synth.playNoteByName('G',2,1,0.4) },
+  { label:'A2',  ico:'\u{1F50A}', row:1, fn:()=>synth.playNoteByName('A',2,1,0.4) },
+  // Row 2: Drums (presets on track 2)
+  { label:'KICK', ico:'\u{1F941}', row:2, fn:()=>synth.playPreset('bass') },
+  { label:'SNARE',ico:'\u{1F4A5}', row:2, fn:()=>synth.playPreset('hit') },
+  { label:'HAT',  ico:'\u{26A1}',  row:2, fn:()=>synth.playPreset('blip') },
+  { label:'CLAP', ico:'\u{1F44F}', row:2, fn:()=>synth.playPreset('shoot') },
+  // Row 3: FX (presets on track 3)
+  { label:'LASER',ico:'\u{1F4A2}', row:3, fn:()=>synth.playPreset('laser') },
+  { label:'COIN', ico:'\u{1FA99}', row:3, fn:()=>synth.playPreset('coin') },
+  { label:'PWR',  ico:'\u{2B06}',  row:3, fn:()=>synth.playPreset('powerup') },
+  { label:'1UP',  ico:'\u{2B50}',  row:3, fn:()=>synth.playPreset('1up') }
+];
+
+const lcdEl = document.getElementById('lcd');
+function setLCD(msg) { lcdEl.textContent = msg; }
+
+/* ── Build pad grid ── */
+const padsEl = document.getElementById('pads');
+const padEls = [];
+padDefs.forEach((p, i) => {
+  const el = document.createElement('div');
+  el.className = 'pad r' + p.row;
+  el.innerHTML = '<span class="ico">' + p.ico + '</span><span class="nm">' + p.label + '</span>';
+  el.addEventListener('pointerdown', () => triggerPad(i));
+  padsEl.appendChild(el);
+  padEls.push(el);
+});
+
+async function triggerPad(i) {
+  if (!inited) return;
+  padDefs[i].fn();
+  flashPad(i);
+  setLCD(padDefs[i].label + '  [CH ' + (padDefs[i].row + 1) + ']');
+}
+
+function flashPad(i) {
+  const el = padEls[i];
+  el.classList.remove('glow');
+  void el.offsetWidth; // reflow
+  el.classList.add('glow');
+}
+
+function activatePad(i) {
+  padEls[i].classList.add('active-hit');
+  setTimeout(() => padEls[i].classList.remove('active-hit'), 120);
+}
+
+/* ── Build faders ── */
+const fadersEl = document.getElementById('faders');
+channels.forEach((ch, ci) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'fader-ch';
+  wrap.innerHTML =
+    '<div class="ch-color" style="background:' + ch.color + ';box-shadow:0 0 6px ' + ch.color + '44"></div>' +
+    '<div class="ch-label">' + ch.name + '</div>' +
+    '<div class="fader-track"><input type="range" min="0" max="100" value="' + ch.volume + '" data-ch="' + ci + '"></div>' +
+    '<div class="ch-val" id="chVal' + ci + '">' + ch.volume + '%</div>';
+  fadersEl.appendChild(wrap);
+
+  wrap.querySelector('input').addEventListener('input', function() {
+    const v = +this.value;
+    channels[ci].volume = v;
+    document.getElementById('chVal' + ci).textContent = v + '%';
+    synth.updateTrack(ch.track, { volume: v / 100 * 0.5 });
+    setLCD(ch.name + ' VOL ' + v + '%');
+  });
+});
+
+/* ── Master volume ── */
+const masterSlider = document.getElementById('masterVol');
+const mvVal = document.getElementById('mvVal');
+masterSlider.addEventListener('input', function() {
+  const v = +this.value;
+  mvVal.textContent = v + '%';
+  synth.setMasterVolume(v / 100);
+  setLCD('MASTER VOL ' + v + '%');
+});
+
+/* ══════════════════════════════════════════════════════════
+   Demo Loop — 4-bar chiptune pattern
+   ══════════════════════════════════════════════════════════ */
+
+/* Lead melody (track 0): 4-bar melody in C major */
+const leadPattern = [
+  // Bar 1
+  { t:0,     note:'E', oct:5, dur:BEAT*0.4 },
+  { t:BEAT,  note:'E', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*2,note:'G', oct:5, dur:BEAT*0.8 },
+  { t:BEAT*3,note:'C', oct:5, dur:BEAT*0.4 },
+  // Bar 2
+  { t:BEAT*4,  note:'E', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*5,  note:'G', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*5.5,note:'A', oct:5, dur:BEAT*0.8 },
+  { t:BEAT*7,  note:'G', oct:5, dur:BEAT*0.4 },
+  // Bar 3
+  { t:BEAT*8,  note:'C', oct:6, dur:BEAT*0.5 },
+  { t:BEAT*9,  note:'B', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*10, note:'A', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*11, note:'G', oct:5, dur:BEAT*0.8 },
+  // Bar 4
+  { t:BEAT*12, note:'E', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*13, note:'D', oct:5, dur:BEAT*0.4 },
+  { t:BEAT*14, note:'C', oct:5, dur:BEAT*0.8 },
+  { t:BEAT*15, note:'E', oct:5, dur:BEAT*0.3 }
+];
+
+/* Bass line (track 1) */
+const bassPattern = [
+  { t:0,       note:'C', oct:3, dur:BEAT*0.8 },
+  { t:BEAT*2,  note:'G', oct:2, dur:BEAT*0.8 },
+  { t:BEAT*4,  note:'A', oct:2, dur:BEAT*0.8 },
+  { t:BEAT*6,  note:'E', oct:2, dur:BEAT*0.8 },
+  { t:BEAT*8,  note:'F', oct:2, dur:BEAT*0.8 },
+  { t:BEAT*10, note:'C', oct:3, dur:BEAT*0.8 },
+  { t:BEAT*12, note:'G', oct:2, dur:BEAT*0.8 },
+  { t:BEAT*14, note:'C', oct:3, dur:BEAT*0.8 }
+];
+
+/* Drum pattern: kick=bass preset, snare=hit preset, hat=blip */
+const drumPattern = [];
+for (let bar = 0; bar < 4; bar++) {
+  const bOff = bar * BEAT * 4;
+  // Kick on 1 and 3
+  drumPattern.push({ t: bOff,          preset:'bass', pad:8 });
+  drumPattern.push({ t: bOff+BEAT*2,   preset:'bass', pad:8 });
+  // Snare on 2 and 4
+  drumPattern.push({ t: bOff+BEAT,     preset:'hit',  pad:9 });
+  drumPattern.push({ t: bOff+BEAT*3,   preset:'hit',  pad:9 });
+  // Hi-hat on 8ths
+  for (let h = 0; h < 8; h++) {
+    drumPattern.push({ t: bOff+h*BEAT/2, preset:'blip', pad:10 });
+  }
+}
+
+/* FX accents (track 3) */
+const fxPattern = [
+  { t:0,           preset:'coin',   pad:13 },
+  { t:BEAT*3.5,    preset:'laser',  pad:12 },
+  { t:BEAT*7,      preset:'1up',    pad:15 },
+  { t:BEAT*11.5,   preset:'laser',  pad:12 },
+  { t:BEAT*15,     preset:'coin',   pad:13 }
+];
+
+const LOOP_LENGTH = BEAT * 16; // 4 bars
+
+function scheduleLoop() {
+  clearLoop();
+
+  const now = performance.now();
+
+  // Lead
+  leadPattern.forEach(n => {
+    const padIdx = n.note === 'C' && n.oct >= 5 ? 0 : n.note === 'E' ? 1 : n.note === 'G' ? 2 : 3;
+    loopTimeouts.push(setTimeout(() => {
+      synth.playNoteByName(n.note, n.oct, 0, n.dur);
+      activatePad(padIdx);
+    }, n.t * 1000));
+  });
+
+  // Bass
+  bassPattern.forEach(n => {
+    const padIdx = n.note === 'C' ? 4 : n.note === 'E' ? 5 : n.note === 'G' ? 6 : 7;
+    loopTimeouts.push(setTimeout(() => {
+      synth.playNoteByName(n.note, n.oct, 1, n.dur);
+      activatePad(padIdx);
+    }, n.t * 1000));
+  });
+
+  // Drums
+  drumPattern.forEach(d => {
+    loopTimeouts.push(setTimeout(() => {
+      synth.playPreset(d.preset);
+      activatePad(d.pad);
+    }, d.t * 1000));
+  });
+
+  // FX
+  fxPattern.forEach(f => {
+    loopTimeouts.push(setTimeout(() => {
+      synth.playPreset(f.preset);
+      activatePad(f.pad);
+    }, f.t * 1000));
+  });
+
+  // Loop restart
+  loopTimeouts.push(setTimeout(() => {
+    if (isPlaying) scheduleLoop();
+  }, LOOP_LENGTH * 1000));
+}
+
+function clearLoop() {
+  loopTimeouts.forEach(clearTimeout);
+  loopTimeouts = [];
+}
+
+function startPlay() {
+  if (isPlaying) return;
+  isPlaying = true;
+  document.getElementById('btnPlay').classList.add('play-on');
+  document.getElementById('btnStop').classList.remove('stop-on');
+  setLCD('PLAYING  128 BPM  4/4');
+
+  // Configure tracks for demo
+  synth.updateTrack(0, { type:'square', volume: channels[0].volume/100*0.5, dutyCycle:0.5 });
+  synth.updateEnvelope(0, { attack:0.01, decay:0.08, sustain:0.6, release:0.15 });
+
+  synth.updateTrack(1, { type:'triangle', volume: channels[1].volume/100*0.5 });
+  synth.updateEnvelope(1, { attack:0.01, decay:0.2, sustain:0.8, release:0.1 });
+
+  scheduleLoop();
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearLoop();
+  document.getElementById('btnPlay').classList.remove('play-on');
+  document.getElementById('btnStop').classList.add('stop-on');
+  setLCD('STOPPED');
+  setTimeout(() => {
+    document.getElementById('btnStop').classList.remove('stop-on');
+    setLCD('READY');
+  }, 800);
+}
+
+document.getElementById('btnPlay').addEventListener('click', startPlay);
+document.getElementById('btnStop').addEventListener('click', stopPlay);
+
+/* ══════════════════════════════════════════════════════════
+   Waveform Visualizer (requestAnimationFrame)
+   ══════════════════════════════════════════════════════════ */
+const waveCanvas = document.getElementById('waveCanvas');
+const wCtx = waveCanvas.getContext('2d');
+
+(function drawWave() {
+  requestAnimationFrame(drawWave);
+  const W = waveCanvas.width, H = waveCanvas.height;
+  wCtx.fillStyle = '#08080c';
+  wCtx.fillRect(0, 0, W, H);
+
+  const wd = synth.getWaveformData();
+  if (!wd) {
+    // Draw idle line
+    wCtx.beginPath();
+    wCtx.strokeStyle = '#1a1a2e';
+    wCtx.lineWidth = 1;
+    wCtx.moveTo(0, H/2);
+    wCtx.lineTo(W, H/2);
+    wCtx.stroke();
+    return;
+  }
+
+  // Gradient waveform
+  const grad = wCtx.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, '#ff6b6b');
+  grad.addColorStop(0.33, '#00f0ff');
+  grad.addColorStop(0.66, '#fbbf24');
+  grad.addColorStop(1, '#a855f7');
+  wCtx.beginPath();
+  wCtx.strokeStyle = grad;
+  wCtx.lineWidth = 1.8;
+  wCtx.shadowColor = '#00f0ff';
+  wCtx.shadowBlur = 4;
+
+  const step = W / wd.length;
+  for (let i = 0; i < wd.length; i++) {
+    const y = (wd[i] / 255) * H;
+    i === 0 ? wCtx.moveTo(0, y) : wCtx.lineTo(i * step, y);
+  }
+  wCtx.stroke();
+  wCtx.shadowBlur = 0;
+})();
+
+/* ══════════════════════════════════════════════════════════
+   Initialization — requires user gesture
+   ══════════════════════════════════════════════════════════ */
+const overlay = document.getElementById('overlay');
+overlay.addEventListener('click', async () => {
+  if (inited) return;
+  await synth.init();
+  inited = true;
+
+  // Set initial volumes
+  synth.setMasterVolume(0.7);
+  channels.forEach(ch => {
+    synth.updateTrack(ch.track, { volume: ch.volume / 100 * 0.5 });
+  });
+
+  // Load instruments for lead and bass
+  synth.loadInstrument('piano', 0);
+  synth.loadInstrument('cello', 1);
+
+  overlay.classList.add('hide');
+  document.getElementById('groovebox').style.opacity = '1';
+  setLCD('GROOVEBOX READY');
+});
+
+/* ── Keyboard shortcuts ── */
+document.addEventListener('keydown', e => {
+  if (e.repeat || !inited) return;
+  if (e.key === ' ') { e.preventDefault(); isPlaying ? stopPlay() : startPlay(); }
+  // Pad keys: 1-4 (row 0), Q-R (row 1), A-F (row 2), Z-V (row 3)
+  const keyMap = { '1':0,'2':1,'3':2,'4':3, 'q':4,'w':5,'e':6,'r':7, 'a':8,'s':9,'d':10,'f':11, 'z':12,'x':13,'c':14,'v':15 };
+  const idx = keyMap[e.key.toLowerCase()];
+  if (idx !== undefined) triggerPad(idx);
+});
+</script>
+</body>
+</html>

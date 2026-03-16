@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Melody Grid — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: Melody Grid Composer                   ║
+  ║  16-step x 12-note grid sequencer, dual tracks   ║
+  ║  (Lead + Bass), BPM, instrument selector,        ║
+  ║  waveform visualizer                             ║
+  ║                                                  ║
+  ║  Exploits: loadInstrument, playNoteByName,       ║
+  ║  updateTrack, setMasterVolume, getWaveformData   ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███  (CodePen → CSS panel)
+     ═══════════════════════════════════════════ -->
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a10;color:#fff;font-family:'Courier New',monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;overflow-x:hidden;padding:16px}
+
+/* ── Header ── */
+.head{text-align:center;margin-bottom:14px}
+.head h1{font-size:1.4rem;background:linear-gradient(135deg,#ffa500,#ffcc00);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px}
+.head p{color:#555;font-size:.55rem;margin-top:3px;letter-spacing:.5px}
+
+/* ── Main shell ── */
+.composer{background:linear-gradient(180deg,#0e0e18 0%,#0a0a12 100%);border:1px solid #ffa50015;border-radius:16px;padding:18px 20px;box-shadow:0 0 60px #ffa50008,0 16px 48px #0008;position:relative;overflow:hidden}
+.composer::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#ffa50033,transparent)}
+
+/* ── Controls bar ── */
+.ctrls{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+.btn{background:#12121f;border:1px solid #333;color:#aaa;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:.62rem;transition:.2s;letter-spacing:.3px}
+.btn:hover{border-color:#ffa500;color:#ffa500}
+.btn.play{border-color:#ffa500;color:#ffa500;text-shadow:0 0 8px #ffa50044}
+.btn.play.active{border-color:#ff6b6b;color:#ff6b6b}
+.ctrl-g{display:flex;align-items:center;gap:4px;font-size:.52rem;color:#555}
+.ctrl-g select,.ctrl-g input[type=range]{background:#0c0c18;border:1px solid #222;color:#ffa500;font-family:inherit;font-size:.52rem;padding:2px 4px;border-radius:4px;cursor:pointer}
+.ctrl-g select{min-width:90px}
+.ctrl-g input[type=range]{-webkit-appearance:none;width:80px;height:3px;border:none;border-radius:2px;outline:none}
+.ctrl-g input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;background:#ffa500;border-radius:50%;cursor:pointer;box-shadow:0 0 6px #ffa50066}
+.bpm-val{color:#ffa500;font-size:.55rem;min-width:28px;text-align:center}
+
+/* ── Track toggle ── */
+.tracks{display:flex;gap:4px;margin-bottom:10px;justify-content:center}
+.trk{background:#0c0c18;border:1px solid #1a1a2e;color:#555;padding:4px 14px;border-radius:16px;cursor:pointer;font-size:.55rem;transition:.2s;letter-spacing:.3px}
+.trk:hover{color:#888;border-color:#333}
+.trk.on{border-color:#ffa500;color:#ffa500;background:#ffa50008;box-shadow:0 0 10px #ffa50015}
+.trk.has-data::after{content:'';display:inline-block;width:4px;height:4px;background:#ffcc00;border-radius:50%;margin-left:5px;vertical-align:middle}
+
+/* ── Grid ── */
+.grid-wrap{overflow-x:auto;margin-bottom:12px}
+.grid{display:inline-block}
+.grid-header{display:flex;padding-left:42px;margin-bottom:2px}
+.step-num{width:28px;text-align:center;font-size:.42rem;color:#333;flex-shrink:0}
+.step-num.beat{color:#555}
+.grid-row{display:flex;align-items:center;margin-bottom:1px}
+.note-lbl{width:40px;font-size:.48rem;color:#555;text-align:right;padding-right:6px;flex-shrink:0;user-select:none}
+.note-lbl.sharp{color:#444}
+.cell{width:28px;height:22px;border-radius:3px;border:1px solid #1a1a2e;background:#0c0c18;cursor:pointer;transition:background .1s,border-color .1s,box-shadow .1s;flex-shrink:0}
+.cell:hover{border-color:#ffa50044}
+.cell.on{background:#ffa500;border-color:#ffa500;box-shadow:inset 0 0 6px #0003,0 0 8px #ffa50033}
+.cell.playhead{border-color:#ffcc0088;box-shadow:0 0 6px #ffcc0033}
+.cell.on.playhead{background:#ffcc00;border-color:#ffcc00;box-shadow:0 0 12px #ffcc0066}
+/* beat group separators */
+.cell:nth-child(6),.cell:nth-child(10),.cell:nth-child(14){margin-left:4px}
+.step-num:nth-child(5),.step-num:nth-child(9),.step-num:nth-child(13){margin-left:4px}
+
+/* ── Waveform ── */
+.wave-wrap{margin-top:10px}
+.wave-wrap canvas{display:block;border-radius:6px;border:1px solid #ffffff06}
+
+/* ── Click overlay ── */
+.overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a10ee;display:flex;align-items:center;justify-content:center;z-index:100;cursor:pointer}
+.overlay-inner{text-align:center}
+.overlay-inner h2{font-size:1.2rem;color:#ffa500;margin-bottom:8px}
+.overlay-inner p{color:#666;font-size:.6rem}
+
+/* ── Footer ── */
+.foot{text-align:center;margin-top:12px;font-size:.48rem;color:#222}
+.foot a{color:#ffa50044;text-decoration:none}
+.foot a:hover{color:#ffa500}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███  (CodePen → HTML panel)
+     ═══════════════════════════════════════════ -->
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-inner">
+    <h2>&#9835; Melody Grid</h2>
+    <p>Click anywhere to start audio</p>
+  </div>
+</div>
+
+<div class="head">
+  <h1>&#9835; Melody Grid</h1>
+  <p>16-step sequencer &bull; 12 notes &bull; Lead + Bass layering</p>
+</div>
+
+<div class="composer">
+  <!-- Track selector -->
+  <div class="tracks">
+    <div class="trk on" id="trkLead" data-track="0">Lead</div>
+    <div class="trk" id="trkBass" data-track="1">Bass</div>
+  </div>
+
+  <!-- Controls -->
+  <div class="ctrls">
+    <button class="btn play" id="playBtn">&#9654; Play</button>
+    <button class="btn" id="stopBtn">&#9632; Stop</button>
+    <button class="btn" id="clearBtn">&#10005; Clear</button>
+    <div class="ctrl-g">BPM<input type="range" id="bpmSlider" min="80" max="200" value="120"><span class="bpm-val" id="bpmVal">120</span></div>
+    <div class="ctrl-g">Inst<select id="instSel"></select></div>
+  </div>
+
+  <!-- Grid -->
+  <div class="grid-wrap">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <!-- Waveform -->
+  <div class="wave-wrap">
+    <canvas id="cvW" width="468" height="40"></canvas>
+  </div>
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> &mdash; @8bitforge</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███  (CodePen → JS panel)
+     ═══════════════════════════════════════════ -->
+<script>
+const synth = new ChiptuneSynth();
+let inited = false;
+
+/* ── Note definitions (bottom=C4, top=B5) ── */
+const NOTES = [
+  {name:'B', oct:5, label:'B5'},
+  {name:'A#',oct:5, label:'A#5'},
+  {name:'A', oct:5, label:'A5'},
+  {name:'G#',oct:5, label:'G#5'},
+  {name:'G', oct:5, label:'G5'},
+  {name:'F#',oct:5, label:'F#5'},
+  {name:'F', oct:5, label:'F5'},
+  {name:'E', oct:5, label:'E5'},
+  {name:'D#',oct:5, label:'D#5'},
+  {name:'D', oct:5, label:'D5'},
+  {name:'C#',oct:5, label:'C#5'},
+  {name:'C', oct:5, label:'C5'},
+  {name:'B', oct:4, label:'B4'},
+  {name:'A#',oct:4, label:'A#4'},
+  {name:'A', oct:4, label:'A4'},
+  {name:'G#',oct:4, label:'G#4'},
+  {name:'G', oct:4, label:'G4'},
+  {name:'F#',oct:4, label:'F#4'},
+  {name:'F', oct:4, label:'F4'},
+  {name:'E', oct:4, label:'E4'},
+  {name:'D#',oct:4, label:'D#4'},
+  {name:'D', oct:4, label:'D4'},
+  {name:'C#',oct:4, label:'C#4'},
+  {name:'C', oct:4, label:'C4'}
+];
+const ROWS = NOTES.length;
+const STEPS = 16;
+
+/* ── Track state ── */
+const trackData = {
+  0: { grid: Array.from({length:STEPS}, ()=>Array(ROWS).fill(false)), inst:'piano' },
+  1: { grid: Array.from({length:STEPS}, ()=>Array(ROWS).fill(false)), inst:'synthBass' }
+};
+let activeTrack = 0;
+let isPlaying = false;
+let currentStep = -1;
+let seqTimer = null;
+
+/* ── Populate instrument selector ── */
+const instNames = ChiptuneSynth.getInstrumentNames();
+const instSel = document.getElementById('instSel');
+instNames.forEach(n => {
+  const o = document.createElement('option');
+  o.value = n; o.textContent = n;
+  instSel.appendChild(o);
+});
+instSel.value = trackData[activeTrack].inst;
+
+/* ── Build grid ── */
+const gridEl = document.getElementById('grid');
+
+// Step numbers header
+const header = document.createElement('div');
+header.className = 'grid-header';
+for (let s = 0; s < STEPS; s++) {
+  const num = document.createElement('div');
+  num.className = 'step-num' + (s % 4 === 0 ? ' beat' : '');
+  num.textContent = s + 1;
+  header.appendChild(num);
+}
+gridEl.appendChild(header);
+
+// Note rows (high to low)
+for (let r = 0; r < ROWS; r++) {
+  const row = document.createElement('div');
+  row.className = 'grid-row';
+  const lbl = document.createElement('div');
+  lbl.className = 'note-lbl' + (NOTES[r].name.includes('#') ? ' sharp' : '');
+  lbl.textContent = NOTES[r].label;
+  row.appendChild(lbl);
+  for (let s = 0; s < STEPS; s++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.r = r;
+    cell.dataset.s = s;
+    cell.addEventListener('mousedown', (e) => { toggleCell(s, r); isDragging = true; dragVal = trackData[activeTrack].grid[s][r]; });
+    cell.addEventListener('mouseenter', (e) => { if (isDragging) setCell(s, r, dragVal); });
+    row.appendChild(cell);
+  }
+  gridEl.appendChild(row);
+}
+
+/* ── Mouse drag support ── */
+let isDragging = false;
+let dragVal = false;
+document.addEventListener('mouseup', () => { isDragging = false; });
+
+function toggleCell(s, r) {
+  trackData[activeTrack].grid[s][r] = !trackData[activeTrack].grid[s][r];
+  refreshGrid();
+  updateTrackIndicators();
+}
+
+function setCell(s, r, val) {
+  trackData[activeTrack].grid[s][r] = val;
+  refreshGrid();
+}
+
+function refreshGrid() {
+  const grid = trackData[activeTrack].grid;
+  const cells = gridEl.querySelectorAll('.cell');
+  cells.forEach(cell => {
+    const s = +cell.dataset.s;
+    const r = +cell.dataset.r;
+    cell.classList.toggle('on', grid[s][r]);
+    cell.classList.toggle('playhead', s === currentStep && isPlaying);
+  });
+}
+
+/* ── Track indicators (dot when track has data) ── */
+function updateTrackIndicators() {
+  [0, 1].forEach(t => {
+    const hasData = trackData[t].grid.some(col => col.some(v => v));
+    const el = t === 0 ? document.getElementById('trkLead') : document.getElementById('trkBass');
+    el.classList.toggle('has-data', hasData);
+  });
+}
+
+/* ── Track switching ── */
+document.querySelectorAll('.trk').forEach(btn => {
+  btn.onclick = () => {
+    activeTrack = +btn.dataset.track;
+    document.querySelectorAll('.trk').forEach(b => b.classList.toggle('on', +b.dataset.track === activeTrack));
+    instSel.value = trackData[activeTrack].inst;
+    refreshGrid();
+  };
+});
+
+/* ── Instrument change ── */
+instSel.onchange = () => {
+  trackData[activeTrack].inst = instSel.value;
+  if (inited) synth.loadInstrument(instSel.value, activeTrack);
+};
+
+/* ── BPM slider ── */
+const bpmSlider = document.getElementById('bpmSlider');
+const bpmVal = document.getElementById('bpmVal');
+bpmSlider.oninput = () => { bpmVal.textContent = bpmSlider.value; };
+
+/* ── Init audio ── */
+async function ensureInit() {
+  if (inited) return;
+  await synth.init();
+  synth.setMasterVolume(0.7);
+  synth.loadInstrument(trackData[0].inst, 0);
+  synth.loadInstrument(trackData[1].inst, 1);
+  inited = true;
+}
+
+/* ── Click-to-start overlay ── */
+document.getElementById('overlay').onclick = async () => {
+  await ensureInit();
+  document.getElementById('overlay').style.display = 'none';
+};
+
+/* ── Sequencer ── */
+function startSequencer() {
+  if (isPlaying) return;
+  isPlaying = true;
+  currentStep = -1;
+  document.getElementById('playBtn').textContent = '\u23F8 Pause';
+  document.getElementById('playBtn').classList.add('active');
+  scheduleNext();
+}
+
+function stopSequencer() {
+  isPlaying = false;
+  clearTimeout(seqTimer);
+  seqTimer = null;
+  currentStep = -1;
+  document.getElementById('playBtn').textContent = '\u25B6 Play';
+  document.getElementById('playBtn').classList.remove('active');
+  refreshGrid();
+}
+
+function scheduleNext() {
+  if (!isPlaying) return;
+  currentStep = (currentStep + 1) % STEPS;
+
+  // Play notes for both tracks
+  [0, 1].forEach(t => {
+    const col = trackData[t].grid[currentStep];
+    for (let r = 0; r < ROWS; r++) {
+      if (col[r]) {
+        const note = NOTES[r];
+        const bpm = +bpmSlider.value || 120;
+        const dur = Math.min(60 / bpm / 2, 0.4);
+        synth.playNoteByName(note.name, note.oct, t, dur);
+      }
+    }
+  });
+
+  refreshGrid();
+
+  const bpm = +bpmSlider.value || 120;
+  const interval = (60000 / bpm) / 4; // 16th notes
+  seqTimer = setTimeout(scheduleNext, interval);
+}
+
+/* ── Transport buttons ── */
+document.getElementById('playBtn').onclick = async () => {
+  await ensureInit();
+  if (isPlaying) stopSequencer();
+  else startSequencer();
+};
+
+document.getElementById('stopBtn').onclick = () => {
+  stopSequencer();
+};
+
+document.getElementById('clearBtn').onclick = () => {
+  trackData[activeTrack].grid = Array.from({length:STEPS}, ()=>Array(ROWS).fill(false));
+  refreshGrid();
+  updateTrackIndicators();
+};
+
+/* ── Waveform visualizer ── */
+const cW = document.getElementById('cvW');
+const ctxW = cW.getContext('2d');
+(function drawWave() {
+  requestAnimationFrame(drawWave);
+  const w = cW.width, h = cW.height;
+  ctxW.fillStyle = '#0a0a10';
+  ctxW.fillRect(0, 0, w, h);
+  const wd = synth.getWaveformData();
+  if (!wd) {
+    // Draw flat line
+    ctxW.strokeStyle = '#1a1a2e';
+    ctxW.lineWidth = 1;
+    ctxW.beginPath();
+    ctxW.moveTo(0, h / 2);
+    ctxW.lineTo(w, h / 2);
+    ctxW.stroke();
+    return;
+  }
+  const slice = w / wd.length;
+  ctxW.strokeStyle = '#ffa500';
+  ctxW.lineWidth = 1.5;
+  ctxW.shadowColor = '#ffa500';
+  ctxW.shadowBlur = 6;
+  ctxW.beginPath();
+  for (let i = 0; i < wd.length; i++) {
+    const v = wd[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) ctxW.moveTo(0, y);
+    else ctxW.lineTo(i * slice, y);
+  }
+  ctxW.stroke();
+  ctxW.shadowBlur = 0;
+})();
+
+/* ── Init state ── */
+updateTrackIndicators();
+refreshGrid();
+</script>
+</body>
+</html>

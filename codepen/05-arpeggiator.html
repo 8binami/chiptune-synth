@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Arpeggiator — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: 8-Bit Arpeggiator & Chord Machine      ║
+  ║  Select a chord, choose an arp pattern, adjust    ║
+  ║  BPM/octave/instrument. Visual key highlights     ║
+  ║  and waveform display.                            ║
+  ║                                                   ║
+  ║  Exploits: init, playNoteByName, loadInstrument,  ║
+  ║  updateTrack, updateEnvelope, setMasterVolume,    ║
+  ║  getWaveformData, stopAllNotes,                   ║
+  ║  getInstrumentNames, noteToFrequency              ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  CSS  ███  (CodePen → CSS panel)
+     ═══════════════════════════════════════════════════════ -->
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ── Theme ── */
+:root{
+  --bg:#08080e;
+  --surface:#111118;
+  --surface2:#1a1a24;
+  --border:rgba(255,255,255,.08);
+  --cyan:#00f0ff;
+  --violet:#a855f7;
+  --pink:#ff6eb4;
+  --amber:#ffb347;
+  --text:#e0e0e8;
+  --dim:#666678;
+  --radius:10px;
+}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'SF Mono','Fira Code','Courier New',monospace;
+  display:flex;flex-direction:column;align-items:center;
+  min-height:100vh;padding:20px;user-select:none;
+  overflow-x:hidden;
+}
+
+/* ── Header ── */
+.header{text-align:center;margin-bottom:18px}
+.header h1{font-size:1.4rem;letter-spacing:2px;color:var(--cyan);text-shadow:0 0 20px rgba(0,240,255,.3)}
+.header p{font-size:.7rem;color:var(--dim);margin-top:4px}
+
+/* ── Device Shell ── */
+.device{
+  background:linear-gradient(145deg,#0e0e16,#14141e);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:24px;
+  width:100%;max-width:680px;
+  box-shadow:0 0 60px rgba(0,240,255,.04),0 20px 40px rgba(0,0,0,.5);
+}
+
+/* ── Waveform ── */
+.wave-wrap{
+  background:#06060a;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:4px;margin-bottom:16px;
+  position:relative;overflow:hidden;
+}
+.wave-wrap canvas{width:100%;height:80px;display:block;border-radius:6px}
+.wave-label{
+  position:absolute;top:6px;right:10px;
+  font-size:.55rem;color:var(--dim);letter-spacing:1px;
+}
+
+/* ── Piano Roll ── */
+.piano-section{margin-bottom:16px}
+.piano-section label{font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;display:block}
+.piano{display:flex;position:relative;height:80px;margin:0 auto;justify-content:center}
+.key{
+  position:relative;
+  width:36px;height:80px;
+  background:linear-gradient(180deg,#f0f0f0,#d8d8d8);
+  border:1px solid #999;
+  border-radius:0 0 5px 5px;
+  cursor:pointer;transition:all .08s;
+  z-index:1;
+}
+.key.active{
+  background:linear-gradient(180deg,var(--cyan),#00b8c8) !important;
+  box-shadow:0 0 12px rgba(0,240,255,.5);
+  transform:scaleY(.97);
+}
+.key.in-chord{
+  background:linear-gradient(180deg,rgba(168,85,247,.3),rgba(168,85,247,.15));
+  border-color:var(--violet);
+}
+.key span{
+  position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
+  font-size:.5rem;color:#666;font-weight:700;
+}
+.key.black{
+  width:24px;height:50px;
+  background:linear-gradient(180deg,#222,#111);
+  border-color:#000;
+  margin:0 -12px;z-index:2;
+  border-radius:0 0 4px 4px;
+}
+.key.black span{color:#888}
+.key.black.active{
+  background:linear-gradient(180deg,var(--violet),#7c3aed) !important;
+  box-shadow:0 0 12px rgba(168,85,247,.5);
+}
+.key.black.in-chord{
+  background:linear-gradient(180deg,rgba(168,85,247,.5),rgba(168,85,247,.3));
+}
+
+/* ── Controls Grid ── */
+.controls{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;margin-bottom:16px;
+}
+.ctrl-group{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:12px;
+}
+.ctrl-group label{
+  font-size:.6rem;color:var(--dim);
+  text-transform:uppercase;letter-spacing:1px;
+  margin-bottom:8px;display:block;
+}
+.ctrl-group select,
+.ctrl-group input[type=range]{
+  width:100%;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:6px 8px;
+  font-family:inherit;font-size:.75rem;
+  outline:none;cursor:pointer;
+}
+.ctrl-group select:focus{border-color:var(--cyan)}
+.ctrl-group input[type=range]{
+  -webkit-appearance:none;height:6px;padding:0;
+  border-radius:3px;background:var(--surface2);
+  margin-top:4px;
+}
+.ctrl-group input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  width:16px;height:16px;border-radius:50%;
+  background:var(--cyan);cursor:pointer;
+  box-shadow:0 0 6px rgba(0,240,255,.4);
+}
+.val{float:right;color:var(--cyan);font-size:.7rem;font-weight:700}
+
+/* ── Chord Buttons ── */
+.chord-section{margin-bottom:16px}
+.chord-section>label{font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block}
+.chord-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.chord-btn{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px 4px;
+  text-align:center;
+  cursor:pointer;transition:all .15s;
+  font-size:.7rem;font-family:inherit;color:var(--text);
+}
+.chord-btn:hover{border-color:var(--violet);background:rgba(168,85,247,.08)}
+.chord-btn.active{
+  border-color:var(--violet);
+  background:rgba(168,85,247,.15);
+  color:var(--violet);
+  box-shadow:0 0 10px rgba(168,85,247,.2);
+}
+.chord-btn .chord-name{font-weight:700;font-size:.8rem;display:block}
+.chord-btn .chord-notes{font-size:.5rem;color:var(--dim);margin-top:2px}
+
+/* ── Pattern Buttons ── */
+.pattern-section{margin-bottom:16px}
+.pattern-section>label{font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block}
+.pattern-row{display:flex;gap:6px;flex-wrap:wrap}
+.pat-btn{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px 14px;
+  cursor:pointer;transition:all .15s;
+  font-size:.7rem;font-family:inherit;color:var(--text);
+}
+.pat-btn:hover{border-color:var(--amber);background:rgba(255,179,71,.08)}
+.pat-btn.active{
+  border-color:var(--amber);
+  background:rgba(255,179,71,.12);
+  color:var(--amber);
+  box-shadow:0 0 10px rgba(255,179,71,.15);
+}
+
+/* ── Transport ── */
+.transport{display:flex;gap:10px;align-items:center;justify-content:center}
+.btn-play{
+  width:56px;height:56px;border-radius:50%;
+  background:linear-gradient(135deg,var(--cyan),#00b8c8);
+  border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 20px rgba(0,240,255,.3);
+  transition:all .15s;
+}
+.btn-play:hover{transform:scale(1.08);box-shadow:0 0 30px rgba(0,240,255,.5)}
+.btn-play svg{width:22px;height:22px;fill:#000}
+.btn-play.playing{background:linear-gradient(135deg,var(--pink),#e0508a)}
+.btn-stop{
+  width:40px;height:40px;border-radius:50%;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.btn-stop:hover{border-color:var(--pink)}
+.btn-stop svg{width:14px;height:14px;fill:var(--dim)}
+.now-playing{
+  font-size:.7rem;color:var(--dim);
+  min-width:120px;text-align:center;
+}
+.now-playing .note-name{color:var(--cyan);font-weight:700;font-size:.9rem}
+
+/* ── Overlay ── */
+.overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(4,4,8,.92);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+.overlay h2{color:var(--cyan);font-size:1.6rem;margin-bottom:8px;letter-spacing:3px}
+.overlay p{color:var(--dim);font-size:.8rem}
+.overlay .pulse{
+  width:80px;height:80px;border-radius:50%;
+  border:2px solid var(--cyan);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:20px;
+  animation:pulse 2s ease-in-out infinite;
+}
+.overlay .pulse svg{width:30px;height:30px;fill:var(--cyan)}
+@keyframes pulse{0%,100%{opacity:.4;transform:scale(.95)}50%{opacity:1;transform:scale(1.05)}}
+.hidden{display:none!important}
+
+/* ── Footer ── */
+.foot{
+  margin-top:16px;font-size:.6rem;color:var(--dim);
+  text-align:center;
+}
+.foot a{color:var(--violet);text-decoration:none}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  HTML  ███  (CodePen → HTML panel)
+     ═══════════════════════════════════════════════════════ -->
+<body>
+
+<!-- Overlay -->
+<div class="overlay" id="overlay">
+  <div class="pulse"><svg viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg></div>
+  <h2>ARPEGGIATOR</h2>
+  <p>Click to power on</p>
+</div>
+
+<div class="header">
+  <h1>♫ ARPEGGIATOR</h1>
+  <p>8-Bit Chord Machine — powered by ChiptuneSynth</p>
+</div>
+
+<div class="device">
+  <!-- Waveform -->
+  <div class="wave-wrap">
+    <canvas id="waveCanvas" width="640" height="80"></canvas>
+    <span class="wave-label">WAVEFORM</span>
+  </div>
+
+  <!-- Piano -->
+  <div class="piano-section">
+    <label>Keyboard</label>
+    <div class="piano" id="piano"></div>
+  </div>
+
+  <!-- Chords -->
+  <div class="chord-section">
+    <label>Chords</label>
+    <div class="chord-grid" id="chordGrid"></div>
+  </div>
+
+  <!-- Arp Pattern -->
+  <div class="pattern-section">
+    <label>Arp Pattern</label>
+    <div class="pattern-row" id="patternRow"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <label>Instrument <span class="val" id="instVal">Piano</span></label>
+      <select id="instSel"></select>
+    </div>
+    <div class="ctrl-group">
+      <label>BPM <span class="val" id="bpmVal">140</span></label>
+      <input type="range" id="bpmSlider" min="60" max="240" value="140">
+    </div>
+    <div class="ctrl-group">
+      <label>Octave <span class="val" id="octVal">4</span></label>
+      <input type="range" id="octSlider" min="2" max="6" value="4">
+    </div>
+    <div class="ctrl-group">
+      <label>Volume <span class="val" id="volVal">80%</span></label>
+      <input type="range" id="volSlider" min="0" max="100" value="80">
+    </div>
+  </div>
+
+  <!-- Transport -->
+  <div class="transport">
+    <button class="btn-stop" id="btnStop" title="Stop">
+      <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+    </button>
+    <button class="btn-play" id="btnPlay" title="Play/Pause">
+      <svg viewBox="0 0 24 24" id="playIcon"><polygon points="8,5 19,12 8,19"/></svg>
+    </button>
+    <div class="now-playing">
+      <div class="note-name" id="noteDisplay">—</div>
+      <div id="stepDisplay">Ready</div>
+    </div>
+  </div>
+</div>
+
+<div class="foot">
+  <a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a>
+  &mdash; @8bitforge/chiptune-synth &mdash;
+  <a href="https://www.npmjs.com/package/@8bitforge/chiptune-synth" target="_blank">npm</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     ███  JS  ███  (CodePen → JS panel)
+     ═══════════════════════════════════════════════════════ -->
+<script>
+/* ─────────────────────────────────────────────────────────
+   Arpeggiator — ChiptuneSynth CodePen
+   ───────────────────────────────────────────────────────── */
+
+const synth = new ChiptuneSynth();
+let ready = false;
+
+/* ── Musical Data ── */
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+const CHORDS = {
+  'C Maj':  ['C','E','G'],
+  'D Min':  ['D','F','A'],
+  'E Min':  ['E','G','B'],
+  'F Maj':  ['F','A','C'],
+  'G Maj':  ['G','B','D'],
+  'A Min':  ['A','C','E'],
+  'C Min':  ['C','D#','G'],
+  'D Maj':  ['D','F#','A'],
+  'E Maj':  ['E','G#','B'],
+  'F Min':  ['F','G#','C'],
+  'G Min':  ['G','A#','D'],
+  'B Dim':  ['B','D','F'],
+  'C Maj7': ['C','E','G','B'],
+  'D Min7': ['D','F','A','C'],
+  'G7':     ['G','B','D','F'],
+  'A Min7': ['A','C','E','G'],
+  'F Maj7': ['F','A','C','E'],
+  'E7':     ['E','G#','B','D'],
+};
+
+const PATTERNS = {
+  'Up':       (notes, i) => notes[i % notes.length],
+  'Down':     (notes, i) => notes[(notes.length - 1) - (i % notes.length)],
+  'Up-Down':  (notes, i) => { const len = notes.length * 2 - 2; const j = i % (len || 1); return j < notes.length ? notes[j] : notes[len - j]; },
+  'Random':   (notes, i) => notes[Math.floor(Math.random() * notes.length)],
+  'Skip':     (notes, i) => notes[(i * 2) % notes.length],
+  'Chord':    (notes, i) => notes, // special: play all at once
+};
+
+let currentChord = 'C Maj';
+let currentPattern = 'Up';
+let octave = 4;
+let bpm = 140;
+let playing = false;
+let stepIndex = 0;
+let timerId = null;
+
+/* ── DOM refs ── */
+const overlay     = document.getElementById('overlay');
+const piano       = document.getElementById('piano');
+const chordGrid   = document.getElementById('chordGrid');
+const patternRow  = document.getElementById('patternRow');
+const instSel     = document.getElementById('instSel');
+const bpmSlider   = document.getElementById('bpmSlider');
+const octSlider   = document.getElementById('octSlider');
+const volSlider   = document.getElementById('volSlider');
+const bpmVal      = document.getElementById('bpmVal');
+const octVal      = document.getElementById('octVal');
+const volVal      = document.getElementById('volVal');
+const instVal     = document.getElementById('instVal');
+const btnPlay     = document.getElementById('btnPlay');
+const btnStop     = document.getElementById('btnStop');
+const playIcon    = document.getElementById('playIcon');
+const noteDisplay = document.getElementById('noteDisplay');
+const stepDisplay = document.getElementById('stepDisplay');
+const waveCanvas  = document.getElementById('waveCanvas');
+const wCtx        = waveCanvas.getContext('2d');
+
+/* ── Build Piano Keys ── */
+function buildPiano() {
+  // 2 octaves: C to B (24 keys)
+  for (let o = 0; o < 2; o++) {
+    NOTES.forEach((n, i) => {
+      const key = document.createElement('div');
+      const isBlack = n.includes('#');
+      key.className = 'key' + (isBlack ? ' black' : '');
+      key.dataset.note = n;
+      key.dataset.octave = octave + o;
+      key.innerHTML = '<span>' + (isBlack ? n.replace('#','♯') : n) + '</span>';
+      key.addEventListener('click', () => {
+        if (!ready) return;
+        synth.playNoteByName(n, octave + o, 0, 0.3);
+        flashKey(key);
+      });
+      piano.appendChild(key);
+    });
+  }
+}
+
+function flashKey(key) {
+  key.classList.add('active');
+  setTimeout(() => key.classList.remove('active'), 200);
+}
+
+function highlightChordKeys() {
+  const notes = CHORDS[currentChord] || [];
+  document.querySelectorAll('.key').forEach(k => k.classList.remove('in-chord'));
+  document.querySelectorAll('.key').forEach(k => {
+    if (notes.includes(k.dataset.note)) {
+      k.classList.add('in-chord');
+    }
+  });
+}
+
+/* ── Build Chord Buttons ── */
+function buildChords() {
+  Object.entries(CHORDS).forEach(([name, notes]) => {
+    const btn = document.createElement('div');
+    btn.className = 'chord-btn' + (name === currentChord ? ' active' : '');
+    btn.innerHTML = '<span class="chord-name">' + name + '</span><span class="chord-notes">' + notes.join(' ') + '</span>';
+    btn.addEventListener('click', () => {
+      currentChord = name;
+      document.querySelectorAll('.chord-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      highlightChordKeys();
+      // Play chord preview
+      if (ready) {
+        const cn = CHORDS[name];
+        cn.forEach((n, i) => {
+          setTimeout(() => synth.playNoteByName(n, octave, 0, 0.4), i * 60);
+        });
+      }
+    });
+    chordGrid.appendChild(btn);
+  });
+}
+
+/* ── Build Pattern Buttons ── */
+function buildPatterns() {
+  Object.keys(PATTERNS).forEach(name => {
+    const btn = document.createElement('div');
+    btn.className = 'pat-btn' + (name === currentPattern ? ' active' : '');
+    btn.textContent = name;
+    btn.addEventListener('click', () => {
+      currentPattern = name;
+      document.querySelectorAll('.pat-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    patternRow.appendChild(btn);
+  });
+}
+
+/* ── Build Instrument Select ── */
+function buildInstruments() {
+  const names = ChiptuneSynth.getInstrumentNames();
+  names.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = n.charAt(0).toUpperCase() + n.slice(1).replace(/([A-Z])/g, ' $1');
+    instSel.appendChild(opt);
+  });
+  instSel.addEventListener('change', () => {
+    const name = instSel.value;
+    synth.loadInstrument(name, 0);
+    instVal.textContent = name.charAt(0).toUpperCase() + name.slice(1).replace(/([A-Z])/g, ' $1');
+  });
+}
+
+/* ── Sliders ── */
+bpmSlider.addEventListener('input', () => {
+  bpm = +bpmSlider.value;
+  bpmVal.textContent = bpm;
+  if (playing) { clearTimeout(timerId); scheduleStep(); }
+});
+
+octSlider.addEventListener('input', () => {
+  octave = +octSlider.value;
+  octVal.textContent = octave;
+  // Rebuild piano octave labels
+  const keys = document.querySelectorAll('.key');
+  let idx = 0;
+  for (let o = 0; o < 2; o++) {
+    NOTES.forEach(n => {
+      if (keys[idx]) keys[idx].dataset.octave = octave + o;
+      idx++;
+    });
+  }
+  highlightChordKeys();
+});
+
+volSlider.addEventListener('input', () => {
+  const v = +volSlider.value;
+  volVal.textContent = v + '%';
+  synth.setMasterVolume(v / 100);
+});
+
+/* ── Arpeggiator Engine ── */
+function buildArpNotes() {
+  const chordNotes = CHORDS[currentChord] || ['C','E','G'];
+  // Spread across 2 octaves
+  const result = [];
+  chordNotes.forEach(n => result.push({ note: n, oct: octave }));
+  chordNotes.forEach(n => result.push({ note: n, oct: octave + 1 }));
+  return result;
+}
+
+function scheduleStep() {
+  if (!playing) return;
+
+  const notes = buildArpNotes();
+  const patFn = PATTERNS[currentPattern];
+  const interval = (60000 / bpm) / 2; // 8th notes
+  const dur = interval / 1000 * 0.8;
+
+  if (currentPattern === 'Chord') {
+    // Play all chord notes together
+    const chordNotes = CHORDS[currentChord] || ['C','E','G'];
+    chordNotes.forEach(n => synth.playNoteByName(n, octave, 0, dur));
+    noteDisplay.textContent = chordNotes.join(' ');
+    stepDisplay.textContent = 'Step ' + (stepIndex + 1);
+
+    // Highlight keys
+    document.querySelectorAll('.key').forEach(k => {
+      if (chordNotes.includes(k.dataset.note)) flashKey(k);
+    });
+  } else {
+    const picked = patFn(notes, stepIndex);
+    if (picked) {
+      synth.playNoteByName(picked.note, picked.oct, 0, dur);
+      noteDisplay.textContent = picked.note + picked.oct;
+      stepDisplay.textContent = 'Step ' + ((stepIndex % notes.length) + 1) + '/' + notes.length;
+
+      // Highlight key
+      document.querySelectorAll('.key').forEach(k => {
+        if (k.dataset.note === picked.note) flashKey(k);
+      });
+    }
+  }
+
+  stepIndex++;
+  timerId = setTimeout(scheduleStep, interval);
+}
+
+function startArp() {
+  if (!ready) return;
+  playing = true;
+  stepIndex = 0;
+  btnPlay.classList.add('playing');
+  playIcon.innerHTML = '<rect x="7" y="5" width="4" height="14" rx="1"/><rect x="13" y="5" width="4" height="14" rx="1"/>';
+  scheduleStep();
+}
+
+function stopArp() {
+  playing = false;
+  clearTimeout(timerId);
+  timerId = null;
+  btnPlay.classList.remove('playing');
+  playIcon.innerHTML = '<polygon points="8,5 19,12 8,19"/>';
+  noteDisplay.textContent = '—';
+  stepDisplay.textContent = 'Stopped';
+  synth.stopAllNotes();
+  document.querySelectorAll('.key').forEach(k => k.classList.remove('active'));
+}
+
+btnPlay.addEventListener('click', () => {
+  if (playing) stopArp(); else startArp();
+});
+btnStop.addEventListener('click', stopArp);
+
+/* ── Waveform ── */
+function drawWave() {
+  requestAnimationFrame(drawWave);
+  const w = waveCanvas.width, h = waveCanvas.height;
+  wCtx.fillStyle = '#06060a';
+  wCtx.fillRect(0, 0, w, h);
+
+  if (!ready) return;
+  const data = synth.getWaveformData();
+  if (!data) return;
+
+  // Gradient line
+  const grad = wCtx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, '#00f0ff');
+  grad.addColorStop(0.5, '#a855f7');
+  grad.addColorStop(1, '#ff6eb4');
+
+  wCtx.beginPath();
+  wCtx.strokeStyle = grad;
+  wCtx.lineWidth = 2;
+  wCtx.shadowColor = 'rgba(0,240,255,.3)';
+  wCtx.shadowBlur = 6;
+
+  const step = w / data.length;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    if (i === 0) wCtx.moveTo(0, y); else wCtx.lineTo(i * step, y);
+  }
+  wCtx.stroke();
+  wCtx.shadowBlur = 0;
+
+  // Center line
+  wCtx.beginPath();
+  wCtx.strokeStyle = 'rgba(255,255,255,.04)';
+  wCtx.lineWidth = 1;
+  wCtx.moveTo(0, h / 2);
+  wCtx.lineTo(w, h / 2);
+  wCtx.stroke();
+}
+
+/* ── Init ── */
+overlay.addEventListener('click', async () => {
+  await synth.init();
+  synth.loadInstrument('piano', 0);
+  synth.updateEnvelope(0, { attack: 0.005, decay: 0.15, sustain: 0.3, release: 0.2 });
+  synth.setMasterVolume(0.8);
+  ready = true;
+  overlay.classList.add('hidden');
+});
+
+buildPiano();
+buildChords();
+buildPatterns();
+buildInstruments();
+highlightChordKeys();
+drawWave();
+
+/* ── Keyboard shortcuts ── */
+document.addEventListener('keydown', (e) => {
+  if (!ready) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (playing) stopArp(); else startArp();
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Waveform Art — ChiptuneSynth</title>
+<!--
+  +=====================================================+
+  |  CodePen: Waveform Art                              |
+  |  Generative audio-reactive visual art canvas.       |
+  |  Click anywhere: X = pitch (C2-C7), Y = duration.  |
+  |  Polar waveform ring, particles, color-by-freq,     |
+  |  trail effects, auto-cycling instruments.            |
+  |                                                     |
+  |  Exploits: init, loadInstrument, playNoteByName,    |
+  |  getWaveformData, getFrequencyData                  |
+  +=====================================================+
+
+  CodePen -> Settings -> JS -> External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ===================================================
+     ███  CSS  ███
+     =================================================== -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#06060e;font-family:'Courier New',monospace}
+canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%}
+#hint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);color:#ffffff55;font-size:.9rem;letter-spacing:.15em;pointer-events:none;transition:opacity 1.2s ease;z-index:10}
+#instLabel{position:fixed;bottom:16px;left:16px;color:#ffffff30;font-size:.6rem;letter-spacing:.1em;pointer-events:none;z-index:10;transition:color .4s}
+#crosshairH,#crosshairV{position:fixed;pointer-events:none;z-index:5;background:#ffffff08}
+#crosshairH{left:0;width:100%;height:1px}
+#crosshairV{top:0;height:100%;width:1px}
+</style>
+</head>
+
+<!-- ===================================================
+     ███  HTML  ███
+     =================================================== -->
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Click anywhere to create sound</div>
+<div id="instLabel"></div>
+<div id="crosshairH"></div>
+<div id="crosshairV"></div>
+
+<!-- ===================================================
+     ███  JS  ███
+     =================================================== -->
+<script>
+(function () {
+  'use strict';
+
+  /* ── Canvas setup ── */
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var W, H, CX, CY;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    CX = W / 2;
+    CY = H / 2;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  /* ── Synth ── */
+  var synth = new ChiptuneSynth();
+  var started = false;
+  var clickCount = 0;
+  var isActive = false;
+  var idleTimer = 0;
+
+  /* ── Instruments auto-cycle ── */
+  var instruments = ChiptuneSynth.getInstrumentNames();
+  var instIndex = 0;
+  var instLabel = document.getElementById('instLabel');
+  instLabel.textContent = instruments[instIndex];
+
+  function cycleInstrument() {
+    instIndex = (instIndex + 1) % instruments.length;
+    var name = instruments[instIndex];
+    synth.loadInstrument(name, 0);
+    instLabel.textContent = name;
+    instLabel.style.color = '#ffffff80';
+    setTimeout(function () { instLabel.style.color = '#ffffff30'; }, 800);
+  }
+
+  /* ── Note mapping ── */
+  var NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+
+  function posToNote(x, y) {
+    // X -> pitch: C2 to C7 (60 semitones + 1)
+    var semitone = Math.floor((x / W) * 61);
+    semitone = Math.max(0, Math.min(60, semitone));
+    var octave = 2 + Math.floor(semitone / 12);
+    var noteIdx = semitone % 12;
+    // Y -> duration: top = short (0.1s), bottom = long (2s)
+    var duration = 0.1 + (y / H) * 1.9;
+    return { note: NOTES[noteIdx], octave: octave, duration: duration, semitone: semitone };
+  }
+
+  /* ── Color from semitone ── */
+  function freqHue(semitone) {
+    // 0 (low) = 0 red/orange, 30 (mid) = 180 cyan, 60 (high) = 280 violet
+    return (semitone / 60) * 280;
+  }
+
+  /* ── Particle system ── */
+  var MAX_PARTICLES = 200;
+  var particles = [];
+  var pPool = [];
+
+  function spawnParticles(hue, count) {
+    for (var i = 0; i < count; i++) {
+      var angle = Math.random() * Math.PI * 2;
+      var speed = 0.4 + Math.random() * 1.8;
+      var p = pPool.length > 0 ? pPool.pop() : {};
+      p.x = CX;
+      p.y = CY;
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed;
+      p.life = 1.0;
+      p.decay = 0.004 + Math.random() * 0.012;
+      p.size = 1 + Math.random() * 3;
+      p.hue = hue + (Math.random() - 0.5) * 30;
+      if (particles.length < MAX_PARTICLES) {
+        particles.push(p);
+      } else {
+        // Recycle oldest
+        var oldest = particles.shift();
+        pPool.push(oldest);
+        particles.push(p);
+      }
+    }
+  }
+
+  function updateParticles() {
+    for (var i = particles.length - 1; i >= 0; i--) {
+      var p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= p.decay;
+      if (p.life <= 0) {
+        pPool.push(particles.splice(i, 1)[0]);
+      }
+    }
+  }
+
+  function drawParticles() {
+    for (var i = 0; i < particles.length; i++) {
+      var p = particles[i];
+      var alpha = p.life * 0.7;
+      ctx.fillStyle = 'hsla(' + (p.hue | 0) + ',80%,60%,' + alpha.toFixed(3) + ')';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* ── Ring glow color (last click) ── */
+  var ringHue = 180;
+  var targetRingHue = 180;
+
+  /* ── Crosshair ── */
+  var chH = document.getElementById('crosshairH');
+  var chV = document.getElementById('crosshairV');
+  document.addEventListener('mousemove', function (e) {
+    chH.style.top = e.clientY + 'px';
+    chV.style.left = e.clientX + 'px';
+  });
+
+  /* ── Click handler ── */
+  var hintEl = document.getElementById('hint');
+
+  canvas.addEventListener('click', function (e) {
+    if (!started) {
+      synth.init().then(function () {
+        started = true;
+        synth.loadInstrument(instruments[instIndex], 0);
+        hintEl.style.opacity = '0';
+        handleClick(e);
+      });
+      return;
+    }
+    handleClick(e);
+  });
+
+  function handleClick(e) {
+    var info = posToNote(e.clientX, e.clientY);
+    synth.playNoteByName(info.note, info.octave, 0, info.duration);
+
+    clickCount++;
+    if (clickCount % 10 === 0) {
+      cycleInstrument();
+    }
+
+    // Spawn particles with frequency-based color
+    var hue = freqHue(info.semitone);
+    targetRingHue = hue;
+    spawnParticles(hue, 12 + Math.floor(Math.random() * 10));
+
+    // Mark active for rendering
+    isActive = true;
+    idleTimer = 0;
+  }
+
+  /* ── Main render loop ── */
+  var lastWaveEnergy = 0;
+
+  function draw() {
+    requestAnimationFrame(draw);
+
+    var wave = synth.getWaveformData();
+    var freq = synth.getFrequencyData();
+
+    // Compute energy to detect idle
+    var energy = 0;
+    if (wave) {
+      for (var i = 0; i < wave.length; i += 8) {
+        energy += Math.abs(wave[i] - 128);
+      }
+      energy /= (wave.length / 8);
+    }
+
+    if (energy < 0.5 && particles.length === 0) {
+      idleTimer++;
+      if (idleTimer > 60) {
+        // Idle: skip heavy rendering
+        if (isActive) {
+          // One final clear to clean up trails
+          ctx.fillStyle = '#06060e';
+          ctx.fillRect(0, 0, W, H);
+          isActive = false;
+        }
+        return;
+      }
+    } else {
+      idleTimer = 0;
+      isActive = true;
+    }
+
+    lastWaveEnergy = energy;
+
+    // Trail effect: semi-transparent clear
+    ctx.fillStyle = 'rgba(6, 6, 14, 0.12)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Smooth ring hue
+    ringHue += (targetRingHue - ringHue) * 0.08;
+
+    if (wave && freq) {
+      drawPolarWaveform(wave, freq);
+      drawFrequencyGlow(freq);
+    }
+
+    updateParticles();
+    drawParticles();
+  }
+
+  /* ── Polar waveform ring ── */
+  function drawPolarWaveform(wave, freq) {
+    var len = wave.length;
+    var baseRadius = Math.min(W, H) * 0.18;
+
+    // Compute average amplitude for ring breathing
+    var avg = 0;
+    for (var i = 0; i < len; i += 4) avg += Math.abs(wave[i] - 128);
+    avg /= (len / 4);
+    var breathe = baseRadius + avg * 1.2;
+
+    // Outer glow
+    ctx.save();
+    ctx.shadowColor = 'hsla(' + (ringHue | 0) + ',80%,50%,0.4)';
+    ctx.shadowBlur = 30 + avg * 0.5;
+
+    // Draw polar waveform
+    ctx.beginPath();
+    ctx.strokeStyle = 'hsla(' + (ringHue | 0) + ',70%,60%,0.8)';
+    ctx.lineWidth = 1.5 + avg * 0.03;
+
+    var step = 2;
+    for (var i = 0; i < len; i += step) {
+      var angle = (i / len) * Math.PI * 2 - Math.PI / 2;
+      var val = (wave[i] - 128) / 128;
+      var r = breathe + val * baseRadius * 0.6;
+      var x = CX + Math.cos(angle) * r;
+      var y = CY + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+
+    // Inner mirrored ring (smaller, different hue)
+    ctx.beginPath();
+    ctx.strokeStyle = 'hsla(' + ((ringHue + 120) | 0) + ',60%,50%,0.3)';
+    ctx.lineWidth = 1;
+    var innerBase = baseRadius * 0.5;
+    for (var i = 0; i < len; i += step) {
+      var angle = (i / len) * Math.PI * 2 - Math.PI / 2;
+      var val = (wave[i] - 128) / 128;
+      var r = innerBase + val * innerBase * 0.5;
+      var x = CX + Math.cos(angle) * r;
+      var y = CY + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+    // Center dot
+    ctx.beginPath();
+    ctx.fillStyle = 'hsla(' + (ringHue | 0) + ',60%,70%,' + Math.min(0.5, avg * 0.03).toFixed(3) + ')';
+    ctx.arc(CX, CY, 3 + avg * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* ── Frequency-based background glow ── */
+  function drawFrequencyGlow(freq) {
+    var bands = Math.min(64, freq.length);
+    for (var i = 0; i < bands; i += 4) {
+      var val = freq[i] / 255;
+      if (val < 0.15) continue;
+      var angle = (i / bands) * Math.PI * 2;
+      var dist = Math.min(W, H) * 0.25 + val * Math.min(W, H) * 0.2;
+      var x = CX + Math.cos(angle) * dist;
+      var y = CY + Math.sin(angle) * dist;
+      var hue = (i / bands) * 280;
+      var alpha = val * 0.15;
+      var radius = 10 + val * 40;
+
+      ctx.beginPath();
+      var grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      grad.addColorStop(0, 'hsla(' + (hue | 0) + ',80%,50%,' + alpha.toFixed(3) + ')');
+      grad.addColorStop(1, 'hsla(' + (hue | 0) + ',80%,50%,0)');
+      ctx.fillStyle = grad;
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  /* ── Start loop ── */
+  draw();
+
+})();
+</script>
+</body>
+</html>

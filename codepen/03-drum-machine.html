@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Drum Machine — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: 8-Bit Drum Machine                     ║
+  ║  4x4 LED pad grid, keyboard-mapped, waveform     ║
+  ║  visualizer, rotary volume, LCD display           ║
+  ║                                                  ║
+  ║  Exploits: all 10 presets, loadInstrument,       ║
+  ║  playNoteByName, playPreset, getWaveformData,    ║
+  ║  setMasterVolume                                 ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+/* ── Reset ── */
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ── Body ── */
+body{
+  background:#080810;
+  color:#fff;
+  font-family:'Courier New',monospace;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  min-height:100vh;
+  overflow:hidden;
+}
+
+/* ── Click overlay ── */
+.overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(8,8,16,.95);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:opacity .4s;
+}
+.overlay.hidden{opacity:0;pointer-events:none}
+.overlay .logo{font-size:3rem;margin-bottom:12px;filter:grayscale(.5)}
+.overlay .start-text{
+  font-size:1rem;color:#556;
+  text-transform:uppercase;letter-spacing:6px;
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── Machine shell ── */
+.machine{
+  background:linear-gradient(180deg,#0c0c18 0%,#0a0a12 100%);
+  border:1px solid #1a1a2a;
+  border-radius:18px;
+  padding:22px 26px 18px;
+  box-shadow:0 0 80px rgba(0,0,0,.5),inset 0 1px 0 #ffffff06;
+  position:relative;
+  max-width:560px;
+  width:100%;
+}
+.machine::before{
+  content:'';position:absolute;top:0;left:20%;right:20%;height:1px;
+  background:linear-gradient(90deg,transparent,#ffffff0a,transparent);
+}
+
+/* ── Header ── */
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.brand{font-size:.55rem;color:#333;text-transform:uppercase;letter-spacing:3px}
+.brand span{color:#ff6b6b88}
+
+/* ── LCD Display ── */
+.lcd{
+  background:#0a0f0a;
+  border:1px solid #1a2a1a;
+  border-radius:6px;
+  padding:6px 14px;
+  min-width:180px;
+  text-align:center;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.5);
+}
+.lcd-label{font-size:.4rem;color:#2a3a2a;text-transform:uppercase;letter-spacing:2px}
+.lcd-value{
+  font-size:.85rem;
+  color:#4ade80;
+  text-shadow:0 0 10px #4ade8044;
+  font-weight:bold;
+  letter-spacing:1px;
+  min-height:1.2em;
+}
+
+/* ── Main layout ── */
+.main{display:flex;gap:20px;align-items:flex-start}
+
+/* ── Pad grid ── */
+.pad-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  flex:1;
+}
+
+/* ── Individual pad ── */
+.pad{
+  width:90px;height:90px;
+  border-radius:10px;
+  background:#0e0e1a;
+  border:1px solid #1a1a2e;
+  cursor:pointer;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  position:relative;
+  overflow:hidden;
+  transition:transform .08s,box-shadow .15s,background .15s;
+  user-select:none;
+}
+.pad:hover{border-color:#333}
+.pad:active,.pad.hit{transform:scale(.93)}
+
+/* LED strip at bottom of pad */
+.pad::after{
+  content:'';position:absolute;
+  bottom:0;left:10%;right:10%;height:3px;
+  border-radius:0 0 4px 4px;
+  opacity:.25;
+  transition:opacity .15s,box-shadow .15s;
+}
+.pad.hit::after{opacity:1}
+
+/* Pad text */
+.pad .pad-name{font-size:.55rem;color:#555;margin-bottom:2px;transition:color .1s}
+.pad .pad-key{font-size:.4rem;color:#2a2a3a;margin-top:4px;transition:color .1s}
+.pad.hit .pad-name{color:#fff}
+.pad.hit .pad-key{color:#aaa}
+
+/* ── Per-pad LED colors ── */
+.pad[data-led="green"]::after{background:#4ade80}
+.pad[data-led="green"].hit{background:#4ade8018;border-color:#4ade80;box-shadow:0 0 24px #4ade8022}
+
+.pad[data-led="red"]::after{background:#ff6b6b}
+.pad[data-led="red"].hit{background:#ff6b6b18;border-color:#ff6b6b;box-shadow:0 0 24px #ff6b6b22}
+
+.pad[data-led="yellow"]::after{background:#fbbf24}
+.pad[data-led="yellow"].hit{background:#fbbf2418;border-color:#fbbf24;box-shadow:0 0 24px #fbbf2422}
+
+.pad[data-led="orange"]::after{background:#fb923c}
+.pad[data-led="orange"].hit{background:#fb923c18;border-color:#fb923c;box-shadow:0 0 24px #fb923c22}
+
+.pad[data-led="cyan"]::after{background:#00f0ff}
+.pad[data-led="cyan"].hit{background:#00f0ff18;border-color:#00f0ff;box-shadow:0 0 24px #00f0ff22}
+
+.pad[data-led="purple"]::after{background:#a855f7}
+.pad[data-led="purple"].hit{background:#a855f718;border-color:#a855f7;box-shadow:0 0 24px #a855f722}
+
+.pad[data-led="pink"]::after{background:#f472b6}
+.pad[data-led="pink"].hit{background:#f472b618;border-color:#f472b6;box-shadow:0 0 24px #f472b622}
+
+.pad[data-led="blue"]::after{background:#60a5fa}
+.pad[data-led="blue"].hit{background:#60a5fa18;border-color:#60a5fa;box-shadow:0 0 24px #60a5fa22}
+
+.pad[data-led="lime"]::after{background:#a3e635}
+.pad[data-led="lime"].hit{background:#a3e63518;border-color:#a3e635;box-shadow:0 0 24px #a3e63522}
+
+.pad[data-led="teal"]::after{background:#2dd4bf}
+.pad[data-led="teal"].hit{background:#2dd4bf18;border-color:#2dd4bf;box-shadow:0 0 24px #2dd4bf22}
+
+.pad[data-led="rose"]::after{background:#fb7185}
+.pad[data-led="rose"].hit{background:#fb718518;border-color:#fb7185;box-shadow:0 0 24px #fb718522}
+
+.pad[data-led="amber"]::after{background:#f59e0b}
+.pad[data-led="amber"].hit{background:#f59e0b18;border-color:#f59e0b;box-shadow:0 0 24px #f59e0b22}
+
+.pad[data-led="indigo"]::after{background:#818cf8}
+.pad[data-led="indigo"].hit{background:#818cf818;border-color:#818cf8;box-shadow:0 0 24px #818cf822}
+
+.pad[data-led="emerald"]::after{background:#34d399}
+.pad[data-led="emerald"].hit{background:#34d39918;border-color:#34d399;box-shadow:0 0 24px #34d39922}
+
+.pad[data-led="sky"]::after{background:#38bdf8}
+.pad[data-led="sky"].hit{background:#38bdf818;border-color:#38bdf8;box-shadow:0 0 24px #38bdf822}
+
+.pad[data-led="coral"]::after{background:#f97316}
+.pad[data-led="coral"].hit{background:#f9731618;border-color:#f97316;box-shadow:0 0 24px #f9731622}
+
+/* ── Right panel: volume knob ── */
+.side-panel{
+  display:flex;flex-direction:column;
+  align-items:center;gap:14px;
+  padding-top:10px;
+}
+.knob-label{font-size:.4rem;color:#333;text-transform:uppercase;letter-spacing:2px}
+
+/* Rotary knob */
+.knob-wrap{
+  width:60px;height:60px;position:relative;
+  cursor:pointer;user-select:none;
+}
+.knob-ring{
+  width:60px;height:60px;
+  border-radius:50%;
+  background:conic-gradient(from 210deg,#1a1a2e 0deg,#ff6b6b44 0deg,#ff6b6b 0deg,#1a1a2e 0deg);
+  display:flex;align-items:center;justify-content:center;
+  transition:background .1s;
+}
+.knob-inner{
+  width:44px;height:44px;
+  border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#1e1e30,#0e0e1a);
+  border:1px solid #2a2a3e;
+  position:relative;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+}
+.knob-dot{
+  position:absolute;
+  width:4px;height:4px;
+  background:#ff6b6b;
+  border-radius:50%;
+  top:6px;left:50%;
+  margin-left:-2px;
+  box-shadow:0 0 6px #ff6b6b88;
+}
+.knob-value{
+  font-size:.55rem;color:#ff6b6b88;
+  text-align:center;margin-top:4px;
+}
+
+/* ── Waveform canvas ── */
+.waveform-section{margin-top:16px}
+.waveform-section canvas{
+  display:block;
+  border-radius:8px;
+  border:1px solid #ffffff06;
+  background:#0a0a14;
+}
+
+/* ── Footer ── */
+.foot{
+  text-align:center;margin-top:14px;
+  font-size:.45rem;color:#1a1a2a;
+}
+.foot a{color:#ff6b6b33;text-decoration:none}
+.foot a:hover{color:#ff6b6b66}
+
+/* ── Responsive ── */
+@media(max-width:580px){
+  .main{flex-direction:column;align-items:center}
+  .pad{width:70px;height:70px}
+  .side-panel{flex-direction:row;padding-top:0}
+}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<!-- Click-to-start overlay -->
+<div class="overlay" id="overlay">
+  <div class="logo">&#127928;</div>
+  <div class="start-text">Click to Start</div>
+</div>
+
+<div class="machine">
+  <!-- Header with LCD -->
+  <div class="header">
+    <div class="brand">8-Bit <span>Drum Machine</span></div>
+    <div class="lcd">
+      <div class="lcd-label">Last Triggered</div>
+      <div class="lcd-value" id="lcd">---</div>
+    </div>
+    <div class="brand" style="text-align:right">16 <span>Pads</span></div>
+  </div>
+
+  <!-- Main content: pad grid + volume knob -->
+  <div class="main">
+    <div class="pad-grid" id="padGrid"></div>
+    <div class="side-panel">
+      <div class="knob-label">Volume</div>
+      <div class="knob-wrap" id="knobWrap">
+        <div class="knob-ring" id="knobRing">
+          <div class="knob-inner" id="knobInner">
+            <div class="knob-dot" id="knobDot"></div>
+          </div>
+        </div>
+      </div>
+      <div class="knob-value" id="knobVal">75%</div>
+      <div class="knob-label" style="margin-top:20px">Keys</div>
+      <div style="font-size:.38rem;color:#2a2a3a;text-align:center;line-height:1.6">
+        1 2 3 4<br>Q W E R<br>A S D F<br>Z X C V
+      </div>
+    </div>
+  </div>
+
+  <!-- Waveform visualizer -->
+  <div class="waveform-section">
+    <canvas id="waveCanvas" width="510" height="50"></canvas>
+  </div>
+</div>
+
+<div class="foot">
+  <a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> &mdash; @8bitforge
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+/* ── Synth instance ── */
+const synth = new ChiptuneSynth();
+let inited = false;
+
+/* ── Pad definitions ── */
+/* type: 'preset' = playPreset(name), 'instrument' = loadInstrument + playNoteByName */
+const PADS = [
+  /* Row 1 — keys 1 2 3 4 */
+  { name:'Laser',      key:'1', type:'preset', preset:'laser',     led:'green'   },
+  { name:'Coin',       key:'2', type:'preset', preset:'coin',      led:'yellow'  },
+  { name:'Jump',       key:'3', type:'preset', preset:'jump',      led:'cyan'    },
+  { name:'Explosion',  key:'4', type:'preset', preset:'explosion', led:'red'     },
+  /* Row 2 — keys Q W E R */
+  { name:'Power Up',   key:'Q', type:'preset', preset:'powerup',   led:'purple'  },
+  { name:'Hit',        key:'W', type:'preset', preset:'hit',       led:'orange'  },
+  { name:'Blip',       key:'E', type:'preset', preset:'blip',      led:'pink'    },
+  { name:'Bass',       key:'R', type:'preset', preset:'bass',      led:'blue'    },
+  /* Row 3 — keys A S D F */
+  { name:'Shoot',      key:'A', type:'preset', preset:'shoot',     led:'lime'    },
+  { name:'1-Up',       key:'S', type:'preset', preset:'1up',       led:'teal'    },
+  { name:'Piano C4',   key:'D', type:'instrument', inst:'piano',    note:'C', octave:4, led:'rose'   },
+  { name:'Piano E4',   key:'F', type:'instrument', inst:'piano',    note:'E', octave:4, led:'amber'  },
+  /* Row 4 — keys Z X C V */
+  { name:'Violin A3',  key:'Z', type:'instrument', inst:'violin',   note:'A', octave:3, led:'indigo'  },
+  { name:'Brass C4',   key:'X', type:'instrument', inst:'brass',    note:'C', octave:4, led:'emerald' },
+  { name:'SynBass E2', key:'C', type:'instrument', inst:'synthBass', note:'E', octave:2, led:'sky'    },
+  { name:'E.Gtr G3',   key:'V', type:'instrument', inst:'electricGuitar', note:'G', octave:3, led:'coral' },
+];
+
+/* ── Key map: keyboard key → pad index ── */
+const KEY_MAP = {};
+PADS.forEach((p, i) => { KEY_MAP[p.key.toUpperCase()] = i; });
+
+/* ── Build pad grid ── */
+const gridEl = document.getElementById('padGrid');
+const padEls = [];
+
+PADS.forEach((p, i) => {
+  const el = document.createElement('div');
+  el.className = 'pad';
+  el.dataset.led = p.led;
+  el.dataset.idx = i;
+  el.innerHTML =
+    '<div class="pad-name">' + p.name + '</div>' +
+    '<div class="pad-key">' + p.key + '</div>';
+  el.addEventListener('pointerdown', () => triggerPad(i));
+  gridEl.appendChild(el);
+  padEls.push(el);
+});
+
+/* ── LCD ── */
+const lcdEl = document.getElementById('lcd');
+
+/* ── Trigger a pad ── */
+async function triggerPad(idx) {
+  if (!inited) { await synth.init(); inited = true; }
+  const p = PADS[idx];
+
+  /* Play sound */
+  if (p.type === 'preset') {
+    synth.playPreset(p.preset);
+  } else {
+    synth.loadInstrument(p.inst, 0);
+    synth.playNoteByName(p.note, p.octave, 0, 0.5);
+  }
+
+  /* LCD update */
+  lcdEl.textContent = p.name;
+
+  /* Visual hit feedback */
+  const el = padEls[idx];
+  el.classList.add('hit');
+  clearTimeout(el._hitTimer);
+  el._hitTimer = setTimeout(() => el.classList.remove('hit'), 150);
+}
+
+/* ── Keyboard input ── */
+const keysDown = new Set();
+
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const k = e.key.toUpperCase();
+  if (k in KEY_MAP && !keysDown.has(k)) {
+    keysDown.add(k);
+    triggerPad(KEY_MAP[k]);
+  }
+});
+document.addEventListener('keyup', (e) => {
+  keysDown.delete(e.key.toUpperCase());
+});
+
+/* ── Click-to-start overlay ── */
+const overlayEl = document.getElementById('overlay');
+overlayEl.addEventListener('click', async () => {
+  if (!inited) { await synth.init(); inited = true; }
+  overlayEl.classList.add('hidden');
+});
+
+/* ── Volume knob (drag interaction) ── */
+const knobWrap = document.getElementById('knobWrap');
+const knobInner = document.getElementById('knobInner');
+const knobDot = document.getElementById('knobDot');
+const knobRing = document.getElementById('knobRing');
+const knobValEl = document.getElementById('knobVal');
+
+let volume = 0.75;
+let knobDragging = false;
+let knobStartY = 0;
+let knobStartVol = 0;
+
+function updateKnob() {
+  /* Rotation: 0% = -135deg, 100% = +135deg */
+  const angle = -135 + volume * 270;
+  knobInner.style.transform = 'rotate(' + angle + 'deg)';
+  /* Conic gradient for the ring */
+  const sweep = volume * 270;
+  knobRing.style.background =
+    'conic-gradient(from 210deg, #1a1a2e 0deg, #ff6b6b44 0deg, #ff6b6b ' + sweep + 'deg, #1a1a2e ' + sweep + 'deg)';
+  knobValEl.textContent = Math.round(volume * 100) + '%';
+  if (inited) synth.setMasterVolume(volume);
+}
+updateKnob();
+
+knobWrap.addEventListener('pointerdown', (e) => {
+  knobDragging = true;
+  knobStartY = e.clientY;
+  knobStartVol = volume;
+  knobWrap.setPointerCapture(e.pointerId);
+  e.preventDefault();
+});
+document.addEventListener('pointermove', (e) => {
+  if (!knobDragging) return;
+  const dy = knobStartY - e.clientY;
+  volume = Math.max(0, Math.min(1, knobStartVol + dy / 150));
+  updateKnob();
+});
+document.addEventListener('pointerup', () => { knobDragging = false; });
+
+/* ── Waveform visualizer ── */
+const waveCanvas = document.getElementById('waveCanvas');
+const wCtx = waveCanvas.getContext('2d');
+const W = waveCanvas.width;
+const H = waveCanvas.height;
+
+function drawWaveform() {
+  requestAnimationFrame(drawWaveform);
+
+  const data = synth.getWaveformData();
+
+  /* Clear */
+  wCtx.fillStyle = '#0a0a14';
+  wCtx.fillRect(0, 0, W, H);
+
+  if (!data) {
+    /* Draw flat line when no data */
+    wCtx.strokeStyle = '#1a1a2e';
+    wCtx.lineWidth = 1;
+    wCtx.beginPath();
+    wCtx.moveTo(0, H / 2);
+    wCtx.lineTo(W, H / 2);
+    wCtx.stroke();
+    return;
+  }
+
+  /* Glow layer */
+  wCtx.strokeStyle = '#ff6b6b22';
+  wCtx.lineWidth = 6;
+  wCtx.beginPath();
+  const step = W / data.length;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 255;
+    const y = v * H;
+    if (i === 0) wCtx.moveTo(0, y);
+    else wCtx.lineTo(i * step, y);
+  }
+  wCtx.stroke();
+
+  /* Sharp line */
+  wCtx.strokeStyle = '#ff6b6b';
+  wCtx.lineWidth = 1.5;
+  wCtx.beginPath();
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 255;
+    const y = v * H;
+    if (i === 0) wCtx.moveTo(0, y);
+    else wCtx.lineTo(i * step, y);
+  }
+  wCtx.stroke();
+
+  /* Center reference line */
+  wCtx.strokeStyle = '#ffffff06';
+  wCtx.lineWidth = 1;
+  wCtx.beginPath();
+  wCtx.moveTo(0, H / 2);
+  wCtx.lineTo(W, H / 2);
+  wCtx.stroke();
+}
+drawWaveform();
+</script>
+</body>
+</html>

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ambient Chiptune Generator — ChiptuneSynth</title>
+<!--
+  ╔══════════════════════════════════════════════════╗
+  ║  CodePen: Generative Ambient Chiptune Soundscape ║
+  ║  4 mood-based generative ambient engines using    ║
+  ║  pentatonic/minor scales, circular waveform viz,  ║
+  ║  star field, density & volume controls             ║
+  ║                                                    ║
+  ║  Exploits: loadInstrument, playNoteByName,         ║
+  ║  updateTrack, updateEnvelope, updateVibrato,       ║
+  ║  setMasterVolume, getWaveformData                  ║
+  ╚══════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Script:
+  https://chiptune-synth.8binami.com/src/chiptune-synth.js
+-->
+<script src="https://chiptune-synth.8binami.com/src/chiptune-synth.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  background:#050510;
+  color:#fff;
+  font-family:'Courier New',monospace;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+/* ── Star field ── */
+.stars{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.star{
+  position:absolute;
+  width:2px;height:2px;
+  background:#fff;
+  border-radius:50%;
+  opacity:0;
+  animation:twinkle var(--dur) ease-in-out var(--delay) infinite;
+}
+@keyframes twinkle{
+  0%,100%{opacity:0;transform:scale(.5)}
+  50%{opacity:var(--bright);transform:scale(1)}
+}
+.star.layer2{width:1px;height:1px;animation-name:drift}
+@keyframes drift{
+  0%{opacity:0;transform:translate(0,0) scale(.5)}
+  50%{opacity:var(--bright);transform:translate(calc(var(--dx)),calc(var(--dy))) scale(1)}
+  100%{opacity:0;transform:translate(calc(var(--dx) * 2),calc(var(--dy) * 2)) scale(.5)}
+}
+
+/* ── Click overlay ── */
+#overlay{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:radial-gradient(ellipse at center,#0a0a20 0%,#050510 100%);
+  z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:opacity .8s;
+}
+#overlay.hidden{opacity:0;pointer-events:none}
+#overlay h1{
+  font-size:1.6rem;color:#8b5cf6;
+  text-shadow:0 0 40px #8b5cf688,0 0 80px #8b5cf644;
+  margin-bottom:8px;letter-spacing:2px;
+}
+#overlay p{font-size:.7rem;color:#555;margin-bottom:30px}
+#overlay .start-ring{
+  width:100px;height:100px;
+  border:2px solid #8b5cf644;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  animation:pulse-ring 2s ease-in-out infinite;
+}
+#overlay .start-ring span{font-size:.7rem;color:#8b5cf6;letter-spacing:1px}
+@keyframes pulse-ring{
+  0%,100%{transform:scale(1);border-color:#8b5cf644}
+  50%{transform:scale(1.08);border-color:#8b5cf688}
+}
+
+/* ── Main UI ── */
+.main{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:16px}
+
+/* ── Note display ── */
+#noteDisplay{
+  font-size:.65rem;color:#555;letter-spacing:2px;
+  height:18px;
+  transition:color .3s;
+}
+
+/* ── Circular visualizer ── */
+#vizCanvas{
+  display:block;
+  filter:drop-shadow(0 0 20px var(--glow-color,#8b5cf633));
+  transition:filter 1s;
+}
+
+/* ── Play button ── */
+#playBtn{
+  width:64px;height:64px;
+  border-radius:50%;
+  border:2px solid #ffffff15;
+  background:#0a0a18;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:.3s;
+  position:relative;
+}
+#playBtn:hover{border-color:#ffffff30;background:#0e0e22}
+#playBtn svg{fill:#fff;width:24px;height:24px;transition:.2s}
+#playBtn.playing svg{fill:var(--accent,#8b5cf6)}
+
+/* ── Mood selector ── */
+.moods{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.mood-btn{
+  padding:10px 22px;
+  border-radius:20px;
+  border:1px solid #ffffff10;
+  background:#0a0a18;
+  color:#555;
+  font-family:inherit;
+  font-size:.6rem;
+  cursor:pointer;
+  letter-spacing:1px;
+  transition:.3s;
+  text-transform:uppercase;
+}
+.mood-btn:hover{border-color:#ffffff25;color:#888}
+.mood-btn.active{
+  border-color:var(--mood-color);
+  color:var(--mood-color);
+  background:var(--mood-bg);
+  box-shadow:0 0 20px var(--mood-glow);
+}
+
+/* ── Sliders ── */
+.sliders{display:flex;gap:24px;align-items:center}
+.slider-group{display:flex;flex-direction:column;align-items:center;gap:4px}
+.slider-group label{font-size:.5rem;color:#444;letter-spacing:1px;text-transform:uppercase}
+.slider-group input[type=range]{
+  -webkit-appearance:none;appearance:none;
+  width:120px;height:4px;
+  background:#1a1a2e;
+  border-radius:2px;
+  outline:none;
+  cursor:pointer;
+}
+.slider-group input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;
+  border-radius:50%;
+  background:var(--accent,#8b5cf6);
+  border:2px solid #050510;
+  box-shadow:0 0 8px var(--accent-glow,#8b5cf633);
+}
+.slider-group input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;
+  border-radius:50%;
+  background:var(--accent,#8b5cf6);
+  border:2px solid #050510;
+  box-shadow:0 0 8px var(--accent-glow,#8b5cf633);
+}
+
+.foot{
+  position:fixed;bottom:12px;
+  font-size:.45rem;color:#222;z-index:1;
+}
+.foot a{color:#ffffff22;text-decoration:none}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<!-- Star field (populated by JS) -->
+<div class="stars" id="stars"></div>
+
+<!-- Click-to-start overlay -->
+<div id="overlay">
+  <h1>AMBIENT CHIPTUNE</h1>
+  <p>generative soundscape engine</p>
+  <div class="start-ring"><span>ENTER</span></div>
+</div>
+
+<!-- Main UI -->
+<div class="main">
+  <div id="noteDisplay">. . .</div>
+
+  <canvas id="vizCanvas" width="320" height="320"></canvas>
+
+  <button id="playBtn" aria-label="Play / Pause">
+    <svg id="playIcon" viewBox="0 0 24 24"><polygon points="8,5 19,12 8,19"/></svg>
+  </button>
+
+  <div class="moods">
+    <button class="mood-btn active" data-mood="cosmic"
+      style="--mood-color:#8b5cf6;--mood-bg:#8b5cf610;--mood-glow:#8b5cf622">Cosmic</button>
+    <button class="mood-btn" data-mood="rain"
+      style="--mood-color:#22d3ee;--mood-bg:#22d3ee10;--mood-glow:#22d3ee22">Rain</button>
+    <button class="mood-btn" data-mood="forest"
+      style="--mood-color:#4ade80;--mood-bg:#4ade8010;--mood-glow:#4ade8022">Forest</button>
+    <button class="mood-btn" data-mood="cave"
+      style="--mood-color:#f59e0b;--mood-bg:#f59e0b10;--mood-glow:#f59e0b22">Cave</button>
+  </div>
+
+  <div class="sliders">
+    <div class="slider-group">
+      <label>Volume</label>
+      <input type="range" id="volSlider" min="0" max="100" value="50">
+    </div>
+    <div class="slider-group">
+      <label>Density</label>
+      <input type="range" id="densSlider" min="1" max="10" value="4">
+    </div>
+  </div>
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> &mdash; @8bitforge</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+/* ══════════════════════════════════════════════
+   Generative Ambient Chiptune Soundscape Engine
+   ══════════════════════════════════════════════ */
+
+const synth = new ChiptuneSynth();
+let initialized = false;
+let playing = false;
+let genTimer = null;
+
+/* ── Star field ── */
+(function buildStars() {
+  const el = document.getElementById('stars');
+  for (let i = 0; i < 120; i++) {
+    const s = document.createElement('div');
+    const layer2 = i > 80;
+    s.className = 'star' + (layer2 ? ' layer2' : '');
+    s.style.left = Math.random() * 100 + '%';
+    s.style.top = Math.random() * 100 + '%';
+    s.style.setProperty('--dur', (6 + Math.random() * 12) + 's');
+    s.style.setProperty('--delay', (Math.random() * 10) + 's');
+    s.style.setProperty('--bright', (0.2 + Math.random() * 0.6).toFixed(2));
+    if (layer2) {
+      s.style.setProperty('--dx', (Math.random() * 30 - 15) + 'px');
+      s.style.setProperty('--dy', (Math.random() * 20 - 10) + 'px');
+    }
+    el.appendChild(s);
+  }
+})();
+
+/* ── Mood definitions ── */
+const MOODS = {
+  cosmic: {
+    label: 'Cosmic',
+    colors: { primary: '#8b5cf6', secondary: '#3b82f6', glow: '#8b5cf633', ring: '#8b5cf6' },
+    scale: ['C','D','E','G','A'],       // C major pentatonic
+    padOctave: 3, melodyOctave: 4, bassOctave: 2,
+    padInstrument: 'synthPad',
+    melodyInstrument: 'flute',
+    bassInstrument: 'synthBass',
+    padDuration: 4.0,
+    melodyDuration: [0.6, 1.0, 1.5],
+    bassDuration: 3.0,
+    tempoMs: 600,
+    sfxPresets: ['coin', 'blip'],
+  },
+  rain: {
+    label: 'Rain',
+    colors: { primary: '#22d3ee', secondary: '#64748b', glow: '#22d3ee33', ring: '#22d3ee' },
+    scale: ['C','Eb','F','G','Bb'],     // C minor pentatonic
+    padOctave: 3, melodyOctave: 4, bassOctave: 2,
+    padInstrument: 'synthPad',
+    melodyInstrument: 'piano',
+    bassInstrument: 'cello',
+    padDuration: 5.0,
+    melodyDuration: [0.3, 0.5, 0.8],
+    bassDuration: 3.5,
+    tempoMs: 500,
+    sfxPresets: ['blip', 'blip'],
+  },
+  forest: {
+    label: 'Forest',
+    colors: { primary: '#4ade80', secondary: '#a16207', glow: '#4ade8033', ring: '#4ade80' },
+    scale: ['D','E','G','A','B'],       // D major pentatonic
+    padOctave: 3, melodyOctave: 5, bassOctave: 2,
+    padInstrument: 'organ',
+    melodyInstrument: 'flute',
+    bassInstrument: 'synthBass',
+    padDuration: 3.5,
+    melodyDuration: [0.4, 0.7, 1.2],
+    bassDuration: 2.5,
+    tempoMs: 550,
+    sfxPresets: ['coin', '1up'],
+  },
+  cave: {
+    label: 'Cave',
+    colors: { primary: '#f59e0b', secondary: '#78350f', glow: '#f59e0b33', ring: '#f59e0b' },
+    scale: ['A','C','D','E','G'],       // A minor pentatonic
+    padOctave: 2, melodyOctave: 3, bassOctave: 1,
+    padInstrument: 'synthPad',
+    melodyInstrument: 'marimba',
+    bassInstrument: 'cello',
+    padDuration: 5.0,
+    melodyDuration: [0.8, 1.5, 2.0],
+    bassDuration: 4.0,
+    tempoMs: 800,
+    sfxPresets: ['blip', 'coin'],
+  }
+};
+
+let currentMood = 'cosmic';
+let density = 4; // 1-10
+
+/* ── DOM refs ── */
+const overlay    = document.getElementById('overlay');
+const playBtn    = document.getElementById('playBtn');
+const playIcon   = document.getElementById('playIcon');
+const noteDisp   = document.getElementById('noteDisplay');
+const vizCanvas  = document.getElementById('vizCanvas');
+const volSlider  = document.getElementById('volSlider');
+const densSlider = document.getElementById('densSlider');
+const ctx        = vizCanvas.getContext('2d');
+
+const PLAY_PATH  = '<polygon points="8,5 19,12 8,19"/>';
+const PAUSE_PATH = '<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+
+/* ── Helper ── */
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+
+/* ── Apply mood colors ── */
+function applyMoodColors(mood) {
+  const m = MOODS[mood];
+  document.documentElement.style.setProperty('--accent', m.colors.primary);
+  document.documentElement.style.setProperty('--accent-glow', m.colors.glow);
+  document.documentElement.style.setProperty('--glow-color', m.colors.glow);
+  vizCanvas.style.filter = `drop-shadow(0 0 25px ${m.colors.glow}) drop-shadow(0 0 50px ${m.colors.glow})`;
+
+  document.querySelectorAll('.mood-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mood === mood);
+  });
+}
+
+/* ── Init synth & configure tracks for mood ── */
+async function ensureInit() {
+  if (!initialized) {
+    await synth.init();
+    initialized = true;
+  }
+}
+
+function configureMood(mood) {
+  const m = MOODS[mood];
+
+  // Track 0: Pad (long sustained chords)
+  synth.loadInstrument(m.padInstrument, 0);
+  synth.updateEnvelope(0, { attack: 1.2, decay: 0.5, sustain: 0.7, release: 2.0 });
+  synth.updateVibrato(0, { rate: 2, depth: 4 });
+
+  // Track 1: Melody (fragments)
+  synth.loadInstrument(m.melodyInstrument, 1);
+  synth.updateVibrato(1, { rate: 4, depth: 6 });
+
+  // Track 2: Bass (low drones)
+  synth.loadInstrument(m.bassInstrument, 2);
+  synth.updateEnvelope(2, { attack: 0.5, decay: 0.3, sustain: 0.8, release: 1.5 });
+  synth.updateVibrato(2, { rate: 1.5, depth: 3 });
+
+  // Track 3: FX sparkles — use default square for blips
+  synth.updateTrack(3, { type: 'square', volume: 0.15, dutyCycle: 0.5 });
+  synth.updateEnvelope(3, { attack: 0.001, decay: 0.06, sustain: 0.0, release: 0.02 });
+}
+
+/* ── Generative engine ── */
+let beatCount = 0;
+let nextPadBeat = 0;
+let nextMelodyBeat = 0;
+let nextBassBeat = 0;
+let nextSfxBeat = 0;
+let lastNoteName = '';
+
+function scheduleNextBeat() {
+  if (!playing) return;
+  const m = MOODS[currentMood];
+  const densityFactor = density / 10; // 0.1 to 1.0
+
+  // Random interval: faster at high density
+  const minBeats = Math.max(1, Math.floor(4 - densityFactor * 3));
+  const maxBeats = Math.max(minBeats + 1, Math.floor(6 - densityFactor * 4));
+
+  // ── Pad (track 0): play chord tones ──
+  if (beatCount >= nextPadBeat) {
+    const note = pick(m.scale);
+    synth.playNoteByName(note, m.padOctave, 0, m.padDuration);
+    // Sometimes stack a fifth
+    if (Math.random() < 0.4) {
+      const fifth = m.scale[(m.scale.indexOf(note) + 3) % m.scale.length];
+      synth.playNoteByName(fifth, m.padOctave, 0, m.padDuration * 0.8);
+    }
+    nextPadBeat = beatCount + randInt(3, 6);
+    lastNoteName = note + m.padOctave + ' pad';
+    noteDisp.textContent = m.label + '  |  ' + note + m.padOctave + ' pad  |  ' + m.scale.join(' ');
+    noteDisp.style.color = m.colors.primary;
+  }
+
+  // ── Melody (track 1): short fragments ──
+  if (beatCount >= nextMelodyBeat) {
+    const note = pick(m.scale);
+    const dur = pick(m.melodyDuration);
+    synth.playNoteByName(note, m.melodyOctave, 1, dur);
+    nextMelodyBeat = beatCount + randInt(minBeats, maxBeats);
+    lastNoteName = note + m.melodyOctave + ' melody';
+    noteDisp.textContent = m.label + '  |  ' + note + m.melodyOctave + ' melody  |  ' + m.scale.join(' ');
+    noteDisp.style.color = m.colors.primary;
+  }
+
+  // ── Bass (track 2): low drones ──
+  if (beatCount >= nextBassBeat) {
+    const note = pick(m.scale);
+    synth.playNoteByName(note, m.bassOctave, 2, m.bassDuration);
+    nextBassBeat = beatCount + randInt(4, 8);
+  }
+
+  // ── SFX sparkles (track 3): occasional blips ──
+  if (beatCount >= nextSfxBeat && Math.random() < densityFactor * 0.6) {
+    synth.playPreset(pick(m.sfxPresets));
+    nextSfxBeat = beatCount + randInt(Math.floor(6 - densityFactor * 4), 10);
+  }
+
+  beatCount++;
+
+  // Schedule next beat with slight humanization
+  const interval = m.tempoMs * (0.8 + Math.random() * 0.4);
+  genTimer = setTimeout(scheduleNextBeat, interval);
+}
+
+function startGen() {
+  if (playing) return;
+  playing = true;
+  beatCount = 0;
+  nextPadBeat = 0;
+  nextMelodyBeat = 1;
+  nextBassBeat = 2;
+  nextSfxBeat = 4;
+  configureMood(currentMood);
+  scheduleNextBeat();
+  playBtn.classList.add('playing');
+  playIcon.innerHTML = PAUSE_PATH;
+}
+
+function stopGen() {
+  playing = false;
+  if (genTimer) { clearTimeout(genTimer); genTimer = null; }
+  playBtn.classList.remove('playing');
+  playIcon.innerHTML = PLAY_PATH;
+  noteDisp.textContent = '. . .';
+  noteDisp.style.color = '#555';
+}
+
+/* ── Circular waveform visualizer ── */
+const VIZ_CX = 160, VIZ_CY = 160, VIZ_R = 120, VIZ_INNER = 80;
+
+function drawViz() {
+  requestAnimationFrame(drawViz);
+
+  const w = vizCanvas.width;
+  const h = vizCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const m = MOODS[currentMood];
+  const waveform = synth.getWaveformData();
+
+  // Draw faint base ring
+  ctx.beginPath();
+  ctx.arc(VIZ_CX, VIZ_CY, VIZ_R, 0, Math.PI * 2);
+  ctx.strokeStyle = m.colors.primary + '15';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(VIZ_CX, VIZ_CY, VIZ_INNER, 0, Math.PI * 2);
+  ctx.strokeStyle = m.colors.primary + '0a';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  if (!waveform) return;
+
+  // Compute average amplitude for pulse
+  let sum = 0;
+  for (let i = 0; i < waveform.length; i++) sum += Math.abs(waveform[i] - 128);
+  const avg = sum / waveform.length / 128;
+  const pulseR = VIZ_R + avg * 20;
+
+  // Glow circle behind waveform
+  const grad = ctx.createRadialGradient(VIZ_CX, VIZ_CY, VIZ_INNER * 0.5, VIZ_CX, VIZ_CY, pulseR + 10);
+  grad.addColorStop(0, m.colors.primary + '08');
+  grad.addColorStop(0.6, m.colors.primary + '04');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(VIZ_CX, VIZ_CY, pulseR + 10, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Draw circular waveform
+  const step = Math.max(1, Math.floor(waveform.length / 256));
+  const points = [];
+
+  for (let i = 0; i < 256; i++) {
+    const idx = (i * step) % waveform.length;
+    const val = (waveform[idx] - 128) / 128; // -1 to 1
+    const angle = (i / 256) * Math.PI * 2 - Math.PI / 2;
+    const r = VIZ_INNER + (VIZ_R - VIZ_INNER) * 0.5 + val * (VIZ_R - VIZ_INNER) * 0.5;
+    points.push({
+      x: VIZ_CX + Math.cos(angle) * r,
+      y: VIZ_CY + Math.sin(angle) * r
+    });
+  }
+
+  // Main waveform line
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i].x, points[i].y);
+  }
+  ctx.closePath();
+
+  // Gradient stroke
+  const lineGrad = ctx.createLinearGradient(VIZ_CX - VIZ_R, VIZ_CY, VIZ_CX + VIZ_R, VIZ_CY);
+  lineGrad.addColorStop(0, m.colors.primary);
+  lineGrad.addColorStop(0.5, m.colors.secondary);
+  lineGrad.addColorStop(1, m.colors.primary);
+  ctx.strokeStyle = lineGrad;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.8;
+  ctx.stroke();
+
+  // Glow layer
+  ctx.strokeStyle = m.colors.primary;
+  ctx.lineWidth = 3;
+  ctx.globalAlpha = 0.15 + avg * 0.3;
+  ctx.stroke();
+
+  ctx.globalAlpha = 1;
+
+  // Pulsing inner ring
+  ctx.beginPath();
+  ctx.arc(VIZ_CX, VIZ_CY, VIZ_INNER - 2 + avg * 8, 0, Math.PI * 2);
+  ctx.strokeStyle = m.colors.primary + '30';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+/* ── Event handlers ── */
+
+// Overlay click
+overlay.addEventListener('click', async () => {
+  await ensureInit();
+  overlay.classList.add('hidden');
+  applyMoodColors(currentMood);
+  startGen();
+});
+
+// Play/Pause
+playBtn.addEventListener('click', async () => {
+  await ensureInit();
+  if (playing) stopGen();
+  else startGen();
+});
+
+// Mood buttons
+document.querySelectorAll('.mood-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const mood = btn.dataset.mood;
+    if (mood === currentMood) return;
+    currentMood = mood;
+    applyMoodColors(mood);
+    if (playing) {
+      stopGen();
+      await ensureInit();
+      startGen();
+    }
+  });
+});
+
+// Volume slider
+volSlider.addEventListener('input', () => {
+  if (initialized) synth.setMasterVolume(volSlider.value / 100);
+});
+
+// Density slider
+densSlider.addEventListener('input', () => {
+  density = parseInt(densSlider.value);
+});
+
+/* ── Start visualization loop ── */
+applyMoodColors(currentMood);
+drawViz();
+</script>
+</body>
+</html>
