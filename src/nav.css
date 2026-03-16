@@ -1,0 +1,27 @@
+body{padding-top:0 !important;margin-top:0 !important}
+.cs-topbar{background:rgba(10,10,15,.95);border-bottom:1px solid rgba(255,255,255,.06);padding:0 16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
+.cs-topbar-spacer{display:none}
+.cs-topbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;height:48px;gap:18px}
+.cs-logo{text-decoration:none;font-weight:700;font-size:1rem;color:#fff;white-space:nowrap;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.cs-logo-icon{color:#00f0ff;font-size:1.2rem}
+.cs-logo-accent{color:#00f0ff}
+.cs-nav-links{display:flex;gap:4px;overflow-x:auto;flex:1;scrollbar-width:none}
+.cs-nav-links::-webkit-scrollbar{display:none}
+.cs-nav-links a{color:#888;text-decoration:none;font-size:.78rem;padding:6px 10px;border-radius:6px;white-space:nowrap;transition:all .15s}
+.cs-nav-links a:hover{color:#fff;background:rgba(255,255,255,.06)}
+.cs-nav-links a.active{color:#00f0ff;background:rgba(0,240,255,.1)}
+.cs-nav-btns{display:flex;gap:6px;flex-shrink:0;align-items:center}
+.cs-btn{text-decoration:none;font-size:.75rem;font-weight:600;white-space:nowrap;padding:5px 12px;border-radius:6px;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.cs-btn-github{color:#e0e0e0;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04)}
+.cs-btn-github:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.3);color:#fff}
+.cs-btn-npm{color:#00f0ff;border:1px solid rgba(0,240,255,.25);background:rgba(0,240,255,.04)}
+.cs-btn-npm:hover{background:rgba(0,240,255,.12);border-color:#00f0ff;color:#00f0ff}
+.cs-btn svg{width:14px;height:14px;fill:currentColor}
+@media(max-width:768px){
+    .cs-topbar-inner{gap:10px}
+    .cs-nav-links{gap:2px}
+    .cs-nav-links a{font-size:.72rem;padding:5px 7px}
+    .cs-btn{font-size:.68rem;padding:4px 8px;gap:4px}
+    .cs-btn span{display:none}
+    .cs-btn svg{width:13px;height:13px}
+}

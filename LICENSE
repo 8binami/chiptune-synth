@@ -1,0 +1,101 @@
+ChiptuneSynth - Dual License
+
+Copyright (c) 2026 8Binami / 8BitForge
+https://8bitforge.com
+
+This software is licensed under a dual-license model. You must choose ONE
+of the following licenses based on your use case:
+
+
+================================================================================
+OPTION A — FREE LICENSE (Non-Commercial + Indie)
+================================================================================
+
+Permission is hereby granted, free of charge, to any person or organization
+obtaining a copy of this software and associated documentation files (the
+"Software"), to use, copy, modify, merge, and distribute the Software,
+subject to the following conditions:
+
+1. ELIGIBLE USE. The Software may be used free of charge in:
+
+   a) NON-COMMERCIAL projects that do not generate revenue, including:
+      - Personal projects and experiments
+      - Educational and academic work
+      - Open-source projects licensed under an OSI-approved license
+      - Game jams and hackathons (including prize-winning entries)
+      - Portfolio projects and demonstrations
+      - Prototypes and proof-of-concept work
+
+   b) INDIE COMMERCIAL projects generating less than $10,000 USD
+      (or equivalent) in gross annual revenue across all products
+      using the Software. This includes:
+      - Indie games sold on Steam, itch.io, App Store, Google Play, etc.
+      - Small web apps or SaaS with paying users
+      - Freelance/client work (per-project revenue applies)
+
+      Once a project or organization exceeds the $10,000/year revenue
+      threshold, a Commercial License (Option B) is required within
+      30 days.
+
+2. ATTRIBUTION REQUIRED. All copies or substantial portions of the Software
+   must include the following attribution in a visible location (e.g.,
+   credits screen, README, about page, or source code header):
+
+       "Built with ChiptuneSynth by 8Binami — https://8bitforge.com"
+
+3. NO SUBLICENSING. You may not sublicense the Software or grant rights to
+   third parties beyond what is permitted under this license.
+
+4. MODIFICATIONS. You may modify the Software for use within this license.
+   Modified versions must retain this license and the attribution requirement.
+
+5. GAME JAM TO COMMERCIAL. If a game jam entry is later developed into a
+   commercial product, the free indie threshold ($10,000/year) applies.
+   No separate license is needed until that threshold is reached.
+
+
+================================================================================
+OPTION B — COMMERCIAL LICENSE (Paid)
+================================================================================
+
+A Commercial License is required when:
+
+   - A project or organization using the Software generates $10,000 USD
+     or more in gross annual revenue
+   - A commercial organization with over $10,000/year revenue uses the
+     Software in internal tools, products, or services
+   - The licensee wishes to remove the attribution requirement
+
+Commercial License tiers:
+
+   INDIE PRO     — Up to $100,000/year revenue    — See pricing page
+   STUDIO        — Up to $1,000,000/year revenue   — See pricing page
+   ENTERPRISE    — Unlimited revenue               — See pricing page
+
+All commercial licenses include:
+   - Priority email support
+   - Access to the full 8BitForge Pro synthesis engine
+     (8 tracks, mixer, effects, mastering, export, and more)
+   - Use in unlimited commercial projects within the revenue tier
+   - Optional: remove attribution requirement
+
+To obtain a Commercial License, visit:
+
+   https://8bitforge.com/pricing
+
+Or contact us directly:
+
+   licensing@8binami.com
+
+
+================================================================================
+DISCLAIMER
+================================================================================
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

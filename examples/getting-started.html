@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChiptuneSynth — Getting Started</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:24px}
+h1{text-align:center;font-size:1.8rem;margin-bottom:6px;background:linear-gradient(90deg,#00f0ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{text-align:center;color:#888;margin-bottom:32px;font-size:.95rem}
+.step{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:24px;margin-bottom:20px;max-width:800px;margin-left:auto;margin-right:auto}
+.step-num{display:inline-block;background:linear-gradient(135deg,#00f0ff,#a855f7);color:#000;font-weight:700;width:28px;height:28px;text-align:center;line-height:28px;border-radius:50%;font-size:.85rem;margin-right:10px}
+.step h2{display:inline;font-size:1.15rem;vertical-align:middle}
+.step p{color:#aaa;margin:12px 0 14px 38px;font-size:.9rem;line-height:1.6}
+pre{background:#111118;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:16px;overflow-x:auto;font-size:.85rem;line-height:1.5;color:#c8f0ff;position:relative;margin:0 0 12px 38px}
+pre .kw{color:#a855f7}
+pre .fn{color:#00f0ff}
+pre .str{color:#4ade80}
+pre .cmt{color:#666}
+pre .num{color:#f59e0b}
+.run-btn{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#00f0ff22,#a855f722);border:1px solid #00f0ff44;color:#00f0ff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:.85rem;margin-left:38px;transition:all .2s}
+.run-btn:hover{background:linear-gradient(135deg,#00f0ff33,#a855f733);border-color:#00f0ff88;transform:translateY(-1px)}
+.run-btn:active{transform:translateY(0)}
+.run-btn.played{border-color:#4ade80;color:#4ade80}
+.output{margin:8px 0 0 38px;padding:8px 14px;background:#0d1117;border-radius:6px;font-family:monospace;font-size:.8rem;color:#4ade80;display:none;border-left:3px solid #4ade80}
+.nav{text-align:center;margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,.06)}
+.nav a{color:#00f0ff;text-decoration:none;margin:0 10px;font-size:.85rem;opacity:.7;transition:opacity .2s}
+.nav a:hover{opacity:1;text-decoration:underline}
+.tip{background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.2);border-radius:8px;padding:12px 16px;margin:12px 0 0 38px;font-size:.82rem;color:#c4b5fd}
+.tip::before{content:'TIP';font-weight:700;color:#a855f7;margin-right:8px;font-size:.75rem}
+</style>
+</head>
+<body>
+
+<h1>Getting Started</h1>
+<p class="subtitle">Learn ChiptuneSynth step by step — click "Run" to hear each example live</p>
+
+<!-- Step 1 -->
+<div class="step">
+    <span class="step-num">1</span><h2>Hello, Chiptune!</h2>
+    <p>Create a synth, initialize it, and play your first sound effect — all in 3 lines.</p>
+    <pre><span class="kw">const</span> synth = <span class="kw">new</span> <span class="fn">ChiptuneSynth</span>();
+<span class="kw">await</span> synth.<span class="fn">init</span>();
+synth.<span class="fn">playPreset</span>(<span class="str">'coin'</span>);  <span class="cmt">// ding!</span></pre>
+    <button class="run-btn" onclick="runStep(1)">&#9654; Run</button>
+    <div class="output" id="out1"></div>
+    <div class="tip">The AudioContext requires a user gesture (click) to start — that's why we use a button.</div>
+</div>
+
+<!-- Step 2 -->
+<div class="step">
+    <span class="step-num">2</span><h2>Play a Note by Name</h2>
+    <p>Play middle C for half a second on the Lead track (track 0).</p>
+    <pre>synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">0.5</span>);
+<span class="cmt">// note, octave, track, duration (seconds)</span></pre>
+    <button class="run-btn" onclick="runStep(2)">&#9654; Run</button>
+    <div class="output" id="out2"></div>
+</div>
+
+<!-- Step 3 -->
+<div class="step">
+    <span class="step-num">3</span><h2>Play a Melody</h2>
+    <p>Schedule multiple notes with timing to create a simple tune.</p>
+    <pre><span class="kw">const</span> melody = [
+  { note:<span class="str">'C'</span>, oct:<span class="num">4</span>, time:<span class="num">0</span> },
+  { note:<span class="str">'E'</span>, oct:<span class="num">4</span>, time:<span class="num">0.25</span> },
+  { note:<span class="str">'G'</span>, oct:<span class="num">4</span>, time:<span class="num">0.5</span> },
+  { note:<span class="str">'C'</span>, oct:<span class="num">5</span>, time:<span class="num">0.75</span> }
+];
+melody.<span class="fn">forEach</span>(n =>
+  <span class="fn">setTimeout</span>(() =>
+    synth.<span class="fn">playNoteByName</span>(n.note, n.oct, <span class="num">0</span>, <span class="num">0.3</span>),
+    n.time * <span class="num">1000</span>
+  )
+);</pre>
+    <button class="run-btn" onclick="runStep(3)">&#9654; Run</button>
+    <div class="output" id="out3"></div>
+</div>
+
+<!-- Step 4 -->
+<div class="step">
+    <span class="step-num">4</span><h2>Load an Instrument</h2>
+    <p>Switch from the default square wave to a violin, then play a note.</p>
+    <pre>synth.<span class="fn">loadInstrument</span>(<span class="str">'violin'</span>, <span class="num">0</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'A'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">1.5</span>);
+<span class="cmt">// Available: piano, violin, cello, flute, organ,</span>
+<span class="cmt">// brass, harmonica, synthLead, synthPad, synthBass,</span>
+<span class="cmt">// marimba, electricGuitar</span></pre>
+    <button class="run-btn" onclick="runStep(4)">&#9654; Run</button>
+    <div class="output" id="out4"></div>
+</div>
+
+<!-- Step 5 -->
+<div class="step">
+    <span class="step-num">5</span><h2>Multi-Track Layering</h2>
+    <p>Play different instruments on different tracks at the same time.</p>
+    <pre>synth.<span class="fn">loadInstrument</span>(<span class="str">'synthPad'</span>, <span class="num">0</span>);  <span class="cmt">// Lead</span>
+synth.<span class="fn">loadInstrument</span>(<span class="str">'synthBass'</span>, <span class="num">1</span>); <span class="cmt">// Bass</span>
+
+<span class="cmt">// Play a chord on the pad</span>
+synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">2</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'E'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">2</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'G'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">2</span>);
+
+<span class="cmt">// Bass note underneath</span>
+synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">2</span>, <span class="num">1</span>, <span class="num">2</span>);</pre>
+    <button class="run-btn" onclick="runStep(5)">&#9654; Run</button>
+    <div class="output" id="out5"></div>
+</div>
+
+<!-- Step 6 -->
+<div class="step">
+    <span class="step-num">6</span><h2>Tweak the Sound</h2>
+    <p>Customize envelope, vibrato, and waveform to shape your sound.</p>
+    <pre><span class="cmt">// Slow attack pad</span>
+synth.<span class="fn">updateEnvelope</span>(<span class="num">0</span>, {
+  attack: <span class="num">0.5</span>, decay: <span class="num">0.3</span>,
+  sustain: <span class="num">0.6</span>, release: <span class="num">1.0</span>
+});
+
+<span class="cmt">// Add vibrato</span>
+synth.<span class="fn">updateVibrato</span>(<span class="num">0</span>, {
+  rate: <span class="num">5</span>, depth: <span class="num">8</span>
+});
+
+<span class="cmt">// Change waveform to sawtooth</span>
+synth.<span class="fn">updateTrack</span>(<span class="num">0</span>, { type: <span class="str">'sawtooth'</span> });
+
+synth.<span class="fn">playNoteByName</span>(<span class="str">'D'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">2.5</span>);</pre>
+    <button class="run-btn" onclick="runStep(6)">&#9654; Run</button>
+    <div class="output" id="out6"></div>
+</div>
+
+<!-- Step 7 -->
+<div class="step">
+    <span class="step-num">7</span><h2>Game SFX Combo</h2>
+    <p>Chain multiple sound effects for a game sequence — collect coin, power up, shoot!</p>
+    <pre>synth.<span class="fn">playPreset</span>(<span class="str">'coin'</span>);
+<span class="fn">setTimeout</span>(() => synth.<span class="fn">playPreset</span>(<span class="str">'powerup'</span>), <span class="num">400</span>);
+<span class="fn">setTimeout</span>(() => synth.<span class="fn">playPreset</span>(<span class="str">'laser'</span>), <span class="num">1200</span>);
+<span class="fn">setTimeout</span>(() => synth.<span class="fn">playPreset</span>(<span class="str">'explosion'</span>), <span class="num">1500</span>);
+<span class="fn">setTimeout</span>(() => synth.<span class="fn">playPreset</span>(<span class="str">'1up'</span>), <span class="num">2200</span>);</pre>
+    <button class="run-btn" onclick="runStep(7)">&#9654; Run</button>
+    <div class="output" id="out7"></div>
+</div>
+
+<!-- Step 8 -->
+<div class="step">
+    <span class="step-num">8</span><h2>Waveform Visualization</h2>
+    <p>Draw the live audio waveform on a canvas — great for game UIs!</p>
+    <pre><span class="kw">function</span> <span class="fn">draw</span>() {
+  <span class="kw">const</span> data = synth.<span class="fn">getWaveformData</span>();
+  ctx.<span class="fn">clearRect</span>(<span class="num">0</span>, <span class="num">0</span>, canvas.width, canvas.height);
+  ctx.strokeStyle = <span class="str">'#00f0ff'</span>;
+  ctx.<span class="fn">beginPath</span>();
+  data.<span class="fn">forEach</span>((v, i) => {
+    <span class="kw">const</span> x = (i / data.length) * canvas.width;
+    <span class="kw">const</span> y = (v / <span class="num">255</span>) * canvas.height;
+    i === <span class="num">0</span> ? ctx.<span class="fn">moveTo</span>(x, y) : ctx.<span class="fn">lineTo</span>(x, y);
+  });
+  ctx.<span class="fn">stroke</span>();
+  <span class="fn">requestAnimationFrame</span>(draw);
+}
+<span class="fn">draw</span>();</pre>
+    <button class="run-btn" onclick="runStep(8)">&#9654; Run (play a note + visualize)</button>
+    <canvas id="vizCanvas" width="720" height="100" style="display:none;margin:12px 0 0 38px;background:#111118;border-radius:8px;border:1px solid rgba(255,255,255,.1);width:100%;max-width:720px"></canvas>
+    <div class="output" id="out8"></div>
+</div>
+
+<!-- Nav -->
+<div class="nav">
+    Powered by <a href="https://8bitforge.com">8BitForge</a>
+</div>
+
+<script src="../src/chiptune-synth.js"></script>
+<script>
+var synth = new ChiptuneSynth();
+var ready = false;
+
+async function ensureInit() {
+    if (!ready) { await synth.init(); ready = true; }
+}
+
+function showOutput(n, msg) {
+    var el = document.getElementById('out' + n);
+    el.style.display = 'block';
+    el.textContent = msg;
+}
+
+async function runStep(n) {
+    await ensureInit();
+    var btn = event.currentTarget;
+    btn.classList.add('played');
+    setTimeout(function () { btn.classList.remove('played'); }, 600);
+
+    switch (n) {
+        case 1:
+            synth.playPreset('coin');
+            showOutput(1, "playPreset('coin') -> ding!");
+            break;
+
+        case 2:
+            synth.resetToDefaults();
+            synth.playNoteByName('C', 4, 0, 0.5);
+            showOutput(2, "Playing C4 on Lead track for 0.5s");
+            break;
+
+        case 3:
+            synth.resetToDefaults();
+            var melody = [
+                { note: 'C', oct: 4, time: 0 },
+                { note: 'E', oct: 4, time: 0.25 },
+                { note: 'G', oct: 4, time: 0.5 },
+                { note: 'C', oct: 5, time: 0.75 }
+            ];
+            melody.forEach(function (mn) {
+                setTimeout(function () {
+                    synth.playNoteByName(mn.note, mn.oct, 0, 0.3);
+                }, mn.time * 1000);
+            });
+            showOutput(3, "Playing C-E-G-C arpeggio...");
+            break;
+
+        case 4:
+            synth.resetToDefaults();
+            synth.loadInstrument('violin', 0);
+            synth.playNoteByName('A', 4, 0, 1.5);
+            showOutput(4, "Loaded violin on track 0, playing A4");
+            break;
+
+        case 5:
+            synth.resetToDefaults();
+            synth.loadInstrument('synthPad', 0);
+            synth.loadInstrument('synthBass', 1);
+            synth.playNoteByName('C', 4, 0, 2);
+            synth.playNoteByName('E', 4, 0, 2);
+            synth.playNoteByName('G', 4, 0, 2);
+            synth.playNoteByName('C', 2, 1, 2);
+            showOutput(5, "Pad chord (C-E-G) + Bass C2 — 2 tracks!");
+            break;
+
+        case 6:
+            synth.resetToDefaults();
+            synth.updateEnvelope(0, { attack: 0.5, decay: 0.3, sustain: 0.6, release: 1.0 });
+            synth.updateVibrato(0, { rate: 5, depth: 8 });
+            synth.updateTrack(0, { type: 'sawtooth' });
+            synth.playNoteByName('D', 4, 0, 2.5);
+            showOutput(6, "Sawtooth + slow attack + vibrato -> ambient pad");
+            break;
+
+        case 7:
+            synth.resetToDefaults();
+            synth.playPreset('coin');
+            setTimeout(function () { synth.playPreset('powerup'); }, 400);
+            setTimeout(function () { synth.playPreset('laser'); }, 1200);
+            setTimeout(function () { synth.playPreset('explosion'); }, 1500);
+            setTimeout(function () {
+                synth.playPreset('1up');
+                showOutput(7, "coin -> powerup -> laser -> explosion -> 1up!");
+            }, 2200);
+            showOutput(7, "Playing sequence...");
+            break;
+
+        case 8:
+            synth.resetToDefaults();
+            synth.loadInstrument('synthPad', 0);
+            synth.playNoteByName('C', 4, 0, 4);
+            synth.playNoteByName('E', 4, 0, 4);
+            synth.playNoteByName('G', 4, 0, 4);
+            var canvas = document.getElementById('vizCanvas');
+            canvas.style.display = 'block';
+            var ctx = canvas.getContext('2d');
+            var drawing = true;
+            function draw() {
+                if (!drawing) return;
+                var data = synth.getWaveformData();
+                if (!data) { requestAnimationFrame(draw); return; }
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (var i = 0; i < data.length; i++) {
+                    var x = (i / data.length) * canvas.width;
+                    var y = (data[i] / 255) * canvas.height;
+                    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+                requestAnimationFrame(draw);
+            }
+            draw();
+            setTimeout(function () { drawing = false; }, 5000);
+            showOutput(8, "Waveform rendering for 5 seconds...");
+            break;
+    }
+}
+</script>
+</body>
+</html>

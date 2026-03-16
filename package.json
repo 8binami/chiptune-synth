@@ -1,0 +1,51 @@
+{
+  "name": "@8bitforge/chiptune-synth",
+  "version": "2.0.1",
+  "description": "8-bit chiptune synthesizer — zero dependencies, 4 tracks, 12 instruments, 10 SFX presets, MIDI support, unison, filters, LFOs. Retro game audio in 3 lines of code.",
+  "main": "src/chiptune-synth.js",
+  "module": "src/chiptune-synth.js",
+  "browser": "src/chiptune-synth.js",
+  "unpkg": "src/chiptune-synth.js",
+  "files": [
+    "src/chiptune-synth.js"
+  ],
+  "scripts": {
+    "start": "open index.html"
+  },
+  "keywords": [
+    "chiptune",
+    "synthesizer",
+    "8bit",
+    "8-bit",
+    "retro",
+    "web-audio",
+    "webaudio",
+    "synth",
+    "sound",
+    "music",
+    "gamedev",
+    "game-audio",
+    "sfx",
+    "sound-effects",
+    "preset",
+    "audio",
+    "oscillator",
+    "nes",
+    "gameboy",
+    "midi",
+    "instruments",
+    "filter",
+    "lfo",
+    "unison"
+  ],
+  "author": "8Binami <contact@8binami.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/8Binami/chiptune-synth.git"
+  },
+  "homepage": "https://chiptune-synth.8binami.com",
+  "bugs": {
+    "url": "https://github.com/8Binami/chiptune-synth/issues"
+  }
+}

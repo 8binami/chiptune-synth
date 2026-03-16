@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChiptuneSynth — Basic Example</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --cs-cyan: #00f0ff; --cs-violet: #a855f7; --cs-bg: #0a0a0f; }
+        body { background: var(--cs-bg); }
+        .text-cyan { color: var(--cs-cyan) !important; }
+        .btn-cyan { background: var(--cs-cyan); color: #000; font-weight: 600; border: none; }
+        .btn-cyan:hover { background: #00d4e0; color: #000; }
+        .bg-glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+        canvas { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.3); }
+        .note-btn { min-width: 60px; }
+    </style>
+</head>
+<body>
+
+<section class="py-4">
+    <div class="container" style="max-width: 800px;">
+
+        <!-- Intro -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h5 class="text-cyan"><i class="bi bi-music-note-beamed"></i> Basic Usage — Single Notes &amp; Chords</h5>
+            <p class="text-secondary mb-0" style="font-size:13px;">Click any button below to hear ChiptuneSynth in action. Each example demonstrates a core API feature.</p>
+        </div>
+
+        <!-- Waveform -->
+        <div class="bg-glass rounded-3 p-3 mb-3">
+            <h6 class="text-cyan mb-2" style="font-size:13px;"><i class="bi bi-activity"></i> Waveform</h6>
+            <canvas id="waveformCanvas" width="700" height="80" class="w-100"></canvas>
+        </div>
+
+        <!-- Single Notes -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-3"><i class="bi bi-soundwave"></i> 1. Single Notes — Different Waveforms</h6>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-cyan note-btn" id="btnSquare"><i class="bi bi-play-fill"></i> Square</button>
+                <button class="btn btn-sm btn-outline-info note-btn" id="btnTriangle"><i class="bi bi-play-fill"></i> Triangle</button>
+                <button class="btn btn-sm btn-outline-warning note-btn" id="btnSawtooth"><i class="bi bi-play-fill"></i> Sawtooth</button>
+                <button class="btn btn-sm btn-outline-success note-btn" id="btnSine"><i class="bi bi-play-fill"></i> Sine</button>
+                <button class="btn btn-sm btn-outline-danger note-btn" id="btnNoise"><i class="bi bi-play-fill"></i> Noise</button>
+            </div>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>const synth = new ChiptuneSynth();
+await synth.init();
+
+// Square wave on Lead (track 0)
+synth.playNote(440, 0, 0.5);
+
+// Triangle on Bass (track 1)
+synth.playNoteByName('C', 3, 1, 0.5);
+
+// Sawtooth on FX (track 3)
+synth.tracks[3].type = 'sawtooth';
+synth.playNote(330, 3, 0.5);</code></pre>
+        </div>
+
+        <!-- Chord -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-3"><i class="bi bi-stack"></i> 2. Chords — Play Multiple Tracks</h6>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-cyan" id="btnCmaj"><i class="bi bi-play-fill"></i> C Major</button>
+                <button class="btn btn-sm btn-outline-info" id="btnAmin"><i class="bi bi-play-fill"></i> A Minor</button>
+                <button class="btn btn-sm btn-outline-warning" id="btnFmaj"><i class="bi bi-play-fill"></i> F Major</button>
+                <button class="btn btn-sm btn-outline-success" id="btnGmaj"><i class="bi bi-play-fill"></i> G Major</button>
+            </div>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>// C major across 3 tracks simultaneously
+synth.playNoteByName('C', 4, 0, 1.0);  // Root
+synth.playNoteByName('E', 4, 1, 1.0);  // Third
+synth.playNoteByName('G', 4, 3, 1.0);  // Fifth</code></pre>
+        </div>
+
+        <!-- Unison -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-3"><i class="bi bi-layers"></i> 3. Unison — Thick Detuned Voices</h6>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-cyan" id="btnUnison1">1 Voice</button>
+                <button class="btn btn-sm btn-outline-info" id="btnUnison4">4 Voices</button>
+                <button class="btn btn-sm btn-outline-warning" id="btnUnison8">8 Voices</button>
+                <button class="btn btn-sm btn-outline-danger" id="btnUnison16">16 Voices</button>
+            </div>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>// 8-voice super-saw with stereo spread
+synth.tracks[0].type = 'sawtooth';
+synth.tracks[0].unisonVoices = 8;
+synth.tracks[0].unisonDetune = 25;
+synth.tracks[0].unisonSpread = 80;
+synth.envelopes[0] = { attack: 0.2, decay: 0.3, sustain: 0.7, release: 1.0 };
+
+synth.playNoteByName('E', 4, 0, 2.0);</code></pre>
+        </div>
+
+        <!-- Vibrato & Tremolo -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-3"><i class="bi bi-tsunami"></i> 4. LFOs — Vibrato &amp; Tremolo</h6>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button class="btn btn-sm btn-cyan" id="btnVibrato"><i class="bi bi-play-fill"></i> Vibrato</button>
+                <button class="btn btn-sm btn-outline-info" id="btnTremolo"><i class="bi bi-play-fill"></i> Tremolo</button>
+                <button class="btn btn-sm btn-outline-warning" id="btnFilterLfo"><i class="bi bi-play-fill"></i> Filter LFO</button>
+                <button class="btn btn-sm btn-outline-danger" id="btnAllLfos"><i class="bi bi-play-fill"></i> All 3 LFOs</button>
+            </div>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>// LFO1: Vibrato (pitch modulation)
+synth.vibrato[0] = { rate: 5, depth: 12 };
+
+// LFO2: Filter modulation
+synth.tracks[0].filterEnabled = true;
+synth.tracks[0].filterCutoff = 1000;
+synth.tracks[0].lfoFilterRate = 3;
+synth.tracks[0].lfoFilterDepth = 2000;
+
+// LFO3: Tremolo (amplitude modulation)
+synth.tracks[0].tremoloRate = 6;
+synth.tracks[0].tremoloDepth = 50;</code></pre>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-secondary mt-4" style="font-size:11px;">
+            Powered by <a href="https://8bitforge.com" class="text-cyan text-decoration-none">8BitForge</a>
+        </div>
+
+    </div>
+</section>
+
+<script src="../src/chiptune-synth.js"></script>
+<script>
+(function () {
+    'use strict';
+    var synth = new ChiptuneSynth();
+    var initDone = false;
+
+    async function ensureInit() {
+        if (initDone) return;
+        await synth.init();
+        initDone = true;
+        startVisualizer();
+    }
+
+    function resetTrack(t) {
+        Object.assign(synth.tracks[t], {
+            type: t === 1 ? 'triangle' : t === 2 ? 'noise' : 'square',
+            volume: 0.3, dutyCycle: 0.5, detune: 0, pitchEnv: 0, glide: 0,
+            filterEnabled: false, filterCutoff: 20000, filterQ: 0.1, filterType: 'lowpass',
+            filterKeyTrack: 0, filterEnvAmount: 0, filterEnvAttack: 0.01, filterEnvRelease: 0.2,
+            lfoFilterRate: 0, lfoFilterDepth: 0, tremoloRate: 0, tremoloDepth: 0,
+            unisonVoices: 1, unisonDetune: 0, unisonSpread: 0,
+            octaveOffset: 0, semitoneOffset: 0
+        });
+        synth.envelopes[t] = { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.2 };
+        synth.vibrato[t] = { rate: 0, depth: 0 };
+    }
+
+    // 1. Single Notes
+    document.getElementById('btnSquare').addEventListener('click', function () {
+        ensureInit().then(function () { resetTrack(0); synth.tracks[0].type = 'square'; synth.playNote(440, 0, 0.5); });
+    });
+    document.getElementById('btnTriangle').addEventListener('click', function () {
+        ensureInit().then(function () { resetTrack(1); synth.playNoteByName('C', 3, 1, 0.5); });
+    });
+    document.getElementById('btnSawtooth').addEventListener('click', function () {
+        ensureInit().then(function () { resetTrack(3); synth.tracks[3].type = 'sawtooth'; synth.playNote(330, 3, 0.5); });
+    });
+    document.getElementById('btnSine').addEventListener('click', function () {
+        ensureInit().then(function () { resetTrack(0); synth.tracks[0].type = 'sine'; synth.playNote(440, 0, 0.5); });
+    });
+    document.getElementById('btnNoise').addEventListener('click', function () {
+        ensureInit().then(function () { resetTrack(2); synth.playNote(440, 2, 0.3); });
+    });
+
+    // 2. Chords
+    function playChord(notes) {
+        ensureInit().then(function () {
+            resetTrack(0); resetTrack(1); resetTrack(3);
+            synth.playNoteByName(notes[0], 4, 0, 1.0);
+            synth.playNoteByName(notes[1], 4, 1, 1.0);
+            synth.playNoteByName(notes[2], 4, 3, 1.0);
+        });
+    }
+    document.getElementById('btnCmaj').addEventListener('click', function () { playChord(['C', 'E', 'G']); });
+    document.getElementById('btnAmin').addEventListener('click', function () { playChord(['A', 'C', 'E']); });
+    document.getElementById('btnFmaj').addEventListener('click', function () { playChord(['F', 'A', 'C']); });
+    document.getElementById('btnGmaj').addEventListener('click', function () { playChord(['G', 'B', 'D']); });
+
+    // 3. Unison
+    function playUnison(voices) {
+        ensureInit().then(function () {
+            resetTrack(0);
+            synth.tracks[0].type = 'sawtooth';
+            synth.tracks[0].unisonVoices = voices;
+            synth.tracks[0].unisonDetune = voices > 1 ? 25 : 0;
+            synth.tracks[0].unisonSpread = voices > 1 ? 80 : 0;
+            synth.envelopes[0] = { attack: 0.2, decay: 0.3, sustain: 0.7, release: 1.0 };
+            synth.playNoteByName('E', 4, 0, 2.0);
+        });
+    }
+    document.getElementById('btnUnison1').addEventListener('click', function () { playUnison(1); });
+    document.getElementById('btnUnison4').addEventListener('click', function () { playUnison(4); });
+    document.getElementById('btnUnison8').addEventListener('click', function () { playUnison(8); });
+    document.getElementById('btnUnison16').addEventListener('click', function () { playUnison(16); });
+
+    // 4. LFOs
+    document.getElementById('btnVibrato').addEventListener('click', function () {
+        ensureInit().then(function () {
+            resetTrack(0);
+            synth.vibrato[0] = { rate: 5, depth: 12 };
+            synth.playNoteByName('A', 4, 0, 2.0);
+        });
+    });
+    document.getElementById('btnTremolo').addEventListener('click', function () {
+        ensureInit().then(function () {
+            resetTrack(0);
+            synth.tracks[0].tremoloRate = 6;
+            synth.tracks[0].tremoloDepth = 50;
+            synth.playNoteByName('A', 4, 0, 2.0);
+        });
+    });
+    document.getElementById('btnFilterLfo').addEventListener('click', function () {
+        ensureInit().then(function () {
+            resetTrack(0);
+            synth.tracks[0].type = 'sawtooth';
+            synth.tracks[0].filterEnabled = true;
+            synth.tracks[0].filterCutoff = 1000;
+            synth.tracks[0].filterQ = 8;
+            synth.tracks[0].lfoFilterRate = 3;
+            synth.tracks[0].lfoFilterDepth = 2000;
+            synth.playNoteByName('C', 3, 0, 2.5);
+        });
+    });
+    document.getElementById('btnAllLfos').addEventListener('click', function () {
+        ensureInit().then(function () {
+            resetTrack(0);
+            synth.tracks[0].type = 'square';
+            synth.tracks[0].dutyCycle = 0.25;
+            synth.vibrato[0] = { rate: 4, depth: 8 };
+            synth.tracks[0].filterEnabled = true;
+            synth.tracks[0].filterCutoff = 2000;
+            synth.tracks[0].filterQ = 5;
+            synth.tracks[0].lfoFilterRate = 2;
+            synth.tracks[0].lfoFilterDepth = 1500;
+            synth.tracks[0].tremoloRate = 3;
+            synth.tracks[0].tremoloDepth = 30;
+            synth.envelopes[0] = { attack: 0.1, decay: 0.3, sustain: 0.6, release: 1.5 };
+            synth.playNoteByName('E', 4, 0, 3.0);
+        });
+    });
+
+    // Visualizer
+    var canvas = document.getElementById('waveformCanvas');
+    var ctx2d = canvas.getContext('2d');
+    function startVisualizer() {
+        (function draw() {
+            requestAnimationFrame(draw);
+            if (!synth.analyser) return;
+            synth.analyser.getByteTimeDomainData(synth._analyserTimeData);
+            var data = synth._analyserTimeData, w = canvas.width, h = canvas.height;
+            ctx2d.fillStyle = 'rgba(0,0,0,0.3)'; ctx2d.fillRect(0, 0, w, h);
+            ctx2d.lineWidth = 2; ctx2d.strokeStyle = '#00f0ff'; ctx2d.beginPath();
+            var sliceW = w / data.length, x = 0;
+            for (var i = 0; i < data.length; i++) {
+                var v = data[i] / 128, y = v * h / 2;
+                if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+                x += sliceW;
+            }
+            ctx2d.lineTo(w, h / 2); ctx2d.stroke();
+        })();
+    }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChiptuneSynth — Instrument Showcase</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --cs-cyan: #00f0ff; --cs-violet: #a855f7; --cs-bg: #0a0a0f; }
+        body { background: var(--cs-bg); }
+        .text-cyan { color: var(--cs-cyan) !important; }
+        .text-violet { color: var(--cs-violet) !important; }
+        .bg-glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+        canvas { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.3); }
+
+        .inst-card {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 14px; cursor: pointer; transition: all 0.2s; text-align: center;
+        }
+        .inst-card:hover { border-color: var(--cs-cyan); background: rgba(0,240,255,0.05); transform: translateY(-2px); }
+        .inst-card.active { border-color: var(--cs-violet); background: rgba(168,85,247,0.12); box-shadow: 0 0 20px rgba(168,85,247,0.2); }
+        .inst-icon { font-size: 28px; margin-bottom: 6px; display: block; }
+        .inst-name { font-weight: 600; font-size: 13px; color: #fff; }
+        .inst-sub { font-size: 10px; color: #888; margin-top: 2px; }
+
+        .key {
+            display: inline-flex; align-items: flex-end; justify-content: center;
+            width: 40px; height: 120px; border-radius: 0 0 6px 6px;
+            background: linear-gradient(180deg, #e8e8e8 0%, #fff 100%);
+            border: 1px solid #999; cursor: pointer; position: relative;
+            font-size: 9px; color: #888; padding-bottom: 6px; transition: background 0.05s;
+            margin: 0 1px; user-select: none;
+        }
+        .key.black {
+            width: 28px; height: 76px; margin: 0 -14px; z-index: 2;
+            background: linear-gradient(180deg, #222 0%, #444 100%);
+            border-color: #000; color: #666; border-radius: 0 0 4px 4px;
+        }
+        .key.active, .key:active { background: var(--cs-cyan) !important; color: #000 !important; }
+        .key.black.active, .key.black:active { background: var(--cs-violet) !important; color: #fff !important; }
+        .keyboard-wrap { display: flex; align-items: flex-start; padding: 10px; overflow-x: auto; }
+
+        .demo-card {
+            background: linear-gradient(135deg, rgba(0,240,255,0.08), rgba(168,85,247,0.08));
+            border: 1px solid rgba(168,85,247,0.3); border-radius: 12px; padding: 16px;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .demo-card:hover { border-color: var(--cs-violet); transform: translateY(-2px); }
+        .demo-card.playing { border-color: var(--cs-cyan); box-shadow: 0 0 15px rgba(0,240,255,0.15); }
+
+        .midi-status { font-size: 10px; padding: 3px 8px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<section class="py-4">
+    <div class="container" style="max-width: 960px;">
+
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h5 class="text-cyan"><i class="bi bi-vinyl"></i> Instrument Showcase</h5>
+            <p class="text-secondary mb-0" style="font-size:13px;">12 instrument presets that transform the synth engine into real instruments. Click one, then play the keyboard below (or use your MIDI controller). Each preset configures waveform, envelope, filter, unison, and vibrato.</p>
+        </div>
+
+        <!-- Waveform -->
+        <div class="bg-glass rounded-3 p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-cyan mb-0" style="font-size:13px;"><i class="bi bi-activity"></i> Waveform</h6>
+                <span class="text-secondary" style="font-size:11px;" id="currentInst">Piano</span>
+            </div>
+            <canvas id="waveCanvas" width="900" height="80" class="w-100"></canvas>
+        </div>
+
+        <!-- Instrument Grid -->
+        <div class="row g-2 mb-3" id="instGrid"></div>
+
+        <!-- Keyboard -->
+        <div class="bg-glass rounded-3 p-2 mb-3">
+            <div class="d-flex justify-content-between align-items-center px-2 mb-1">
+                <div>
+                    <button class="btn btn-sm btn-outline-secondary" id="octDown"><i class="bi bi-dash"></i></button>
+                    <span class="text-secondary mx-2" style="font-size:12px;">Octave <span id="octDisplay">4</span></span>
+                    <button class="btn btn-sm btn-outline-secondary" id="octUp"><i class="bi bi-plus"></i></button>
+                </div>
+                <span class="text-secondary" style="font-size:10px;">Click keys or use PC keyboard (Q-M)</span>
+            </div>
+            <div class="keyboard-wrap" id="keyboard"></div>
+        </div>
+
+        <!-- Musical Demos -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-3"><i class="bi bi-music-note-list"></i> Musical Demos — Hear Each Instrument In Context</h6>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <div class="demo-card" id="demoClassical">
+                        <div class="fw-bold" style="font-size:14px;"><i class="bi bi-play-circle text-cyan"></i> Chamber Ensemble</div>
+                        <div class="text-secondary" style="font-size:11px;">Violin melody + Cello harmony + Piano chords &middot; Canon style</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="demo-card" id="demoJazz">
+                        <div class="fw-bold" style="font-size:14px;"><i class="bi bi-play-circle text-cyan"></i> Jazz Combo</div>
+                        <div class="text-secondary" style="font-size:11px;">Organ chords + Synth Bass walk + Brass stabs &middot; Swing feel</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="demo-card" id="demoSynthwave">
+                        <div class="fw-bold" style="font-size:14px;"><i class="bi bi-play-circle text-cyan"></i> Synthwave Drive</div>
+                        <div class="text-secondary" style="font-size:11px;">Synth Lead + Synth Pad + Synth Bass + Drums &middot; 128 BPM</div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="demo-card" id="demoWorld">
+                        <div class="fw-bold" style="font-size:14px;"><i class="bi bi-play-circle text-cyan"></i> World Fusion</div>
+                        <div class="text-secondary" style="font-size:11px;">Marimba + Flute + Harmonica + Guitar &middot; Pentatonic</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Code example -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-2"><i class="bi bi-code-slash"></i> Load Instruments Programmatically</h6>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>const synth = new ChiptuneSynth();
+await synth.init();
+
+// Load instruments onto tracks
+synth.loadInstrument('violin', 0);   // Track 0 = Violin
+synth.loadInstrument('piano', 1);    // Track 1 = Piano
+
+// Play a chord
+synth.playNoteByName('A', 4, 0, 2);  // Violin A4
+synth.playNoteByName('C', 4, 1, 2);  // Piano C4
+synth.playNoteByName('E', 4, 1, 2);  // Piano E4
+
+// List all instruments
+console.log(ChiptuneSynth.getInstrumentNames());
+// ['piano','violin','cello','flute','organ','brass',
+//  'harmonica','synthLead','synthPad','synthBass','marimba','electricGuitar']
+
+// Enable MIDI controller
+const devices = await synth.enableMIDI({ track: 0 });
+console.log('MIDI devices:', devices);</code></pre>
+        </div>
+
+        <div class="text-center text-secondary mt-4" style="font-size:11px;">
+            Powered by <a href="https://8bitforge.com" class="text-cyan text-decoration-none">8BitForge</a>
+        </div>
+    </div>
+</section>
+
+<script src="../src/chiptune-synth.js"></script>
+<script>
+(function () {
+    'use strict';
+    var synth = new ChiptuneSynth();
+    var initDone = false;
+    var currentOctave = 4;
+    var currentInstrument = 'piano';
+    var timeouts = [];
+    var NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    var KEY_MAP = {
+        'q':0,'z':1,'s':2,'e':3,'d':4,'f':5,'t':6,'g':7,'y':8,'h':9,'u':10,'j':11,'k':12,'o':13,'l':14,'p':15,'m':16,
+        'a':0,';':16
+    };
+    var MUSICAL_KEYS = {};
+    for (var mk in KEY_MAP) MUSICAL_KEYS[mk] = true;
+    MUSICAL_KEYS['w'] = true; MUSICAL_KEYS['x'] = true;
+
+    async function ensureInit() {
+        if (initDone) return;
+        await synth.init();
+        synth.loadInstrument('piano', 0);
+        initDone = true;
+        startVisualizer();
+    }
+
+    // ── Instrument grid ──
+    var instruments = ChiptuneSynth.getInstrumentNames();
+    var instDefs = ChiptuneSynth.getInstruments();
+    var ICONS = {
+        piano:'\uD83C\uDFB9', violin:'\uD83C\uDFBB', cello:'\uD83C\uDFBB', flute:'\uD83C\uDF2C\uFE0F',
+        organ:'\u26EA', brass:'\uD83C\uDFBA', harmonica:'\uD83C\uDFA4', synthLead:'\u26A1',
+        synthPad:'\u2601\uFE0F', synthBass:'\uD83D\uDD0A', marimba:'\uD83E\uDE98', electricGuitar:'\uD83C\uDFB8'
+    };
+    var grid = document.getElementById('instGrid');
+
+    instruments.forEach(function (name) {
+        var def = instDefs[name];
+        var col = document.createElement('div');
+        col.className = 'col-4 col-md-3 col-lg-2';
+        var card = document.createElement('div');
+        card.className = 'inst-card' + (name === 'piano' ? ' active' : '');
+        card.dataset.name = name;
+        card.innerHTML = '<span class="inst-icon">' + (ICONS[name] || '\uD83C\uDFB5') + '</span>' +
+            '<div class="inst-name">' + def.label + '</div>' +
+            '<div class="inst-sub">' + def.type + (def.mod && def.mod.unisonVoices > 1 ? ' \u00D7' + def.mod.unisonVoices : '') + '</div>';
+        card.addEventListener('click', function () {
+            ensureInit().then(function () {
+                document.querySelectorAll('.inst-card').forEach(function (c) { c.classList.remove('active'); });
+                card.classList.add('active');
+                currentInstrument = name;
+                synth.loadInstrument(name, 0);
+                document.getElementById('currentInst').textContent = def.label;
+                // Play preview note
+                synth.playNoteByName('C', currentOctave, 0, 0.6);
+            });
+        });
+        col.appendChild(card);
+        grid.appendChild(col);
+    });
+
+    // ── Keyboard ──
+    var keyboard = document.getElementById('keyboard');
+    var activeNotes = {};
+
+    function buildKeyboard() {
+        keyboard.innerHTML = '';
+        for (var i = 0; i < 25; i++) {
+            var noteIdx = i % 12;
+            var oct = currentOctave + Math.floor(i / 12);
+            var noteName = NOTES[noteIdx];
+            var isBlack = noteName.includes('#');
+            var key = document.createElement('div');
+            key.className = 'key' + (isBlack ? ' black' : '');
+            key.dataset.note = noteName;
+            key.dataset.oct = oct;
+            if (!isBlack) key.textContent = noteName + oct;
+            key.addEventListener('mousedown', function (e) {
+                e.preventDefault();
+                var el = this;
+                ensureInit().then(function () {
+                    var f = ChiptuneSynth.noteToFrequency(el.dataset.note, parseInt(el.dataset.oct));
+                    var id = synth.playNote(f, 0);
+                    activeNotes[el.dataset.note + el.dataset.oct] = id;
+                    el.classList.add('active');
+                });
+            });
+            key.addEventListener('mouseup', function () {
+                var k = this.dataset.note + this.dataset.oct;
+                if (activeNotes[k]) { synth.stopNote(activeNotes[k]); delete activeNotes[k]; }
+                this.classList.remove('active');
+            });
+            key.addEventListener('mouseleave', function () {
+                var k = this.dataset.note + this.dataset.oct;
+                if (activeNotes[k]) { synth.stopNote(activeNotes[k]); delete activeNotes[k]; }
+                this.classList.remove('active');
+            });
+            keyboard.appendChild(key);
+        }
+    }
+    buildKeyboard();
+
+    document.getElementById('octDown').addEventListener('click', function () { if (currentOctave > 1) { currentOctave--; document.getElementById('octDisplay').textContent = currentOctave; buildKeyboard(); } });
+    document.getElementById('octUp').addEventListener('click', function () { if (currentOctave < 7) { currentOctave++; document.getElementById('octDisplay').textContent = currentOctave; buildKeyboard(); } });
+
+    // ── PC keyboard ──
+    var pcNotes = {};
+    document.addEventListener('keydown', function (ev) {
+        if (ev.repeat) return;
+        var k = ev.key.toLowerCase();
+        var tag = ev.target.tagName;
+        if ((tag === 'INPUT' || tag === 'SELECT') && !MUSICAL_KEYS[k]) return;
+        if (k === 'w') { ev.preventDefault(); if (currentOctave > 1) { currentOctave--; document.getElementById('octDisplay').textContent = currentOctave; buildKeyboard(); } return; }
+        if (k === 'x') { ev.preventDefault(); if (currentOctave < 7) { currentOctave++; document.getElementById('octDisplay').textContent = currentOctave; buildKeyboard(); } return; }
+        var idx = KEY_MAP[k];
+        if (idx === undefined || pcNotes[k]) return;
+        ev.preventDefault();
+        ensureInit().then(function () {
+            var noteIdx = idx % 12;
+            var octOff = Math.floor(idx / 12);
+            var note = NOTES[noteIdx];
+            var oct = currentOctave + octOff;
+            var freq = ChiptuneSynth.noteToFrequency(note, oct);
+            pcNotes[k] = synth.playNote(freq, 0);
+            var keyEl = keyboard.querySelector('[data-note="' + note + '"][data-oct="' + oct + '"]');
+            if (keyEl) keyEl.classList.add('active');
+        });
+    });
+    document.addEventListener('keyup', function (ev) {
+        var k = ev.key.toLowerCase();
+        if (!pcNotes[k]) return;
+        synth.stopNote(pcNotes[k]);
+        var idx = KEY_MAP[k];
+        if (idx !== undefined) {
+            var noteIdx = idx % 12;
+            var octOff = Math.floor(idx / 12);
+            var note = NOTES[noteIdx];
+            var oct = currentOctave + octOff;
+            var keyEl = keyboard.querySelector('[data-note="' + note + '"][data-oct="' + oct + '"]');
+            if (keyEl) keyEl.classList.remove('active');
+        }
+        delete pcNotes[k];
+    });
+
+    // ── MIDI ──
+    var midiStatus = document.getElementById('midiStatus');
+    if (navigator.requestMIDIAccess) {
+        ensureInit().then(function () {
+            synth.enableMIDI({
+                track: 0,
+                onConnect: function (name) { midiStatus.textContent = name; midiStatus.style.background = 'rgba(0,240,255,0.15)'; midiStatus.style.color = '#00f0ff'; },
+                onDisconnect: function () { midiStatus.textContent = 'MIDI off'; midiStatus.style.background = 'rgba(255,255,255,0.06)'; midiStatus.style.color = '#666'; },
+                onNoteOn: function (note, vel) {
+                    var idx = (note - 12 * Math.floor(note / 12));
+                    var oct = Math.floor(note / 12) - 1;
+                    var n = NOTES[idx % 12];
+                    var keyEl = keyboard.querySelector('[data-note="' + n + '"][data-oct="' + oct + '"]');
+                    if (keyEl) keyEl.classList.add('active');
+                },
+                onNoteOff: function (note) {
+                    var idx = (note - 12 * Math.floor(note / 12));
+                    var oct = Math.floor(note / 12) - 1;
+                    var n = NOTES[idx % 12];
+                    var keyEl = keyboard.querySelector('[data-note="' + n + '"][data-oct="' + oct + '"]');
+                    if (keyEl) keyEl.classList.remove('active');
+                }
+            }).then(function (names) {
+                if (names.length) { midiStatus.textContent = names[0]; midiStatus.style.background = 'rgba(0,240,255,0.15)'; midiStatus.style.color = '#00f0ff'; }
+                else { midiStatus.textContent = 'MIDI ready'; midiStatus.style.color = '#888'; }
+            });
+        });
+    }
+
+    // ── Musical Demos ──
+    function clearDemos() {
+        timeouts.forEach(clearTimeout); timeouts = [];
+        synth.stopAllNotes();
+        document.querySelectorAll('.demo-card').forEach(function (c) { c.classList.remove('playing'); });
+    }
+
+    function n(name, oct) { return ChiptuneSynth.noteToFrequency(name, oct); }
+    function sched(freq, trk, t, dur) { timeouts.push(setTimeout(function () { synth.playNote(freq, trk, dur); }, t * 1000)); }
+    function schedN(name, oct, trk, t, dur) { sched(n(name, oct), trk, t, dur); }
+
+    // Demo 1: Chamber Ensemble (Violin + Cello + Piano)
+    document.getElementById('demoClassical').addEventListener('click', function () {
+        clearDemos(); this.classList.add('playing');
+        ensureInit().then(function () {
+            synth.loadInstrument('violin', 0);
+            synth.loadInstrument('cello', 1);
+            synth.loadInstrument('piano', 3);
+            document.getElementById('currentInst').textContent = 'Chamber Ensemble';
+
+            var BPM = 80, b = 60 / BPM;
+            // Violin melody (Pachelbel-inspired)
+            var mel = [['E',5],['F#',5],['G',5],['E',5],['C',5],['D',5],['E',5],['C',5],
+                       ['D',5],['C',5],['B',4],['A',4],['B',4],['C',5],['D',5],['B',4]];
+            mel.forEach(function (m, i) { schedN(m[0], m[1], 0, i * b, b * 0.9); });
+
+            // Cello sustained bass
+            var bass = [['C',3],['G',2],['A',2],['E',2],['F',2],['C',3],['F',2],['G',2]];
+            bass.forEach(function (bs, i) { schedN(bs[0], bs[1], 1, i * b * 2, b * 1.8); });
+
+            // Piano chords
+            var chords = [['C','E','G'],['G','B','D'],['A','C','E'],['E','G','B'],
+                          ['F','A','C'],['C','E','G'],['F','A','C'],['G','B','D']];
+            chords.forEach(function (ch, i) {
+                ch.forEach(function (note) { schedN(note, 4, 3, i * b * 2, b * 1.5); });
+            });
+
+            timeouts.push(setTimeout(function () {
+                clearDemos();
+                synth.loadInstrument(currentInstrument, 0);
+                document.getElementById('currentInst').textContent = instDefs[currentInstrument].label;
+            }, (mel.length * b + 2) * 1000));
+        });
+    });
+
+    // Demo 2: Jazz Combo (Organ + Synth Bass + Brass)
+    document.getElementById('demoJazz').addEventListener('click', function () {
+        clearDemos(); this.classList.add('playing');
+        ensureInit().then(function () {
+            synth.loadInstrument('organ', 0);
+            synth.loadInstrument('synthBass', 1);
+            synth.loadInstrument('brass', 3);
+            document.getElementById('currentInst').textContent = 'Jazz Combo';
+
+            var BPM = 110, b = 60 / BPM;
+            // Organ comping — Dm7 / G7 / Cmaj7 / Am7
+            var voicings = [
+                [['D',4],['F',4],['A',4],['C',5]],
+                [['D',4],['F',4],['G',4],['B',4]],
+                [['C',4],['E',4],['G',4],['B',4]],
+                [['C',4],['E',4],['G',4],['A',4]]
+            ];
+            voicings.forEach(function (ch, i) {
+                ch.forEach(function (note) { schedN(note[0], note[1], 0, i * b * 4, b * 3.5); });
+                // Off-beat stab
+                ch.forEach(function (note) { schedN(note[0], note[1], 0, i * b * 4 + b * 2.5, b * 0.3); });
+            });
+
+            // Walking bass
+            var walk = ['D','F','A','G', 'G','B','D','F', 'C','E','G','B', 'A','C','E','G'];
+            walk.forEach(function (note, i) { schedN(note, 2, 1, i * b, b * 0.8); });
+
+            // Brass stabs
+            schedN('A', 5, 3, b * 3.5, b * 0.4);
+            schedN('G', 5, 3, b * 7.5, b * 0.4);
+            schedN('B', 5, 3, b * 11.5, b * 0.4);
+            schedN('A', 5, 3, b * 14, b * 0.3);
+            schedN('G', 5, 3, b * 14.5, b * 0.3);
+
+            timeouts.push(setTimeout(function () {
+                clearDemos();
+                synth.loadInstrument(currentInstrument, 0);
+                document.getElementById('currentInst').textContent = instDefs[currentInstrument].label;
+            }, (16 * b + 2) * 1000));
+        });
+    });
+
+    // Demo 3: Synthwave Drive
+    document.getElementById('demoSynthwave').addEventListener('click', function () {
+        clearDemos(); this.classList.add('playing');
+        ensureInit().then(function () {
+            synth.loadInstrument('synthLead', 0);
+            synth.loadInstrument('synthBass', 1);
+            synth.loadInstrument('synthPad', 3);
+            // Drums on track 2
+            synth.tracks[2].type = 'noise'; synth.tracks[2].volume = 0.2;
+            synth.envelopes[2] = { attack: 0.001, decay: 0.05, sustain: 0, release: 0.01 };
+            document.getElementById('currentInst').textContent = 'Synthwave Drive';
+
+            var BPM = 128, b = 60 / BPM;
+
+            // Synth Lead melody (Am / F / C / G)
+            var lead = [['A',5,0],['C',6,b],['E',5,b*2],['A',5,b*3],
+                        ['F',5,b*4],['A',5,b*5],['C',6,b*6],['A',5,b*7],
+                        ['C',6,b*8],['E',6,b*9],['G',5,b*10],['E',5,b*11],
+                        ['G',5,b*12],['B',5,b*13],['D',6,b*14],['B',5,b*15]];
+            lead.forEach(function (l) { schedN(l[0], l[1], 0, l[2], b * 0.7); });
+
+            // Bass: pumping 8ths
+            var bassRoot = ['A','A','F','F','C','C','G','G'];
+            for (var i = 0; i < 16; i++) {
+                schedN(bassRoot[Math.floor(i / 2)], 2, 1, i * b, b * 0.6);
+            }
+
+            // Pad sustained chords
+            schedN('A', 3, 3, 0, b * 4);
+            schedN('F', 3, 3, b * 4, b * 4);
+            schedN('C', 4, 3, b * 8, b * 4);
+            schedN('G', 3, 3, b * 12, b * 4);
+
+            // Hi-hats
+            for (var i = 0; i < 32; i++) {
+                sched(8000, 2, i * b / 2, 0.03);
+            }
+
+            timeouts.push(setTimeout(function () {
+                clearDemos();
+                synth.loadInstrument(currentInstrument, 0);
+                document.getElementById('currentInst').textContent = instDefs[currentInstrument].label;
+            }, (16 * b + 3) * 1000));
+        });
+    });
+
+    // Demo 4: World Fusion (Marimba + Flute + Harmonica + Guitar)
+    document.getElementById('demoWorld').addEventListener('click', function () {
+        clearDemos(); this.classList.add('playing');
+        ensureInit().then(function () {
+            synth.loadInstrument('marimba', 0);
+            synth.loadInstrument('flute', 3);
+            synth.loadInstrument('harmonica', 1);
+            document.getElementById('currentInst').textContent = 'World Fusion';
+
+            var BPM = 105, b = 60 / BPM;
+
+            // Marimba: pentatonic pattern (C D E G A)
+            var marimba = ['C','D','E','G','A','G','E','D','C','E','G','A','C','A','G','E'];
+            var mOcts =   [5,  5,  5,  5,  5,  5,  5,  5,  6,  5,  5,  5,  6,  5,  5,  5];
+            marimba.forEach(function (note, i) { schedN(note, mOcts[i], 0, i * b * 0.5, b * 0.35); });
+
+            // Flute melody (enters bar 2)
+            var flute = [['G',5],['A',5],['C',6],['D',6],['C',6],['A',5],['G',5],['E',5]];
+            flute.forEach(function (f, i) { schedN(f[0], f[1], 3, (i + 8) * b * 0.5, b * 0.8); });
+
+            // Harmonica: long sustained notes
+            schedN('C', 4, 1, 0, b * 3);
+            schedN('G', 4, 1, b * 4, b * 3);
+
+            timeouts.push(setTimeout(function () {
+                clearDemos();
+                synth.loadInstrument(currentInstrument, 0);
+                document.getElementById('currentInst').textContent = instDefs[currentInstrument].label;
+            }, (8 * b + 3) * 1000));
+        });
+    });
+
+    // ── Visualizer ──
+    var canvas = document.getElementById('waveCanvas');
+    var ctx = canvas.getContext('2d');
+    function startVisualizer() {
+        (function draw() {
+            requestAnimationFrame(draw);
+            if (!synth.analyser) return;
+            synth.analyser.getByteTimeDomainData(synth._analyserTimeData);
+            var data = synth._analyserTimeData, w = canvas.width, h = canvas.height;
+            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, w, h);
+            ctx.lineWidth = 2; ctx.strokeStyle = '#00f0ff'; ctx.beginPath();
+            var sliceW = w / data.length, x = 0;
+            for (var i = 0; i < data.length; i++) {
+                var v = data[i] / 128, y = v * h / 2;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                x += sliceW;
+            }
+            ctx.lineTo(w, h / 2); ctx.stroke();
+        })();
+    }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChiptuneSynth — Melody Example</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root { --cs-cyan: #00f0ff; --cs-violet: #a855f7; --cs-bg: #0a0a0f; }
+        body { background: var(--cs-bg); }
+        .text-cyan { color: var(--cs-cyan) !important; }
+        .text-violet { color: var(--cs-violet) !important; }
+        .bg-glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+        canvas { border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(0,0,0,0.3); }
+
+        .song-card {
+            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.15s;
+        }
+        .song-card:hover { border-color: var(--cs-cyan); background: rgba(0,240,255,0.04); }
+        .song-card.playing { border-color: var(--cs-violet); background: rgba(168,85,247,0.08); }
+        .song-title { font-weight: 600; font-size: 14px; color: #fff; }
+        .song-meta { font-size: 11px; color: #888; }
+        .song-badge { font-size: 9px; padding: 2px 6px; }
+
+        .transport-btn {
+            width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 20px; border: 2px solid; transition: all 0.15s;
+        }
+    </style>
+</head>
+<body>
+
+<section class="py-4">
+    <div class="container" style="max-width: 900px;">
+
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h5 class="text-cyan"><i class="bi bi-music-note-list"></i> Melodies &amp; Sequences</h5>
+            <p class="text-secondary mb-0" style="font-size:13px;">Full musical compositions using all 4 tracks. Lead, bass, drums and FX working together.</p>
+        </div>
+
+        <!-- Waveform -->
+        <div class="bg-glass rounded-3 p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="text-cyan mb-0" style="font-size:13px;"><i class="bi bi-activity"></i> Waveform</h6>
+                <span class="text-secondary" style="font-size:11px;" id="nowPlaying">Ready</span>
+            </div>
+            <canvas id="waveformCanvas" width="800" height="90" class="w-100"></canvas>
+        </div>
+
+        <!-- Song 1: Platform Theme -->
+        <div class="song-card mb-3" id="song1">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="song-title"><i class="bi bi-play-circle text-cyan"></i> Platform Adventure</div>
+                    <div class="song-meta mt-1">Lead (square) + Bass (triangle) + Hi-hat (noise) &middot; 140 BPM</div>
+                </div>
+                <span class="badge bg-info song-badge">3 tracks</span>
+            </div>
+        </div>
+
+        <!-- Song 2: Chill Arpeggio -->
+        <div class="song-card mb-3" id="song2">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="song-title"><i class="bi bi-play-circle text-cyan"></i> Crystal Caves</div>
+                    <div class="song-meta mt-1">Arpeggiated sawtooth + deep bass + filter sweep &middot; 120 BPM</div>
+                </div>
+                <span class="badge bg-warning text-dark song-badge">filter + unison</span>
+            </div>
+        </div>
+
+        <!-- Song 3: Boss Battle -->
+        <div class="song-card mb-3" id="song3">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="song-title"><i class="bi bi-play-circle text-cyan"></i> Boss Battle</div>
+                    <div class="song-meta mt-1">Aggressive square lead + driving bass + drum pattern &middot; 160 BPM</div>
+                </div>
+                <span class="badge bg-danger song-badge">4 tracks</span>
+            </div>
+        </div>
+
+        <!-- Song 4: Chill Pad -->
+        <div class="song-card mb-3" id="song4">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="song-title"><i class="bi bi-play-circle text-cyan"></i> Starfield (Unison Pad)</div>
+                    <div class="song-meta mt-1">8-voice unison pad + vibrato + filter LFO &middot; Ambient</div>
+                </div>
+                <span class="badge bg-success song-badge">LFOs + unison</span>
+            </div>
+        </div>
+
+        <!-- Code -->
+        <div class="bg-glass rounded-3 p-4 mb-3">
+            <h6 class="text-cyan mb-2"><i class="bi bi-code-slash"></i> How It Works</h6>
+            <pre class="bg-dark p-3 rounded small mb-0"><code>const synth = new ChiptuneSynth();
+await synth.init();
+
+const BPM = 140, beat = 60 / BPM;
+const n = ChiptuneSynth.noteToFrequency;
+
+// Schedule notes with setTimeout
+function play(note, oct, track, time, dur) {
+    setTimeout(() => {
+        synth.playNote(n(note, oct), track, dur);
+    }, time * 1000);
+}
+
+// Lead melody on track 0 (square)
+play('E', 5, 0, 0,        beat * 0.4);
+play('E', 5, 0, beat*0.5, beat * 0.4);
+play('G', 5, 0, beat*1.5, beat);
+
+// Bass on track 1 (triangle)
+play('C', 3, 1, 0, beat * 0.8);
+
+// Hi-hat on track 2 (noise)
+for (let i = 0; i < 8; i++)
+    play('A', 5, 2, i * beat/2, 0.05);</code></pre>
+        </div>
+
+        <div class="text-center text-secondary mt-4" style="font-size:11px;">
+            Powered by <a href="https://8bitforge.com" class="text-cyan text-decoration-none">8BitForge</a>
+        </div>
+    </div>
+</section>
+
+<script src="../src/chiptune-synth.js"></script>
+<script>
+(function () {
+    'use strict';
+    var synth = new ChiptuneSynth();
+    var initDone = false;
+    var timeouts = [];
+    var nowPlaying = document.getElementById('nowPlaying');
+
+    async function ensureInit() {
+        if (initDone) return;
+        await synth.init();
+        initDone = true;
+        startVisualizer();
+    }
+
+    function clearAll() {
+        timeouts.forEach(clearTimeout);
+        timeouts = [];
+        document.querySelectorAll('.song-card').forEach(function (c) { c.classList.remove('playing'); });
+    }
+
+    function resetTrack(i) {
+        var defaults = [
+            { type: 'square',   volume: 0.30, dutyCycle: 0.5 },
+            { type: 'triangle', volume: 0.40, dutyCycle: 0.5 },
+            { type: 'noise',    volume: 0.50, dutyCycle: 0.5 },
+            { type: 'sawtooth', volume: 0.25, dutyCycle: 0.5 }
+        ];
+        Object.assign(synth.tracks[i], defaults[i], {
+            detune: 0, pitchEnv: 0, glide: 0,
+            filterEnabled: false, filterCutoff: 20000, filterQ: 0.1, filterType: 'lowpass',
+            filterKeyTrack: 0, filterEnvAmount: 0, filterEnvAttack: 0.01, filterEnvRelease: 0.2,
+            lfoFilterRate: 0, lfoFilterDepth: 0, tremoloRate: 0, tremoloDepth: 0,
+            unisonVoices: 1, unisonDetune: 0, unisonSpread: 0,
+            octaveOffset: 0, semitoneOffset: 0
+        });
+        synth.envelopes[i] = { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.2 };
+        synth.vibrato[i] = { rate: 0, depth: 0 };
+    }
+
+    function resetAll() { for (var i = 0; i < 4; i++) resetTrack(i); }
+
+    function sched(name, oct, trk, t, dur) {
+        var f = ChiptuneSynth.noteToFrequency(name, oct);
+        timeouts.push(setTimeout(function () { synth.playNote(f, trk, dur); }, t * 1000));
+    }
+
+    function endSong(totalSec, cardId) {
+        timeouts.push(setTimeout(function () {
+            resetAll();
+            document.getElementById(cardId).classList.remove('playing');
+            nowPlaying.textContent = 'Ready';
+        }, totalSec * 1000));
+    }
+
+    // ============================================
+    // Song 1: Platform Adventure (140 BPM)
+    // ============================================
+    document.getElementById('song1').addEventListener('click', function () {
+        clearAll(); this.classList.add('playing'); nowPlaying.textContent = 'Platform Adventure';
+        ensureInit().then(function () {
+            resetAll();
+            var BPM = 140, beat = 60 / BPM;
+
+            // Lead: square
+            synth.tracks[0].type = 'square'; synth.tracks[0].dutyCycle = 0.5; synth.tracks[0].volume = 0.3;
+            synth.envelopes[0] = { attack: 0.01, decay: 0.08, sustain: 0.6, release: 0.15 };
+
+            // Bass: triangle
+            synth.tracks[1].type = 'triangle'; synth.tracks[1].volume = 0.4;
+            synth.envelopes[1] = { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.1 };
+
+            // Hi-hat: noise
+            synth.tracks[2].type = 'noise'; synth.tracks[2].volume = 0.15;
+            synth.envelopes[2] = { attack: 0.001, decay: 0.04, sustain: 0, release: 0.01 };
+
+            // Lead melody (2 bars)
+            sched('E',5,0, 0,          beat*0.4);
+            sched('E',5,0, beat*0.5,   beat*0.4);
+            sched('E',5,0, beat*1.5,   beat*0.4);
+            sched('C',5,0, beat*2,     beat*0.4);
+            sched('E',5,0, beat*2.5,   beat*0.8);
+            sched('G',5,0, beat*3.5,   beat);
+            sched('G',4,0, beat*4,     beat*0.8);
+            sched('C',5,0, beat*5.5,   beat*0.4);
+            sched('E',5,0, beat*6,     beat*0.4);
+            sched('G',5,0, beat*6.5,   beat*0.4);
+            sched('A',5,0, beat*7,     beat*0.4);
+            sched('F',5,0, beat*7.5,   beat*0.4);
+
+            // Bass
+            sched('C',3,1, 0,          beat*0.8);
+            sched('G',2,1, beat*2,     beat*0.8);
+            sched('C',3,1, beat*3,     beat*0.8);
+            sched('E',3,1, beat*4,     beat*0.8);
+            sched('C',3,1, beat*5.5,   beat*0.8);
+            sched('A',2,1, beat*7,     beat*0.8);
+
+            // Hi-hat every half-beat
+            for (var i = 0; i < 16; i++) sched('A',5,2, i*beat/2, 0.05);
+
+            endSong(beat * 8 + 1, 'song1');
+        });
+    });
+
+    // ============================================
+    // Song 2: Crystal Caves (120 BPM)
+    // ============================================
+    document.getElementById('song2').addEventListener('click', function () {
+        clearAll(); this.classList.add('playing'); nowPlaying.textContent = 'Crystal Caves';
+        ensureInit().then(function () {
+            resetAll();
+            var BPM = 120, beat = 60 / BPM;
+
+            // Arp: sawtooth with filter
+            synth.tracks[3].type = 'sawtooth'; synth.tracks[3].volume = 0.25;
+            synth.tracks[3].filterEnabled = true;
+            synth.tracks[3].filterType = 'lowpass';
+            synth.tracks[3].filterCutoff = 2000;
+            synth.tracks[3].filterQ = 6;
+            synth.tracks[3].filterEnvAmount = 36;
+            synth.tracks[3].filterEnvAttack = 0.01;
+            synth.tracks[3].filterEnvRelease = 0.3;
+            synth.envelopes[3] = { attack: 0.005, decay: 0.12, sustain: 0.2, release: 0.15 };
+
+            // Bass
+            synth.tracks[1].type = 'triangle'; synth.tracks[1].volume = 0.35;
+            synth.envelopes[1] = { attack: 0.01, decay: 0.3, sustain: 0.6, release: 0.1 };
+
+            // Pad: unison square
+            synth.tracks[0].type = 'square'; synth.tracks[0].dutyCycle = 0.25;
+            synth.tracks[0].volume = 0.12;
+            synth.tracks[0].unisonVoices = 6;
+            synth.tracks[0].unisonDetune = 15;
+            synth.tracks[0].unisonSpread = 60;
+            synth.tracks[0].filterEnabled = true;
+            synth.tracks[0].filterCutoff = 3000;
+            synth.tracks[0].filterQ = 2;
+            synth.envelopes[0] = { attack: 0.5, decay: 0.5, sustain: 0.6, release: 1.5 };
+            synth.vibrato[0] = { rate: 3, depth: 5 };
+
+            // Arpeggio pattern (C minor pentatonic)
+            var arpNotes = ['C','Eb','G','Bb','C','Bb','G','Eb'];
+            var arpOcts  = [5,5,5,5,6,5,5,5];
+            for (var bar = 0; bar < 4; bar++) {
+                var t = bar * 4 * beat;
+                for (var n = 0; n < 8; n++) {
+                    (function (note, oct, time) {
+                        timeouts.push(setTimeout(function () { synth.playNoteByName(note, oct, 3, beat * 0.4); }, time * 1000));
+                    })(arpNotes[n], arpOcts[n], t + n * beat / 2);
+                }
+            }
+
+            // Bass notes
+            var bassPattern = [['C',3], ['Eb',3], ['Ab',2], ['Bb',2]];
+            for (var bar = 0; bar < 4; bar++) {
+                (function (b) {
+                    var bp = bassPattern[b % 4];
+                    timeouts.push(setTimeout(function () { synth.playNoteByName(bp[0], bp[1], 1, beat * 3); }, b * 4 * beat * 1000));
+                })(bar);
+            }
+
+            // Pad chord
+            sched('C',4,0, 0, 4*beat);
+            sched('Eb',4,0, 4*beat, 4*beat);
+            sched('Ab',3,0, 8*beat, 4*beat);
+            sched('Bb',3,0, 12*beat, 4*beat);
+
+            endSong(16 * beat + 2, 'song2');
+        });
+    });
+
+    // ============================================
+    // Song 3: Boss Battle (160 BPM)
+    // ============================================
+    document.getElementById('song3').addEventListener('click', function () {
+        clearAll(); this.classList.add('playing'); nowPlaying.textContent = 'Boss Battle';
+        ensureInit().then(function () {
+            resetAll();
+            var BPM = 160, beat = 60 / BPM;
+
+            // Lead: aggressive square
+            synth.tracks[0].type = 'square'; synth.tracks[0].dutyCycle = 0.25;
+            synth.tracks[0].volume = 0.3;
+            synth.envelopes[0] = { attack: 0.005, decay: 0.06, sustain: 0.5, release: 0.1 };
+
+            // Bass: sawtooth
+            synth.tracks[1].type = 'sawtooth'; synth.tracks[1].volume = 0.3;
+            synth.envelopes[1] = { attack: 0.01, decay: 0.15, sustain: 0.7, release: 0.08 };
+
+            // Kick: sine + pitch env
+            synth.tracks[2].type = 'sine'; synth.tracks[2].volume = 0.5;
+            synth.tracks[2].pitchEnv = 36;
+            synth.envelopes[2] = { attack: 0.001, decay: 0.2, sustain: 0, release: 0.02 };
+
+            // Hi-hat: noise
+            synth.tracks[3].type = 'noise'; synth.tracks[3].volume = 0.15;
+            synth.envelopes[3] = { attack: 0.001, decay: 0.03, sustain: 0, release: 0.01 };
+
+            // Lead: E minor aggressive riff (2 bars repeated)
+            var leadRiff = [
+                ['E',5,0], ['E',5,beat*0.25], ['G',5,beat*0.5], ['A',5,beat],
+                ['G',5,beat*1.5], ['E',5,beat*2], ['D',5,beat*2.5], ['E',5,beat*3],
+                ['B',5,beat*4], ['B',5,beat*4.25], ['A',5,beat*4.5], ['G',5,beat*5],
+                ['A',5,beat*5.5], ['E',5,beat*6], ['D',5,beat*6.5], ['E',5,beat*7]
+            ];
+
+            for (var rep = 0; rep < 2; rep++) {
+                var offset = rep * 8 * beat;
+                leadRiff.forEach(function (n) {
+                    sched(n[0], n[1], 0, offset + n[2], beat * 0.35);
+                });
+            }
+
+            // Bass: driving 8th notes
+            var bassNotes = ['E','E','E','E', 'C','C','D','D'];
+            for (var rep = 0; rep < 2; rep++) {
+                for (var b = 0; b < 8; b++) {
+                    var t = (rep * 8 + b) * beat;
+                    sched(bassNotes[b], 2, 1, t, beat * 0.7);
+                    sched(bassNotes[b], 2, 1, t + beat * 0.5, beat * 0.3);
+                }
+            }
+
+            // Drums: kick on 1&3, hi-hat on 8ths
+            for (var bar = 0; bar < 4; bar++) {
+                var t = bar * 4 * beat;
+                // Kick
+                timeouts.push(setTimeout((function(time) { return function() { synth.playNote(55, 2, 0.2); }; })(t), t * 1000));
+                timeouts.push(setTimeout((function(time) { return function() { synth.playNote(55, 2, 0.2); }; })(t + beat*2), (t + beat*2) * 1000));
+                // Hi-hat every 8th
+                for (var h = 0; h < 8; h++) {
+                    (function(time) {
+                        timeouts.push(setTimeout(function() { synth.playNote(440, 3, 0.04); }, time * 1000));
+                    })(t + h * beat / 2);
+                }
+            }
+
+            endSong(16 * beat + 1, 'song3');
+        });
+    });
+
+    // ============================================
+    // Song 4: Starfield (Ambient Unison Pad)
+    // ============================================
+    document.getElementById('song4').addEventListener('click', function () {
+        clearAll(); this.classList.add('playing'); nowPlaying.textContent = 'Starfield';
+        ensureInit().then(function () {
+            resetAll();
+
+            // Pad: thick unison with all LFOs
+            synth.tracks[0].type = 'square'; synth.tracks[0].dutyCycle = 0.3;
+            synth.tracks[0].volume = 0.2;
+            synth.tracks[0].unisonVoices = 8;
+            synth.tracks[0].unisonDetune = 18;
+            synth.tracks[0].unisonSpread = 90;
+            synth.tracks[0].filterEnabled = true;
+            synth.tracks[0].filterType = 'lowpass';
+            synth.tracks[0].filterCutoff = 4000;
+            synth.tracks[0].filterQ = 3;
+            synth.tracks[0].lfoFilterRate = 0.3;
+            synth.tracks[0].lfoFilterDepth = 2000;
+            synth.tracks[0].tremoloRate = 0.2;
+            synth.tracks[0].tremoloDepth = 15;
+            synth.envelopes[0] = { attack: 1.5, decay: 1.0, sustain: 0.7, release: 3.0 };
+            synth.vibrato[0] = { rate: 2, depth: 5 };
+
+            // Sub bass
+            synth.tracks[1].type = 'sine'; synth.tracks[1].volume = 0.25;
+            synth.envelopes[1] = { attack: 1.0, decay: 0.5, sustain: 0.8, release: 2.0 };
+
+            // Slow chord progression: Cmaj7 → Am7 → Fmaj7 → Gmaj7
+            var chords = [
+                { pad: 'E', padOct: 4, bass: 'C', bassOct: 2 },
+                { pad: 'C', padOct: 4, bass: 'A', bassOct: 2 },
+                { pad: 'A', padOct: 4, bass: 'F', bassOct: 2 },
+                { pad: 'B', padOct: 4, bass: 'G', bassOct: 2 }
+            ];
+
+            var chordDur = 4.0;
+            chords.forEach(function (ch, i) {
+                var t = i * chordDur;
+                timeouts.push(setTimeout(function () {
+                    synth.playNoteByName(ch.pad, ch.padOct, 0, chordDur - 0.5);
+                }, t * 1000));
+                timeouts.push(setTimeout(function () {
+                    synth.playNoteByName(ch.bass, ch.bassOct, 1, chordDur - 0.5);
+                }, t * 1000));
+            });
+
+            endSong(chords.length * chordDur + 3, 'song4');
+        });
+    });
+
+    // Visualizer
+    var canvas = document.getElementById('waveformCanvas');
+    var ctx2d = canvas.getContext('2d');
+    function startVisualizer() {
+        (function draw() {
+            requestAnimationFrame(draw);
+            if (!synth.analyser) return;
+            synth.analyser.getByteTimeDomainData(synth._analyserTimeData);
+            var data = synth._analyserTimeData, w = canvas.width, h = canvas.height;
+            ctx2d.fillStyle = 'rgba(0,0,0,0.25)'; ctx2d.fillRect(0, 0, w, h);
+            ctx2d.lineWidth = 2; ctx2d.strokeStyle = '#00f0ff'; ctx2d.beginPath();
+            var sliceW = w / data.length, x = 0;
+            for (var i = 0; i < data.length; i++) {
+                var v = data[i] / 128, y = v * h / 2;
+                if (i === 0) ctx2d.moveTo(x, y); else ctx2d.lineTo(x, y);
+                x += sliceW;
+            }
+            ctx2d.lineTo(w, h / 2); ctx2d.stroke();
+        })();
+    }
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

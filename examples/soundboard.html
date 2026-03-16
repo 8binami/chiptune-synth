@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChiptuneSynth — Soundboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;padding:24px}
+h1{text-align:center;font-size:1.6rem;margin-bottom:4px;background:linear-gradient(90deg,#00f0ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{text-align:center;color:#888;margin-bottom:24px;font-size:.85rem}
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:700px;margin:0 auto 24px}
+@media(max-width:500px){.board{grid-template-columns:repeat(2,1fr)}}
+.pad{position:relative;aspect-ratio:1;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:2px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03);transition:all .12s;overflow:hidden;min-height:120px}
+.pad:hover{border-color:rgba(255,255,255,.15);transform:translateY(-2px)}
+.pad:active,.pad.flash{transform:scale(.95)}
+.pad .icon{font-size:2rem;margin-bottom:6px;filter:drop-shadow(0 0 8px currentColor)}
+.pad .name{font-size:.82rem;font-weight:600;letter-spacing:.5px}
+.pad .key{position:absolute;top:6px;right:8px;font-size:.65rem;color:rgba(255,255,255,.25);font-family:monospace;background:rgba(255,255,255,.05);padding:2px 6px;border-radius:4px}
+.pad .wave{position:absolute;bottom:0;left:0;width:100%;height:30%;opacity:0;transition:opacity .3s}
+.pad.flash .wave{opacity:.3}
+.pad.c0{border-color:rgba(0,240,255,.2);color:#00f0ff}
+.pad.c0.flash{background:rgba(0,240,255,.15);box-shadow:0 0 30px rgba(0,240,255,.2)}
+.pad.c1{border-color:rgba(168,85,247,.2);color:#a855f7}
+.pad.c1.flash{background:rgba(168,85,247,.15);box-shadow:0 0 30px rgba(168,85,247,.2)}
+.pad.c2{border-color:rgba(74,222,128,.2);color:#4ade80}
+.pad.c2.flash{background:rgba(74,222,128,.15);box-shadow:0 0 30px rgba(74,222,128,.2)}
+.pad.c3{border-color:rgba(251,191,36,.2);color:#fbbf24}
+.pad.c3.flash{background:rgba(251,191,36,.15);box-shadow:0 0 30px rgba(251,191,36,.2)}
+.pad.c4{border-color:rgba(255,68,68,.2);color:#ff4444}
+.pad.c4.flash{background:rgba(255,68,68,.15);box-shadow:0 0 30px rgba(255,68,68,.2)}
+.section{text-align:center;margin:28px auto 14px;max-width:700px}
+.section h2{font-size:1rem;color:#888;font-weight:500;border-bottom:1px solid rgba(255,255,255,.06);padding-bottom:8px;margin-bottom:14px}
+.custom-area{max-width:700px;margin:0 auto 24px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:20px}
+.custom-area h3{font-size:.9rem;color:#a855f7;margin-bottom:12px}
+.custom-row{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:12px}
+.custom-row label{font-size:.75rem;color:#888;display:block;margin-bottom:3px}
+.custom-row select,.custom-row input{background:#16161e;color:#e0e0e0;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:5px 8px;font-size:.8rem}
+.custom-row input[type=number]{width:60px}
+.custom-row input[type=range]{width:100px;accent-color:#a855f7}
+.add-btn{background:linear-gradient(135deg,#a855f7,#00f0ff);color:#000;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:.82rem;margin-top:4px}
+.add-btn:hover{transform:translateY(-1px)}
+.code-section{max-width:700px;margin:0 auto 20px;text-align:center}
+.code-section button{background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.25);color:#00f0ff;padding:7px 18px;border-radius:8px;cursor:pointer;font-size:.82rem;transition:all .15s}
+.code-section button:hover{background:rgba(0,240,255,.15)}
+.code-box{margin-top:10px;background:#111118;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:14px;font-family:monospace;font-size:.78rem;color:#4ade80;text-align:left;white-space:pre-wrap;display:none;max-height:200px;overflow-y:auto}
+.nav{text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+.nav a{color:#00f0ff;text-decoration:none;margin:0 8px;font-size:.82rem;opacity:.6;transition:opacity .2s}
+.nav a:hover{opacity:1;text-decoration:underline}
+canvas.viz{display:block;margin:0 auto 20px;max-width:700px;width:100%;height:60px;border-radius:8px;background:#0d0d14;border:1px solid rgba(255,255,255,.06)}
+</style>
+</head>
+<body>
+
+<h1>Soundboard</h1>
+<p class="subtitle">Tap pads or press keyboard shortcuts to trigger sounds. Build your own custom pads!</p>
+
+<canvas class="viz" id="viz" width="700" height="60"></canvas>
+
+<div class="section"><h2>Game SFX</h2></div>
+<div class="board" id="sfxBoard"></div>
+
+<div class="section"><h2>Instruments</h2></div>
+<div class="board" id="instBoard"></div>
+
+<div class="section"><h2>Custom Pads</h2></div>
+<div class="board" id="customBoard"></div>
+
+<div class="custom-area">
+    <h3>Create a Custom Pad</h3>
+    <div class="custom-row">
+        <div>
+            <label>Note</label>
+            <select id="cNote">
+                <option>C</option><option>C#</option><option>D</option><option>D#</option>
+                <option>E</option><option>F</option><option>F#</option><option>G</option>
+                <option>G#</option><option>A</option><option>A#</option><option>B</option>
+            </select>
+        </div>
+        <div>
+            <label>Octave</label>
+            <input type="number" id="cOct" value="4" min="1" max="7">
+        </div>
+        <div>
+            <label>Waveform</label>
+            <select id="cWave">
+                <option value="square">Square</option>
+                <option value="triangle">Triangle</option>
+                <option value="sawtooth">Sawtooth</option>
+                <option value="sine">Sine</option>
+                <option value="noise">Noise</option>
+            </select>
+        </div>
+        <div>
+            <label>Duration</label>
+            <input type="range" id="cDur" min="0.1" max="3" step="0.1" value="0.5">
+            <span id="cDurVal" style="font-size:.75rem;color:#aaa">.5s</span>
+        </div>
+        <div>
+            <label>Color</label>
+            <select id="cColor">
+                <option value="c0">Cyan</option>
+                <option value="c1">Purple</option>
+                <option value="c2">Green</option>
+                <option value="c3">Gold</option>
+                <option value="c4">Red</option>
+            </select>
+        </div>
+        <div>
+            <label>Label</label>
+            <input type="text" id="cLabel" value="My Sound" style="width:100px" maxlength="12">
+        </div>
+        <button class="add-btn" onclick="addCustomPad()">+ Add Pad</button>
+    </div>
+</div>
+
+<div class="code-section">
+    <button onclick="showCode()">{ } Show Code for All Pads</button>
+    <div class="code-box" id="codeBox"></div>
+</div>
+
+<div class="nav">
+    Powered by <a href="https://8bitforge.com">8BitForge</a>
+</div>
+
+<script src="../src/chiptune-synth.js"></script>
+<script>
+var synth = new ChiptuneSynth();
+var initDone = false;
+
+async function ensureInit() {
+    if (!initDone) { await synth.init(); initDone = true; }
+}
+
+// ── SFX Pads ──
+var sfxPads = [
+    { name: 'laser', icon: '\u26A1', color: 'c0', key: '1' },
+    { name: 'coin', icon: '\uD83D\uDCB0', color: 'c3', key: '2' },
+    { name: 'jump', icon: '\u2B06', color: 'c2', key: '3' },
+    { name: 'explosion', icon: '\uD83D\uDCA5', color: 'c4', key: '4' },
+    { name: 'powerup', icon: '\u2B50', color: 'c1', key: '5' },
+    { name: 'hit', icon: '\uD83D\uDCA2', color: 'c4', key: '6' },
+    { name: 'shoot', icon: '\uD83D\uDD2B', color: 'c0', key: '7' },
+    { name: '1up', icon: '\u2764', color: 'c2', key: '8' }
+];
+
+var sfxBoard = document.getElementById('sfxBoard');
+sfxPads.forEach(function (p) {
+    var pad = createPad(p.icon, p.name, p.color, p.key, function () {
+        ensureInit().then(function () { synth.playPreset(p.name); });
+    });
+    sfxBoard.appendChild(pad);
+});
+
+// ── Instrument Pads ──
+var instPads = [
+    { name: 'piano', icon: '\uD83C\uDFB9', note: 'C', oct: 4, color: 'c0', key: 'q' },
+    { name: 'violin', icon: '\uD83C\uDFBB', note: 'A', oct: 4, color: 'c1', key: 'w' },
+    { name: 'organ', icon: '\u26EA', note: 'C', oct: 4, color: 'c2', key: 'e' },
+    { name: 'brass', icon: '\uD83C\uDFBA', note: 'G', oct: 3, color: 'c3', key: 'r' },
+    { name: 'synthLead', icon: '\u26A1', note: 'E', oct: 4, color: 'c0', key: 't' },
+    { name: 'synthBass', icon: '\uD83D\uDD0A', note: 'C', oct: 2, color: 'c1', key: 'y' },
+    { name: 'electricGuitar', icon: '\uD83C\uDFB8', note: 'E', oct: 3, color: 'c4', key: 'u' },
+    { name: 'marimba', icon: '\uD83E\uDE98', note: 'C', oct: 5, color: 'c3', key: 'i' }
+];
+
+var instBoard = document.getElementById('instBoard');
+instPads.forEach(function (p) {
+    var pad = createPad(p.icon, p.name, p.color, p.key, function () {
+        ensureInit().then(function () {
+            synth.loadInstrument(p.name, 0);
+            synth.playNoteByName(p.note, p.oct, 0, 0.8);
+        });
+    });
+    instBoard.appendChild(pad);
+});
+
+// ── Keyboard bindings ──
+var keyMap = {};
+sfxPads.forEach(function (p) {
+    keyMap[p.key] = function () { ensureInit().then(function () { synth.playPreset(p.name); }); };
+});
+instPads.forEach(function (p) {
+    keyMap[p.key] = function () {
+        ensureInit().then(function () {
+            synth.loadInstrument(p.name, 0);
+            synth.playNoteByName(p.note, p.oct, 0, 0.8);
+        });
+    };
+});
+
+document.addEventListener('keydown', function (e) {
+    if (e.repeat) return;
+    var k = e.key.toLowerCase();
+    if (keyMap[k]) {
+        keyMap[k]();
+        // Flash the pad
+        var pads = document.querySelectorAll('.pad');
+        pads.forEach(function (pad) {
+            if (pad.dataset.key === k) {
+                pad.classList.add('flash');
+                setTimeout(function () { pad.classList.remove('flash'); }, 200);
+            }
+        });
+    }
+    // Custom pads (a-z minus used keys)
+    if (customKeyMap[k]) {
+        customKeyMap[k]();
+        document.querySelectorAll('.pad').forEach(function (pad) {
+            if (pad.dataset.key === k) {
+                pad.classList.add('flash');
+                setTimeout(function () { pad.classList.remove('flash'); }, 200);
+            }
+        });
+    }
+});
+
+// ── Pad creation helper ──
+function createPad(icon, name, color, key, onClick) {
+    var pad = document.createElement('div');
+    pad.className = 'pad ' + color;
+    pad.dataset.key = key;
+    pad.innerHTML = '<span class="icon">' + icon + '</span>' +
+        '<span class="name">' + name + '</span>' +
+        '<span class="key">' + key.toUpperCase() + '</span>';
+    pad.addEventListener('click', function () {
+        onClick();
+        pad.classList.add('flash');
+        setTimeout(function () { pad.classList.remove('flash'); }, 200);
+    });
+    return pad;
+}
+
+// ── Custom pads ──
+var customPads = [];
+var customKeyMap = {};
+var nextCustomKey = 0;
+var CUSTOM_KEYS = ['z', 'x', 'c', 'v', 'b', 'n', 'm', ','];
+
+document.getElementById('cDur').addEventListener('input', function () {
+    document.getElementById('cDurVal').textContent = parseFloat(this.value).toFixed(1) + 's';
+});
+
+function addCustomPad() {
+    var note = document.getElementById('cNote').value;
+    var oct = parseInt(document.getElementById('cOct').value);
+    var wave = document.getElementById('cWave').value;
+    var dur = parseFloat(document.getElementById('cDur').value);
+    var color = document.getElementById('cColor').value;
+    var label = document.getElementById('cLabel').value || 'Custom';
+    var key = CUSTOM_KEYS[nextCustomKey % CUSTOM_KEYS.length];
+    nextCustomKey++;
+
+    var padData = { note: note, oct: oct, wave: wave, dur: dur, color: color, label: label, key: key };
+    customPads.push(padData);
+
+    var waveIcons = { square: '\u25A0', triangle: '\u25B3', sawtooth: '\u25E4', sine: '\u223F', noise: '\u2248' };
+
+    var board = document.getElementById('customBoard');
+    var pad = createPad(waveIcons[wave] || '\u266B', label, color, key, function () {
+        ensureInit().then(function () {
+            synth.updateTrack(3, { type: wave });
+            synth.playNoteByName(note, oct, 3, dur);
+        });
+    });
+    board.appendChild(pad);
+
+    customKeyMap[key] = function () {
+        ensureInit().then(function () {
+            synth.updateTrack(3, { type: wave });
+            synth.playNoteByName(note, oct, 3, dur);
+        });
+    };
+
+    ensureInit().then(function () {
+        synth.updateTrack(3, { type: wave });
+        synth.playNoteByName(note, oct, 3, dur);
+    });
+}
+
+// ── Export code ──
+function showCode() {
+    var box = document.getElementById('codeBox');
+    var lines = [];
+    lines.push('const synth = new ChiptuneSynth();');
+    lines.push('await synth.init();');
+    lines.push('');
+    lines.push('// --- SFX Presets (one-liner!) ---');
+    sfxPads.forEach(function (p) {
+        lines.push("synth.playPreset('" + p.name + "');");
+    });
+    lines.push('');
+    lines.push('// --- Instrument Notes ---');
+    instPads.forEach(function (p) {
+        lines.push("synth.loadInstrument('" + p.name + "', 0);");
+        lines.push("synth.playNoteByName('" + p.note + "', " + p.oct + ", 0, 0.8);");
+        lines.push('');
+    });
+    if (customPads.length > 0) {
+        lines.push('// --- Custom Sounds ---');
+        customPads.forEach(function (p) {
+            lines.push("synth.updateTrack(3, { type: '" + p.wave + "' });");
+            lines.push("synth.playNoteByName('" + p.note + "', " + p.oct + ", 3, " + p.dur + ");");
+            lines.push('');
+        });
+    }
+    box.textContent = lines.join('\n');
+    box.style.display = box.style.display === 'block' ? 'none' : 'block';
+}
+
+// ── Waveform visualizer ──
+var vizCanvas = document.getElementById('viz');
+var vizCtx = vizCanvas.getContext('2d');
+function drawViz() {
+    requestAnimationFrame(drawViz);
+    var data = synth.getWaveformData();
+    if (!data) return;
+    vizCtx.fillStyle = '#0d0d14';
+    vizCtx.fillRect(0, 0, vizCanvas.width, vizCanvas.height);
+    vizCtx.strokeStyle = '#00f0ff';
+    vizCtx.lineWidth = 1.5;
+    vizCtx.beginPath();
+    for (var i = 0; i < data.length; i++) {
+        var x = (i / data.length) * vizCanvas.width;
+        var y = (data[i] / 255) * vizCanvas.height;
+        i === 0 ? vizCtx.moveTo(x, y) : vizCtx.lineTo(x, y);
+    }
+    vizCtx.stroke();
+}
+drawViz();
+</script>
+</body>
+</html>

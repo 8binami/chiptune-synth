@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChiptuneSynth — API Documentation</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0f;color:#e0e0e0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.docs{max-width:900px;margin:0 auto;padding:24px 20px 60px}
+h1{font-size:2rem;margin-bottom:6px;background:linear-gradient(90deg,#00f0ff,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.tagline{color:#888;margin-bottom:32px;font-size:.92rem}
+h2{font-size:1.3rem;color:#00f0ff;margin:36px 0 14px;padding-bottom:8px;border-bottom:1px solid rgba(0,240,255,.12)}
+h3{font-size:1rem;color:#a855f7;margin:20px 0 8px}
+h4{font-size:.88rem;color:#ccc;margin:14px 0 6px}
+p{color:#bbb;line-height:1.65;margin-bottom:10px;font-size:.9rem}
+code{font-family:'Fira Code','Cascadia Code',monospace;font-size:.82rem}
+:not(pre)>code{background:rgba(0,240,255,.08);color:#00f0ff;padding:2px 6px;border-radius:4px}
+pre{background:#111118;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:16px;overflow-x:auto;margin:8px 0 16px;line-height:1.55}
+pre code{color:#c8e0ff;background:none;padding:0}
+.kw{color:#a855f7}
+.fn{color:#00f0ff}
+.str{color:#4ade80}
+.cmt{color:#666}
+.num{color:#f59e0b}
+.type{color:#f472b6}
+table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:.82rem}
+th{text-align:left;background:rgba(0,240,255,.06);color:#00f0ff;padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.1);font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.04);color:#ccc;vertical-align:top}
+td:first-child{color:#e0e0e0;font-family:monospace;white-space:nowrap}
+tr:hover{background:rgba(255,255,255,.02)}
+.param-table td:nth-child(2){color:#a855f7;font-family:monospace;font-size:.78rem}
+.param-table td:nth-child(3){color:#666;font-family:monospace;font-size:.78rem}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.7rem;font-weight:600;margin-left:6px;vertical-align:middle}
+.badge-static{background:rgba(168,85,247,.15);color:#a855f7;border:1px solid rgba(168,85,247,.25)}
+.badge-async{background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.25)}
+.badge-returns{background:rgba(251,191,36,.12);color:#fbbf24;border:1px solid rgba(251,191,36,.2)}
+.toc{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:20px 24px;margin-bottom:28px}
+.toc h4{color:#00f0ff;margin:0 0 10px;font-size:.85rem}
+.toc ul{list-style:none;columns:2;gap:20px}
+.toc li{margin-bottom:5px}
+.toc a{color:#888;text-decoration:none;font-size:.82rem;transition:color .15s}
+.toc a:hover{color:#00f0ff}
+.tip{background:rgba(168,85,247,.06);border-left:3px solid #a855f7;padding:10px 14px;border-radius:0 6px 6px 0;margin:10px 0 16px;font-size:.83rem;color:#c4b5fd}
+.warn{background:rgba(251,191,36,.06);border-left:3px solid #fbbf24;padding:10px 14px;border-radius:0 6px 6px 0;margin:10px 0 16px;font-size:.83rem;color:#fde68a}
+.footer{text-align:center;color:#666;font-size:.78rem;margin-top:40px;padding-top:16px;border-top:1px solid rgba(255,255,255,.06)}
+.footer a{color:#00f0ff;text-decoration:none}
+</style>
+</head>
+<body>
+
+<div class="docs">
+
+<h1>API Documentation</h1>
+<p class="tagline">Complete reference for ChiptuneSynth — 4-track chiptune synthesizer for the Web Audio API</p>
+
+<!-- TOC -->
+<div class="toc">
+    <h4>Table of Contents</h4>
+    <ul>
+        <li><a href="#quick-start">Quick Start</a></li>
+        <li><a href="#constructor">Constructor &amp; Init</a></li>
+        <li><a href="#playback">Playback Methods</a></li>
+        <li><a href="#presets">Presets &amp; Instruments</a></li>
+        <li><a href="#track-config">Track Configuration</a></li>
+        <li><a href="#envelopes">Envelopes (ADSR)</a></li>
+        <li><a href="#vibrato">Vibrato</a></li>
+        <li><a href="#filter">Filter</a></li>
+        <li><a href="#unison">Unison &amp; Detune</a></li>
+        <li><a href="#lfo">LFOs (Tremolo, Filter)</a></li>
+        <li><a href="#midi">MIDI Support</a></li>
+        <li><a href="#visualizer">Visualizer Data</a></li>
+        <li><a href="#static">Static Methods</a></li>
+        <li><a href="#custom-presets">Custom Instruments</a></li>
+        <li><a href="#defaults">Default Values</a></li>
+    </ul>
+</div>
+
+<!-- QUICK START -->
+<h2 id="quick-start">Quick Start</h2>
+<pre><code><span class="cmt">// 1. Include the library</span>
+&lt;script src=<span class="str">"chiptune-synth.js"</span>&gt;&lt;/script&gt;
+
+<span class="cmt">// 2. Create and initialize</span>
+<span class="kw">const</span> synth = <span class="kw">new</span> <span class="fn">ChiptuneSynth</span>();
+<span class="kw">await</span> synth.<span class="fn">init</span>();
+
+<span class="cmt">// 3. Play a note</span>
+synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">0.5</span>);
+
+<span class="cmt">// 4. Or play a sound effect</span>
+synth.<span class="fn">playPreset</span>(<span class="str">'coin'</span>);
+
+<span class="cmt">// 5. Load an instrument</span>
+synth.<span class="fn">loadInstrument</span>(<span class="str">'violin'</span>, <span class="num">0</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'A'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">1.0</span>);</code></pre>
+<div class="warn">The AudioContext requires a user gesture (click/tap) to start. Always call <code>init()</code> inside a click handler or after user interaction.</div>
+
+
+<!-- CONSTRUCTOR -->
+<h2 id="constructor">Constructor &amp; Initialization</h2>
+
+<h3>new ChiptuneSynth()</h3>
+<p>Creates a new synthesizer instance with 4 tracks (Lead, Bass, Drums, FX), default envelopes, and empty vibrato settings.</p>
+<pre><code><span class="kw">const</span> synth = <span class="kw">new</span> <span class="fn">ChiptuneSynth</span>();</code></pre>
+
+<h3>synth.init() <span class="badge badge-async">async</span></h3>
+<p>Initializes the Web Audio API context, creates master gain, analyser, per-track gain nodes, and noise buffer. Must be called once before any playback.</p>
+<pre><code><span class="kw">await</span> synth.<span class="fn">init</span>();</code></pre>
+
+<h3>synth.dispose()</h3>
+<p>Stops all notes and closes the AudioContext. Call when you're done with the synth.</p>
+
+
+<!-- PLAYBACK -->
+<h2 id="playback">Playback Methods</h2>
+
+<h3>synth.playNote(frequency, trackIndex, duration, startTime) <span class="badge badge-returns">→ noteId</span></h3>
+<p>Plays a note at the given frequency (Hz) on the specified track.</p>
+<table class="param-table">
+    <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>frequency</td><td>number</td><td>—</td><td>Frequency in Hz (e.g. 440 for A4)</td></tr>
+    <tr><td>trackIndex</td><td>number</td><td>0</td><td>Track index: 0=Lead, 1=Bass, 2=Drums, 3=FX</td></tr>
+    <tr><td>duration</td><td>number</td><td>10</td><td>Duration in seconds. Values ≥10 create sustained notes</td></tr>
+    <tr><td>startTime</td><td>number</td><td>now</td><td>AudioContext time to start (for scheduling)</td></tr>
+</table>
+<pre><code><span class="kw">const</span> noteId = synth.<span class="fn">playNote</span>(<span class="num">440</span>, <span class="num">0</span>, <span class="num">0.5</span>);  <span class="cmt">// A4, Lead, 0.5s</span></code></pre>
+<div class="tip">Use <code>duration = 10</code> or higher for sustained notes that you control manually with <code>stopNote()</code>. This is how the keyboard and MIDI work.</div>
+
+<h3>synth.playNoteByName(note, octave, trackIndex, duration) <span class="badge badge-returns">→ noteId</span></h3>
+<p>Plays a note by its musical name.</p>
+<table class="param-table">
+    <tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>note</td><td>string</td><td>—</td><td>Note name: C, C#, D, D#, E, F, F#, G, G#, A, A#, B (also Db, Eb, Gb, Ab, Bb)</td></tr>
+    <tr><td>octave</td><td>number</td><td>4</td><td>Octave (1-7)</td></tr>
+    <tr><td>trackIndex</td><td>number</td><td>0</td><td>Target track</td></tr>
+    <tr><td>duration</td><td>number</td><td>10</td><td>Duration in seconds</td></tr>
+</table>
+<pre><code>synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">0.5</span>);  <span class="cmt">// Middle C on Lead</span>
+synth.<span class="fn">playNoteByName</span>(<span class="str">'Eb'</span>, <span class="num">3</span>, <span class="num">1</span>, <span class="num">1.0</span>); <span class="cmt">// Eb3 on Bass</span></code></pre>
+
+<h3>synth.stopNote(noteId)</h3>
+<p>Stops a specific note with its release envelope. Use the noteId returned by <code>playNote()</code> or <code>playNoteByName()</code>.</p>
+
+<h3>synth.stopAllNotes()</h3>
+<p>Immediately stops all active notes across all tracks.</p>
+
+
+<!-- PRESETS -->
+<h2 id="presets">Presets &amp; Instruments</h2>
+
+<h3>synth.playPreset(name)</h3>
+<p>Loads and plays a built-in SFX preset in one call. Perfect for game sound effects.</p>
+<pre><code>synth.<span class="fn">playPreset</span>(<span class="str">'coin'</span>);
+synth.<span class="fn">playPreset</span>(<span class="str">'explosion'</span>);
+synth.<span class="fn">playPreset</span>(<span class="str">'jump'</span>);</code></pre>
+
+<h4>Available SFX Presets (10)</h4>
+<table>
+    <tr><th>Name</th><th>Description</th><th>Use Case</th></tr>
+    <tr><td>laser</td><td>Descending zap beam</td><td>Shooting, beams</td></tr>
+    <tr><td>coin</td><td>Rising bright ding</td><td>Collecting items</td></tr>
+    <tr><td>jump</td><td>Quick ascending sweep</td><td>Jumping, bouncing</td></tr>
+    <tr><td>explosion</td><td>Noise burst decay</td><td>Destruction, death</td></tr>
+    <tr><td>powerup</td><td>Rising sweep fanfare</td><td>Power-ups, upgrades</td></tr>
+    <tr><td>hit</td><td>Sharp impact noise</td><td>Damage, collision</td></tr>
+    <tr><td>blip</td><td>Short UI click</td><td>Menu selection, UI</td></tr>
+    <tr><td>bass</td><td>Deep triangle thump</td><td>Bass drops, impacts</td></tr>
+    <tr><td>shoot</td><td>Quick zap shot</td><td>Rapid fire weapons</td></tr>
+    <tr><td>1up</td><td>Ascending fanfare</td><td>Extra lives, bonuses</td></tr>
+</table>
+
+<h3>synth.loadPreset(name)</h3>
+<p>Loads a preset's configuration (waveform, envelope, effects) onto a track <em>without</em> playing it. Useful for setting up a track before triggering notes manually.</p>
+
+<h3>synth.loadInstrument(name, trackIndex) <span class="badge badge-returns">→ boolean</span></h3>
+<p>Loads a full instrument preset onto the specified track, configuring waveform, envelope, vibrato, and modulation.</p>
+<pre><code>synth.<span class="fn">loadInstrument</span>(<span class="str">'violin'</span>, <span class="num">0</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'A'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">2.0</span>);</code></pre>
+
+<h4>Available Instruments (12)</h4>
+<table>
+    <tr><th>Name</th><th>Type</th><th>Description</th></tr>
+    <tr><td>piano</td><td>triangle</td><td>Bright percussive tone with quick decay</td></tr>
+    <tr><td>violin</td><td>sawtooth</td><td>Warm bowed string with vibrato</td></tr>
+    <tr><td>cello</td><td>sawtooth</td><td>Deep bowed string, low register</td></tr>
+    <tr><td>flute</td><td>sine</td><td>Soft breathy tone with vibrato</td></tr>
+    <tr><td>organ</td><td>square</td><td>Sustained pipe organ tone</td></tr>
+    <tr><td>brass</td><td>sawtooth</td><td>Bold horn/trumpet sound</td></tr>
+    <tr><td>harmonica</td><td>square</td><td>Reedy PWM tone with tremolo</td></tr>
+    <tr><td>synthLead</td><td>square</td><td>Classic chiptune lead</td></tr>
+    <tr><td>synthPad</td><td>sawtooth</td><td>Wide unison pad with filter</td></tr>
+    <tr><td>synthBass</td><td>sawtooth</td><td>Punchy synth bass</td></tr>
+    <tr><td>marimba</td><td>sine</td><td>Percussive mallet tone</td></tr>
+    <tr><td>electricGuitar</td><td>square</td><td>Overdriven guitar emulation</td></tr>
+</table>
+
+
+<!-- TRACK CONFIG -->
+<h2 id="track-config">Track Configuration</h2>
+
+<h3>synth.updateTrack(trackIndex, settings)</h3>
+<p>Updates one or more properties of a track. Changes apply in real-time to currently playing notes.</p>
+<pre><code>synth.<span class="fn">updateTrack</span>(<span class="num">0</span>, {
+  type: <span class="str">'sawtooth'</span>,
+  volume: <span class="num">0.4</span>,
+  unisonVoices: <span class="num">4</span>,
+  unisonDetune: <span class="num">20</span>
+});</code></pre>
+
+<h4>Track Properties</h4>
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>type</td><td>string</td><td>'square'</td><td>Waveform: 'square', 'triangle', 'sawtooth', 'sine', 'noise'</td></tr>
+    <tr><td>volume</td><td>number</td><td>0.3</td><td>Track volume (0-1)</td></tr>
+    <tr><td>dutyCycle</td><td>number</td><td>0.5</td><td>Pulse width for square waves (0-1)</td></tr>
+    <tr><td>detune</td><td>number</td><td>0</td><td>Fine tuning in cents (1200 = 1 octave)</td></tr>
+    <tr><td>octaveOffset</td><td>number</td><td>0</td><td>Octave shift (±)</td></tr>
+    <tr><td>semitoneOffset</td><td>number</td><td>0</td><td>Semitone shift (±)</td></tr>
+    <tr><td>pitchEnv</td><td>number</td><td>0</td><td>Pitch envelope depth in semitones</td></tr>
+    <tr><td>glide</td><td>number</td><td>0</td><td>Portamento time in seconds</td></tr>
+</table>
+
+<p>You can also directly set properties on the track objects:</p>
+<pre><code>synth.tracks[<span class="num">0</span>].type = <span class="str">'sawtooth'</span>;
+synth.tracks[<span class="num">0</span>].volume = <span class="num">0.4</span>;
+synth.<span class="fn">updateLiveNotes</span>(<span class="num">0</span>); <span class="cmt">// Apply to active notes</span></code></pre>
+
+
+<!-- ENVELOPES -->
+<h2 id="envelopes">Envelopes (ADSR)</h2>
+
+<h3>synth.updateEnvelope(trackIndex, settings)</h3>
+<p>Sets the amplitude envelope for a track. Controls how notes fade in, sustain, and fade out.</p>
+<pre><code>synth.<span class="fn">updateEnvelope</span>(<span class="num">0</span>, {
+  attack:  <span class="num">0.1</span>,   <span class="cmt">// Fade-in time (seconds)</span>
+  decay:   <span class="num">0.2</span>,   <span class="cmt">// Decay to sustain level</span>
+  sustain: <span class="num">0.6</span>,   <span class="cmt">// Held level (0-1)</span>
+  release: <span class="num">0.5</span>    <span class="cmt">// Fade-out after note stops</span>
+});</code></pre>
+
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Range</th><th>Description</th></tr>
+    <tr><td>attack</td><td>number</td><td>0-5s</td><td>Time to reach full volume</td></tr>
+    <tr><td>decay</td><td>number</td><td>0-5s</td><td>Time to fall from peak to sustain level</td></tr>
+    <tr><td>sustain</td><td>number</td><td>0-1</td><td>Volume level while note is held (0 = off after decay)</td></tr>
+    <tr><td>release</td><td>number</td><td>0-10s</td><td>Fade-out time after note stops</td></tr>
+</table>
+
+<h4>Default Envelopes</h4>
+<table>
+    <tr><th>Track</th><th>Attack</th><th>Decay</th><th>Sustain</th><th>Release</th></tr>
+    <tr><td>0 - Lead</td><td>0.01</td><td>0.10</td><td>0.7</td><td>0.20</td></tr>
+    <tr><td>1 - Bass</td><td>0.01</td><td>0.20</td><td>0.8</td><td>0.15</td></tr>
+    <tr><td>2 - Drums</td><td>0.001</td><td>0.10</td><td>0.0</td><td>0.05</td></tr>
+    <tr><td>3 - FX</td><td>0.005</td><td>0.30</td><td>0.0</td><td>0.20</td></tr>
+</table>
+
+
+<!-- VIBRATO -->
+<h2 id="vibrato">Vibrato</h2>
+
+<h3>synth.updateVibrato(trackIndex, settings)</h3>
+<p>Configures pitch modulation (vibrato) for a track.</p>
+<pre><code>synth.<span class="fn">updateVibrato</span>(<span class="num">0</span>, {
+  rate:  <span class="num">5</span>,   <span class="cmt">// Speed in Hz</span>
+  depth: <span class="num">12</span>   <span class="cmt">// Amount in cents</span>
+});</code></pre>
+
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>rate</td><td>number</td><td>0</td><td>LFO speed in Hz (0 = off)</td></tr>
+    <tr><td>depth</td><td>number</td><td>0</td><td>Pitch deviation in cents (0 = off)</td></tr>
+</table>
+
+
+<!-- FILTER -->
+<h2 id="filter">Filter</h2>
+<p>Each track has an optional filter for shaping the frequency content of the sound.</p>
+
+<pre><code>synth.tracks[<span class="num">0</span>].filterEnabled = <span class="kw">true</span>;
+synth.tracks[<span class="num">0</span>].filterType = <span class="str">'lowpass'</span>;
+synth.tracks[<span class="num">0</span>].filterCutoff = <span class="num">2000</span>;
+synth.tracks[<span class="num">0</span>].filterQ = <span class="num">5</span>;
+synth.<span class="fn">updateLiveNotes</span>(<span class="num">0</span>);</code></pre>
+
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>filterEnabled</td><td>boolean</td><td>false</td><td>Enable/disable filter</td></tr>
+    <tr><td>filterType</td><td>string</td><td>'lowpass'</td><td>'lowpass', 'highpass', 'bandpass', 'notch'</td></tr>
+    <tr><td>filterCutoff</td><td>number</td><td>20000</td><td>Cutoff frequency in Hz</td></tr>
+    <tr><td>filterQ</td><td>number</td><td>0.1</td><td>Resonance / Q factor</td></tr>
+    <tr><td>filterKeyTrack</td><td>number</td><td>0</td><td>Key tracking 0-100 (cutoff follows pitch)</td></tr>
+    <tr><td>filterEnvAmount</td><td>number</td><td>0</td><td>Filter envelope depth (semitones)</td></tr>
+    <tr><td>filterEnvAttack</td><td>number</td><td>0.01</td><td>Filter envelope attack (seconds)</td></tr>
+    <tr><td>filterEnvRelease</td><td>number</td><td>0.2</td><td>Filter envelope release (seconds)</td></tr>
+</table>
+
+
+<!-- UNISON -->
+<h2 id="unison">Unison &amp; Detune</h2>
+<p>Stack multiple detuned oscillators for a thick, wide sound. Essential for pads and leads.</p>
+
+<pre><code>synth.tracks[<span class="num">0</span>].unisonVoices = <span class="num">8</span>;
+synth.tracks[<span class="num">0</span>].unisonDetune = <span class="num">25</span>;  <span class="cmt">// cents between voices</span>
+synth.tracks[<span class="num">0</span>].unisonSpread = <span class="num">80</span>;  <span class="cmt">// stereo spread %</span></code></pre>
+
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>unisonVoices</td><td>number</td><td>1</td><td>Number of oscillators (1-16)</td></tr>
+    <tr><td>unisonDetune</td><td>number</td><td>0</td><td>Detune spread in cents</td></tr>
+    <tr><td>unisonSpread</td><td>number</td><td>0</td><td>Stereo panning spread (0-100%)</td></tr>
+</table>
+
+
+<!-- LFOs -->
+<h2 id="lfo">LFOs (Tremolo &amp; Filter Modulation)</h2>
+
+<h4>Tremolo (Amplitude LFO)</h4>
+<pre><code>synth.tracks[<span class="num">0</span>].tremoloRate = <span class="num">6</span>;    <span class="cmt">// Hz</span>
+synth.tracks[<span class="num">0</span>].tremoloDepth = <span class="num">50</span>;   <span class="cmt">// 0-100</span></code></pre>
+
+<h4>Filter LFO</h4>
+<pre><code>synth.tracks[<span class="num">0</span>].filterEnabled = <span class="kw">true</span>;
+synth.tracks[<span class="num">0</span>].filterCutoff = <span class="num">1000</span>;
+synth.tracks[<span class="num">0</span>].lfoFilterRate = <span class="num">3</span>;     <span class="cmt">// Hz</span>
+synth.tracks[<span class="num">0</span>].lfoFilterDepth = <span class="num">2000</span>;  <span class="cmt">// Hz range</span></code></pre>
+
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Description</th></tr>
+    <tr><td>tremoloRate</td><td>number</td><td>Tremolo speed in Hz (0 = off)</td></tr>
+    <tr><td>tremoloDepth</td><td>number</td><td>Tremolo amount (0-100)</td></tr>
+    <tr><td>lfoFilterRate</td><td>number</td><td>Filter LFO speed in Hz (0 = off)</td></tr>
+    <tr><td>lfoFilterDepth</td><td>number</td><td>Filter LFO range in Hz</td></tr>
+</table>
+
+<div class="tip">ChiptuneSynth has 3 independent LFOs per track: Vibrato (pitch), Tremolo (volume), and Filter modulation.</div>
+
+
+<!-- MIDI -->
+<h2 id="midi">MIDI Support</h2>
+
+<h3>synth.enableMIDI(options) <span class="badge badge-async">async</span> <span class="badge badge-returns">→ inputNames[]</span></h3>
+<p>Enables MIDI input from connected controllers. Returns an array of detected MIDI input device names.</p>
+<pre><code><span class="kw">const</span> inputs = <span class="kw">await</span> synth.<span class="fn">enableMIDI</span>({
+  track: <span class="num">0</span>,
+  channel: <span class="num">0</span>,              <span class="cmt">// 0 = all channels</span>
+  onConnect: (name) => console.log(<span class="str">'Connected:'</span>, name),
+  onDisconnect: (name) => console.log(<span class="str">'Disconnected:'</span>, name),
+  onNoteOn: (note, vel, ch) => { <span class="cmt">/* MIDI note 0-127 */</span> },
+  onNoteOff: (note, ch) => { <span class="cmt">/* ... */</span> },
+  onCC: (cc, value, ch) => { <span class="cmt">/* CC 0-127 */</span> }
+});</code></pre>
+
+<h4>Options</h4>
+<table class="param-table">
+    <tr><th>Property</th><th>Type</th><th>Default</th><th>Description</th></tr>
+    <tr><td>track</td><td>number</td><td>0</td><td>Target track for MIDI notes</td></tr>
+    <tr><td>channel</td><td>number</td><td>0</td><td>MIDI channel filter (1-16, 0 = all)</td></tr>
+    <tr><td>onConnect</td><td>function</td><td>—</td><td>Called when a MIDI device connects</td></tr>
+    <tr><td>onDisconnect</td><td>function</td><td>—</td><td>Called when a MIDI device disconnects</td></tr>
+    <tr><td>onNoteOn</td><td>function</td><td>—</td><td>Called on note on (note, velocity, channel)</td></tr>
+    <tr><td>onNoteOff</td><td>function</td><td>—</td><td>Called on note off (note, channel)</td></tr>
+    <tr><td>onCC</td><td>function</td><td>—</td><td>Called on control change (cc, value, channel)</td></tr>
+</table>
+
+<h4>Supported MIDI CC</h4>
+<table>
+    <tr><th>CC</th><th>Name</th><th>Effect</th></tr>
+    <tr><td>1</td><td>Mod Wheel</td><td>Controls vibrato depth</td></tr>
+    <tr><td>7</td><td>Volume</td><td>Controls track volume</td></tr>
+    <tr><td>64</td><td>Sustain Pedal</td><td>Sustains held notes</td></tr>
+    <tr><td>120</td><td>All Sound Off</td><td>Stops all notes</td></tr>
+    <tr><td>123</td><td>All Notes Off</td><td>Stops all notes</td></tr>
+</table>
+
+<h3>synth.disableMIDI()</h3>
+<p>Disables MIDI input and stops all held MIDI notes.</p>
+
+<h3>synth.setMIDITrack(trackIndex)</h3>
+<p>Changes which track receives MIDI input.</p>
+
+<h3>synth.setMIDIChannel(ch)</h3>
+<p>Sets the MIDI channel filter (0 = all channels).</p>
+
+<h3>synth.isMIDIEnabled() <span class="badge badge-returns">→ boolean</span></h3>
+<p>Returns whether MIDI is currently active.</p>
+
+
+<!-- VISUALIZER -->
+<h2 id="visualizer">Visualizer Data</h2>
+
+<h3>synth.getWaveformData() <span class="badge badge-returns">→ Uint8Array</span></h3>
+<p>Returns time-domain waveform data for drawing oscilloscope-style visualizations. Values range from 0-255 (128 = center).</p>
+<pre><code><span class="kw">function</span> <span class="fn">draw</span>() {
+  <span class="kw">const</span> data = synth.<span class="fn">getWaveformData</span>();
+  <span class="cmt">// Draw on canvas...</span>
+  ctx.<span class="fn">beginPath</span>();
+  data.<span class="fn">forEach</span>((v, i) => {
+    <span class="kw">const</span> x = (i / data.length) * width;
+    <span class="kw">const</span> y = (v / <span class="num">255</span>) * height;
+    i === <span class="num">0</span> ? ctx.<span class="fn">moveTo</span>(x, y) : ctx.<span class="fn">lineTo</span>(x, y);
+  });
+  ctx.<span class="fn">stroke</span>();
+  <span class="fn">requestAnimationFrame</span>(draw);
+}</code></pre>
+
+<h3>synth.getFrequencyData() <span class="badge badge-returns">→ Uint8Array</span></h3>
+<p>Returns frequency-domain (FFT) data for spectrum visualizations. Values range from 0-255.</p>
+
+<h3>synth.setMasterVolume(value)</h3>
+<p>Sets the master output volume (0-1).</p>
+
+<h3>synth.getMasterVolume() <span class="badge badge-returns">→ number</span></h3>
+<p>Returns the current master volume.</p>
+
+<h3>synth.resetToDefaults()</h3>
+<p>Resets all tracks, envelopes, and vibrato to their default values.</p>
+
+
+<!-- STATIC -->
+<h2 id="static">Static Methods</h2>
+
+<h3>ChiptuneSynth.noteToFrequency(note, octave) <span class="badge badge-static">static</span> <span class="badge badge-returns">→ number</span></h3>
+<p>Converts a note name and octave to frequency in Hz.</p>
+<pre><code><span class="fn">ChiptuneSynth</span>.noteToFrequency(<span class="str">'A'</span>, <span class="num">4</span>);  <span class="cmt">// → 440</span>
+<span class="fn">ChiptuneSynth</span>.noteToFrequency(<span class="str">'C'</span>, <span class="num">4</span>);  <span class="cmt">// → 261.63</span></code></pre>
+
+<h3>ChiptuneSynth.midiToFrequency(midi) <span class="badge badge-static">static</span> <span class="badge badge-returns">→ number</span></h3>
+<p>Converts a MIDI note number (0-127) to frequency in Hz.</p>
+
+<h3>ChiptuneSynth.frequencyToMidi(freq) <span class="badge badge-static">static</span> <span class="badge badge-returns">→ number</span></h3>
+<p>Converts a frequency to the nearest MIDI note number.</p>
+
+<h3>ChiptuneSynth.getPresetNames() <span class="badge badge-static">static</span> <span class="badge badge-returns">→ string[]</span></h3>
+<p>Returns an array of all available SFX preset names.</p>
+<pre><code><span class="fn">ChiptuneSynth</span>.getPresetNames();
+<span class="cmt">// → ['laser','coin','jump','explosion','powerup','hit','blip','bass','shoot','1up']</span></code></pre>
+
+<h3>ChiptuneSynth.getInstrumentNames() <span class="badge badge-static">static</span> <span class="badge badge-returns">→ string[]</span></h3>
+<p>Returns an array of all available instrument preset names.</p>
+
+<h3>ChiptuneSynth.getInstruments() <span class="badge badge-static">static</span> <span class="badge badge-returns">→ object</span></h3>
+<p>Returns an object keyed by instrument name, each value containing the full definition (track settings, envelope, vibrato, filter, etc.).</p>
+<pre><code><span class="kw">const</span> instruments = ChiptuneSynth.<span class="fn">getInstruments</span>();
+<span class="cmt">// { piano: { name, label, icon, type, volume, ... }, violin: { ... }, ... }</span>
+
+<span class="cmt">// Access a specific instrument definition</span>
+<span class="kw">const</span> piano = instruments.piano;
+console.<span class="fn">log</span>(piano.type);  <span class="cmt">// 'triangle'</span>
+console.<span class="fn">log</span>(piano.label); <span class="cmt">// 'Piano'</span></code></pre>
+
+
+<!-- CUSTOM PRESETS -->
+<h2 id="custom-presets">Creating Custom Instruments</h2>
+<p>You can craft your own instruments by combining track settings, envelopes, vibrato, and filters. Here's how to build sounds from scratch.</p>
+
+<h3>Basic Custom Sound</h3>
+<p>Configure a track manually, then play notes on it:</p>
+<pre><code><span class="cmt">// Create a retro pluck bass</span>
+synth.<span class="fn">updateTrack</span>(<span class="num">1</span>, {
+  type: <span class="str">'sawtooth'</span>,
+  volume: <span class="num">0.5</span>,
+  octaveOffset: <span class="num">-1</span>
+});
+synth.<span class="fn">updateEnvelope</span>(<span class="num">1</span>, {
+  attack: <span class="num">0.005</span>,
+  decay: <span class="num">0.3</span>,
+  sustain: <span class="num">0.0</span>,
+  release: <span class="num">0.1</span>
+});
+synth.<span class="fn">playNoteByName</span>(<span class="str">'E'</span>, <span class="num">2</span>, <span class="num">1</span>, <span class="num">0.4</span>);</code></pre>
+
+<h3>Custom SFX (Preset-Style)</h3>
+<p>Replicate the preset pattern — configure a track, play a note, and let the envelope handle the rest:</p>
+<pre><code><span class="cmt">// Custom "warp" SFX on FX track (3)</span>
+<span class="kw">function</span> <span class="fn">playWarp</span>() {
+  synth.<span class="fn">updateTrack</span>(<span class="num">3</span>, {
+    type: <span class="str">'square'</span>,
+    volume: <span class="num">0.3</span>,
+    dutyCycle: <span class="num">0.25</span>,
+    pitchEnv: <span class="num">-24</span>       <span class="cmt">// pitch drops 2 octaves</span>
+  });
+  synth.<span class="fn">updateEnvelope</span>(<span class="num">3</span>, {
+    attack: <span class="num">0.01</span>,
+    decay: <span class="num">0.4</span>,
+    sustain: <span class="num">0.0</span>,
+    release: <span class="num">0.1</span>
+  });
+  synth.<span class="fn">playNote</span>(<span class="num">880</span>, <span class="num">3</span>, <span class="num">0.5</span>);
+}
+<span class="cmt">// Now call playWarp() anytime!</span></code></pre>
+
+<h3>Rich Instrument with Effects</h3>
+<p>Combine multiple features for expressive instruments:</p>
+<pre><code><span class="cmt">// Dreamy synth pad with filter sweep</span>
+<span class="kw">function</span> <span class="fn">setupDreamPad</span>(track) {
+  synth.<span class="fn">updateTrack</span>(track, {
+    type: <span class="str">'square'</span>,
+    volume: <span class="num">0.25</span>,
+    dutyCycle: <span class="num">0.3</span>,
+    unisonVoices: <span class="num">6</span>,
+    unisonDetune: <span class="num">18</span>,
+    unisonSpread: <span class="num">70</span>
+  });
+  synth.<span class="fn">updateEnvelope</span>(track, {
+    attack: <span class="num">0.8</span>,
+    decay: <span class="num">0.5</span>,
+    sustain: <span class="num">0.6</span>,
+    release: <span class="num">2.0</span>
+  });
+  synth.<span class="fn">updateVibrato</span>(track, {
+    rate: <span class="num">4</span>,
+    depth: <span class="num">8</span>
+  });
+  <span class="cmt">// Add filter with LFO modulation</span>
+  synth.tracks[track].filterEnabled = <span class="kw">true</span>;
+  synth.tracks[track].filterType = <span class="str">'lowpass'</span>;
+  synth.tracks[track].filterCutoff = <span class="num">1200</span>;
+  synth.tracks[track].filterQ = <span class="num">3</span>;
+  synth.tracks[track].lfoFilterRate = <span class="num">0.3</span>;
+  synth.tracks[track].lfoFilterDepth = <span class="num">800</span>;
+}
+
+setupDreamPad(<span class="num">0</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">4</span>, <span class="num">0</span>, <span class="num">3.0</span>);</code></pre>
+
+<h3>Multi-Track Layered Sound</h3>
+<p>Layer multiple tracks for complex sounds:</p>
+<pre><code><span class="cmt">// Layered "epic hit" — noise + bass + lead</span>
+<span class="kw">function</span> <span class="fn">playEpicHit</span>() {
+  <span class="cmt">// Layer 1: noise crash</span>
+  synth.<span class="fn">updateTrack</span>(<span class="num">2</span>, { type: <span class="str">'noise'</span>, volume: <span class="num">0.4</span> });
+  synth.<span class="fn">updateEnvelope</span>(<span class="num">2</span>, { attack:<span class="num">0.001</span>, decay:<span class="num">0.3</span>, sustain:<span class="num">0</span>, release:<span class="num">0.1</span> });
+  synth.<span class="fn">playNote</span>(<span class="num">200</span>, <span class="num">2</span>, <span class="num">0.4</span>);
+
+  <span class="cmt">// Layer 2: sub bass thump</span>
+  synth.<span class="fn">updateTrack</span>(<span class="num">1</span>, { type: <span class="str">'sine'</span>, volume: <span class="num">0.6</span>, pitchEnv: <span class="num">12</span> });
+  synth.<span class="fn">updateEnvelope</span>(<span class="num">1</span>, { attack:<span class="num">0.001</span>, decay:<span class="num">0.25</span>, sustain:<span class="num">0</span>, release:<span class="num">0.1</span> });
+  synth.<span class="fn">playNote</span>(<span class="num">60</span>, <span class="num">1</span>, <span class="num">0.3</span>);
+
+  <span class="cmt">// Layer 3: bright accent</span>
+  synth.<span class="fn">updateTrack</span>(<span class="num">0</span>, { type: <span class="str">'square'</span>, volume: <span class="num">0.2</span> });
+  synth.<span class="fn">updateEnvelope</span>(<span class="num">0</span>, { attack:<span class="num">0.001</span>, decay:<span class="num">0.1</span>, sustain:<span class="num">0</span>, release:<span class="num">0.2</span> });
+  synth.<span class="fn">playNote</span>(<span class="num">440</span>, <span class="num">0</span>, <span class="num">0.15</span>);
+}</code></pre>
+
+<h3>Reusable Instrument Object Pattern</h3>
+<p>Organize your custom instruments as config objects:</p>
+<pre><code><span class="cmt">// Define instrument configs</span>
+<span class="kw">const</span> myInstruments = {
+  retroLead: {
+    track: { type: <span class="str">'square'</span>, dutyCycle: <span class="num">0.25</span>, volume: <span class="num">0.3</span> },
+    env:   { attack: <span class="num">0.02</span>, decay: <span class="num">0.15</span>, sustain: <span class="num">0.5</span>, release: <span class="num">0.3</span> },
+    vib:   { rate: <span class="num">5.5</span>, depth: <span class="num">10</span> }
+  },
+  fatBass: {
+    track: { type: <span class="str">'sawtooth'</span>, volume: <span class="num">0.5</span>, unisonVoices: <span class="num">3</span>, unisonDetune: <span class="num">10</span> },
+    env:   { attack: <span class="num">0.01</span>, decay: <span class="num">0.2</span>, sustain: <span class="num">0.7</span>, release: <span class="num">0.1</span> },
+    vib:   { rate: <span class="num">0</span>, depth: <span class="num">0</span> }
+  }
+};
+
+<span class="cmt">// Apply an instrument to a track</span>
+<span class="kw">function</span> <span class="fn">applyInstrument</span>(name, trackIndex) {
+  <span class="kw">const</span> inst = myInstruments[name];
+  synth.<span class="fn">updateTrack</span>(trackIndex, inst.track);
+  synth.<span class="fn">updateEnvelope</span>(trackIndex, inst.env);
+  synth.<span class="fn">updateVibrato</span>(trackIndex, inst.vib);
+}
+
+applyInstrument(<span class="str">'retroLead'</span>, <span class="num">0</span>);
+synth.<span class="fn">playNoteByName</span>(<span class="str">'C'</span>, <span class="num">5</span>, <span class="num">0</span>, <span class="num">0.5</span>);</code></pre>
+
+<div class="tip">The <strong>Reusable Instrument Object</strong> pattern is the recommended approach for managing custom instruments in your game or app. It keeps your sound design clean and easy to tweak.</div>
+
+<div class="warn"><strong>Want more?</strong> <a href="https://8bitforge.com" style="color:#fbbf24">8BitForge Pro</a> includes a visual instrument editor, 8 tracks, full mixer with EQ/compressor, 3 LFOs per track, and 50+ built-in instruments.</div>
+
+
+<!-- DEFAULTS -->
+<h2 id="defaults">Default Values</h2>
+
+<h4>Track Defaults</h4>
+<table>
+    <tr><th>Track</th><th>Index</th><th>Waveform</th><th>Volume</th></tr>
+    <tr><td>Lead</td><td>0</td><td>square</td><td>0.30</td></tr>
+    <tr><td>Bass</td><td>1</td><td>triangle</td><td>0.40</td></tr>
+    <tr><td>Drums</td><td>2</td><td>noise</td><td>0.50</td></tr>
+    <tr><td>FX</td><td>3</td><td>sawtooth</td><td>0.25</td></tr>
+</table>
+
+<h4>Architecture Note</h4>
+<p>Per-note <code>gainNode</code> handles only the ADSR envelope (normalized 0→1→sustain). Track volume is controlled by a separate <code>_trackGains[]</code> node. This architecture allows real-time parameter changes without interrupting the ADSR schedule of playing notes.</p>
+
+<div class="footer">
+    <strong>ChiptuneSynth</strong> by <a href="https://8bitforge.com">8BitForge</a> &middot; Dual License (Free non-commercial / Commercial)
+</div>
+
+</div>
+</body>
+</html>
