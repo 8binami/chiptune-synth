@@ -43,6 +43,9 @@ Thumbs.db
 # Dev tools (local only)
 codepen/_publish.php
 
+# Server-only files (SEO, i18n, analytics — not part of the open source repo)
+.server/
+
 # Large media files
 *.mp4
 *.tiff

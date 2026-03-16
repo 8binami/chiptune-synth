@@ -5,6 +5,7 @@
  *
  * Routes all requests through a single entry point.
  * Injects shared PHP nav into every page automatically.
+ * Conditionally loads i18n/SEO from .server/ (gitignored, server-only).
  */
 
 // ── Preprod Gate (dev only) ──────────────────────────────
@@ -19,7 +20,20 @@ define('ROOT_DIR', __DIR__);
 // Compute BASE_URL dynamically (handles XAMPP subfolder)
 $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
 $baseUrl = rtrim($scriptDir, '/');
-define('BASE_URL', $baseUrl);
+
+// ── i18n Configuration (server-only) ────────────────────
+$serverDir = ROOT_DIR . '/.server';
+$hasI18n = file_exists($serverDir . '/i18n.config.php');
+$i18nConfig = null;
+$supportedLangs = [];
+$defaultLang = 'en';
+$currentLang = 'en';
+
+if ($hasI18n) {
+    $i18nConfig = require($serverDir . '/i18n.config.php');
+    $supportedLangs = $i18nConfig['supported_langs'];
+    $defaultLang = $i18nConfig['default_lang'];
+}
 
 // ── Routing ────────────────────────────────────────────
 $request = $_SERVER['REQUEST_URI'];
@@ -31,6 +45,43 @@ if (strpos($path, $baseUrl) === 0) {
 }
 $path = trim($path, '/');
 
+// ── Serve .server/ static files (robots.txt, llms.txt, sitemap) ──
+if ($hasI18n) {
+    if ($path === 'robots.txt' && file_exists($serverDir . '/robots.txt')) {
+        header('Content-Type: text/plain; charset=utf-8');
+        readfile($serverDir . '/robots.txt');
+        exit;
+    }
+    if ($path === 'llms.txt' && file_exists($serverDir . '/llms.txt')) {
+        header('Content-Type: text/plain; charset=utf-8');
+        readfile($serverDir . '/llms.txt');
+        exit;
+    }
+    if ($path === 'sitemap.xml' && file_exists($serverDir . '/sitemap.php')) {
+        include $serverDir . '/sitemap.php';
+        exit;
+    }
+}
+
+// ── Extract language prefix from URL ────────────────────
+$canonicalPath = '';
+
+if ($hasI18n && !empty($path)) {
+    $segments = explode('/', $path, 2);
+    if (in_array($segments[0], $supportedLangs, true)) {
+        $currentLang = $segments[0];
+        $path = $segments[1] ?? '';
+    } elseif ($path !== '' && $path !== 'index' && $path !== 'index.html' && $path !== 'index.php'
+              && !preg_match('#^(examples|src|codepen|assets|ico\.)#', $path)) {
+        // Bare page slug without language prefix → redirect to default lang
+        header('Location: ' . $baseUrl . '/' . $defaultLang . '/' . $path, true, 301);
+        exit;
+    }
+}
+
+define('BASE_URL', $baseUrl);
+define('CURRENT_LANG', $currentLang);
+
 // ── Route matching ─────────────────────────────────────
 // Clean URLs:  /examples/basic  (no .html)
 // Legacy URLs: /examples/basic.html  (still supported)
@@ -40,15 +91,18 @@ if ($path === '' || $path === 'index' || $path === 'index.html' || $path === 'in
     // Home page
     $fileToInclude = ROOT_DIR . '/index.html';
     $currentPage = 'index';
+    $canonicalPath = '';
 
 } elseif (preg_match('#^examples/([a-z0-9\-]+)$#', $path, $m)) {
     // Clean URL: /examples/basic
     $fileToInclude = ROOT_DIR . '/examples/' . $m[1] . '.html';
     $currentPage = $m[1];
+    $canonicalPath = 'examples/' . $m[1];
 
 } elseif (preg_match('#^examples/([a-z0-9\-]+)\.html$#', $path, $m)) {
     // Legacy .html URL → redirect to clean URL
-    header('Location: ' . BASE_URL . '/examples/' . $m[1], true, 301);
+    $langPrefix = ($hasI18n) ? '/' . $currentLang : '';
+    header('Location: ' . BASE_URL . $langPrefix . '/examples/' . $m[1], true, 301);
     exit;
 
 } else {
@@ -88,6 +142,36 @@ $html = preg_replace('#(<body[^>]*>)#i', '$1' . "\n" . $navHtml, $html);
 if (stripos($html, 'nav.css') === false) {
     $navCssTag = '<link rel="stylesheet" href="' . BASE_URL . '/src/nav.css?v=' . filemtime(ROOT_DIR . '/src/nav.css') . '">';
     $html = str_replace('</head>', $navCssTag . "\n" . '</head>', $html);
+}
+
+// ── SEO injection (server-only) ─────────────────────────
+if ($hasI18n) {
+    $siteUrl = rtrim($i18nConfig['site_url'], '/');
+    include $serverDir . '/seo.php';
+}
+
+// ── Translation pipeline (non-English, server-only) ─────
+if ($hasI18n && $currentLang !== $defaultLang) {
+    require_once($serverDir . '/Translator.php');
+    $translator = new Translator($i18nConfig);
+
+    $cacheKey = $currentPage;
+    $cached = $translator->getCachedPage($currentLang, $cacheKey, $fileToInclude);
+    if ($cached !== null) {
+        $html = $cached;
+    } else {
+        $translatedHtml = $translator->translateHtml($html, $currentLang);
+        $translatedHtml = $translator->translateMetaAttributes($translatedHtml, $currentLang);
+        $translator->cachePage($currentLang, $cacheKey, $translatedHtml);
+        $html = $translatedHtml;
+    }
+}
+
+// ── Minify (server-only) ────────────────────────────────
+if (file_exists($serverDir . '/HtmlMinifier.php')) {
+    require_once($serverDir . '/HtmlMinifier.php');
+    $minifier = new HtmlMinifier();
+    $html = $minifier->minify($html);
 }
 
 // ── Analytics (server-side only, not in repo) ─────────

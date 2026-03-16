@@ -12,5 +12,13 @@ RewriteRule ^ - [L]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
+# SEO files → front controller (served from .server/ if present)
+RewriteRule ^robots\.txt$ index.php [L]
+RewriteRule ^llms\.txt$ index.php [L]
+RewriteRule ^sitemap\.xml$ index.php [L]
+
+# Language-prefixed URLs → front controller
+RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)(/.*)?$ index.php [QSA,L]
+
 # Everything else → front controller (clean URLs, .html legacy, root)
 RewriteRule ^(.*)$ index.php [QSA,L]
