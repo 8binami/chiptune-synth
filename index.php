@@ -132,6 +132,29 @@ ob_start();
 include ROOT_DIR . '/.php/nav.php';
 $navHtml = ob_get_clean();
 
+// ── Inject language switcher into nav (server-only) ─────
+if ($hasI18n) {
+    $currentSlug = $canonicalPath;
+    $langSwitcherHtml = '<div class="lang-switcher" translate="no">';
+    $langSwitcherHtml .= '<input type="checkbox" id="langToggle">';
+    $langSwitcherHtml .= '<label for="langToggle" class="lang-switcher-btn" aria-label="Change language">';
+    $langSwitcherHtml .= '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2z"/></svg>';
+    $langSwitcherHtml .= '<span>' . strtoupper($currentLang) . '</span>';
+    $langSwitcherHtml .= '</label>';
+    $langSwitcherHtml .= '<div class="lang-switcher-dropdown">';
+    foreach ($supportedLangs as $lc) {
+        $activeClass = ($lc === $currentLang) ? ' class="active"' : '';
+        $switchUrl = $baseUrl . '/' . $lc . '/' . $currentSlug;
+        $langSwitcherHtml .= '<a href="' . $switchUrl . '"' . $activeClass . '>' . $i18nConfig['lang_names'][$lc] . '</a>';
+    }
+    $langSwitcherHtml .= '</div></div>';
+
+    // Insert inside .cs-nav-btns (before its closing </div>)
+    // The nav structure is: .cs-topbar > .cs-topbar-inner > [.cs-logo, .cs-nav-links, .cs-nav-btns]
+    // We insert the lang switcher right after the npm button's closing </a> tag inside .cs-nav-btns
+    $navHtml = preg_replace('#(class="cs-btn cs-btn-npm".*?</a>)\s*(</div>)#s', '$1' . "\n" . '            ' . $langSwitcherHtml . "\n" . '        $2', $navHtml);
+}
+
 // ── Render page ────────────────────────────────────────
 $html = file_get_contents($fileToInclude);
 
@@ -162,7 +185,9 @@ if ($hasI18n && $currentLang !== $defaultLang) {
     } else {
         $translatedHtml = $translator->translateHtml($html, $currentLang);
         $translatedHtml = $translator->translateMetaAttributes($translatedHtml, $currentLang);
-        $translator->cachePage($currentLang, $cacheKey, $translatedHtml);
+        if (!$translator->hasFailed()) {
+            $translator->cachePage($currentLang, $cacheKey, $translatedHtml);
+        }
         $html = $translatedHtml;
     }
 }
@@ -170,7 +195,10 @@ if ($hasI18n && $currentLang !== $defaultLang) {
 // ── Minify (server-only) ────────────────────────────────
 if (file_exists($serverDir . '/HtmlMinifier.php')) {
     require_once($serverDir . '/HtmlMinifier.php');
-    $minifier = new HtmlMinifier();
+    $minifier = new HtmlMinifier([
+        'minify_inline_js'  => false,
+        'remove_js_comments' => false,
+    ]);
     $html = $minifier->minify($html);
 }
 

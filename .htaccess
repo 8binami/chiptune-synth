@@ -17,6 +17,11 @@ RewriteRule ^robots\.txt$ index.php [L]
 RewriteRule ^llms\.txt$ index.php [L]
 RewriteRule ^sitemap\.xml$ index.php [L]
 
+# Language-prefixed static assets → strip prefix and serve file directly
+# Handles /zh/src/file.js, /fr/assets/img.png, etc.
+RewriteCond %{DOCUMENT_ROOT}/$2 -f
+RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)/(.+\.(js|css|png|jpg|jpeg|gif|svg|woff2?|ttf|eot|ico|mp3|wav|ogg|webp|json|map))$ $2 [L]
+
 # Language-prefixed URLs → front controller
 RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)(/.*)?$ index.php [QSA,L]
 

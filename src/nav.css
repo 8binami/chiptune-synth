@@ -1,7 +1,7 @@
 body{padding-top:0 !important;margin-top:0 !important}
 .cs-topbar{background:rgba(10,10,15,.95);border-bottom:1px solid rgba(255,255,255,.06);padding:0 16px;position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)}
 .cs-topbar-spacer{display:none}
-.cs-topbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;height:48px;gap:18px}
+.cs-topbar-inner{max-width:1320px;margin:0 auto;display:flex;align-items:center;height:48px;gap:18px}
 .cs-logo{text-decoration:none;font-weight:700;font-size:1rem;color:#fff;white-space:nowrap;display:flex;align-items:center;gap:6px;flex-shrink:0}
 .cs-logo-icon{color:#00f0ff;font-size:1.2rem}
 .cs-logo-accent{color:#00f0ff}

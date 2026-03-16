@@ -20,16 +20,19 @@ $navLinks = [
 ];
 
 $isIndex = ($currentPage === 'index' || $currentPage === '');
+
+// Language prefix for nav links (empty if no i18n or default lang)
+$langPrefix = (defined('CURRENT_LANG') && CURRENT_LANG !== 'en') ? '/' . CURRENT_LANG : '';
 ?>
 <nav class="cs-topbar">
     <div class="cs-topbar-inner">
-        <a href="<?= BASE_URL ?>/" class="cs-logo">
+        <a href="<?= BASE_URL ?><?= $langPrefix ?>/" class="cs-logo">
             <span class="cs-logo-icon">&#9835;</span> Chiptune<span class="cs-logo-accent">Synth</span>
         </a>
         <div class="cs-nav-links">
-            <a href="<?= BASE_URL ?>/"<?= $isIndex ? ' class="active"' : '' ?>>Main Demo</a>
+            <a href="<?= BASE_URL ?><?= $langPrefix ?>/"<?= $isIndex ? ' class="active"' : '' ?>>Main Demo</a>
             <?php foreach ($navLinks as $link): ?>
-                <a href="<?= BASE_URL ?>/examples/<?= $link['file'] ?>"<?= ($currentPage === $link['file']) ? ' class="active"' : '' ?>><?= $link['label'] ?></a>
+                <a href="<?= BASE_URL ?><?= $langPrefix ?>/examples/<?= $link['file'] ?>"<?= ($currentPage === $link['file']) ? ' class="active"' : '' ?>><?= $link['label'] ?></a>
             <?php endforeach; ?>
         </div>
         <div class="cs-nav-btns">
