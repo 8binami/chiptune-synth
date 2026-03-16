@@ -24,7 +24,7 @@ $isIndex = ($currentPage === 'index' || $currentPage === '');
 // Language prefix for nav links (empty if no i18n or default lang)
 $langPrefix = (defined('CURRENT_LANG') && CURRENT_LANG !== 'en') ? '/' . CURRENT_LANG : '';
 ?>
-<nav class="cs-topbar">
+<nav class="cs-topbar" translate="no">
     <div class="cs-topbar-inner">
         <a href="<?= BASE_URL ?><?= $langPrefix ?>/" class="cs-logo">
             <span class="cs-logo-icon">&#9835;</span> Chiptune<span class="cs-logo-accent">Synth</span>
