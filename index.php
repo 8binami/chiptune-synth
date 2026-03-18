@@ -8,12 +8,6 @@
  * Conditionally loads i18n/SEO from .server/ (gitignored, server-only).
  */
 
-// ── Preprod Gate (dev only) ──────────────────────────────
-$preprodGate = __DIR__ . '/../_preprod_gate.php';
-if (file_exists($preprodGate)) {
-    require_once($preprodGate);
-}
-
 // ── Constants ──────────────────────────────────────────
 define('ROOT_DIR', __DIR__);
 
