@@ -1,7 +1,11 @@
 RewriteEngine On
+RewriteBase /8b/com.8binami.github.chiptune-synth/
 
-# Codepen folder: serve directly (standalone HTML files)
-RewriteRule ^codepen/ - [L]
+# Proprietary engine: redirect source → obfuscated dist
+RewriteRule ^src/chiptune-synth\.js$ dist/chiptune-synth.min.js [L,R=301]
+
+# Dist + Codepen folders: serve directly (standalone HTML + built assets)
+RewriteRule ^(dist|codepen)/ - [L]
 
 # Static assets: serve directly (CSS, JS, images, fonts, audio, etc.)
 RewriteCond %{REQUEST_FILENAME} -f

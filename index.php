@@ -152,6 +152,10 @@ if ($hasI18n) {
 // ── Render page ────────────────────────────────────────
 $html = file_get_contents($fileToInclude);
 
+// ── Load obfuscated engine instead of source ───────────
+$html = str_replace('src/chiptune-synth.js', 'dist/chiptune-synth.min.js', $html);
+$html = str_replace('src/chiptune-sound-font.js', 'dist/chiptune-sound-font.min.js', $html);
+
 // Inject nav right after <body...>
 $html = preg_replace('#(<body[^>]*>)#i', '$1' . "\n" . $navHtml, $html);
 

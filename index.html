@@ -168,10 +168,14 @@
                     <div class="bg-glass rounded-3 p-2 param-section">
                         <div class="param-header" data-target="instrumentsBody">
                             <i class="bi bi-music-note-list"></i> Instruments
+                            <span class="badge bg-cyan text-dark ms-2" style="font-size:9px" id="instCount"></span>
                             <i class="bi bi-chevron-down chevron"></i>
                         </div>
                         <div class="param-body" id="instrumentsBody">
-                            <div class="d-flex flex-wrap gap-1" id="instrumentButtons"></div>
+                            <input type="text" id="instrumentFilter" class="form-control form-control-sm mb-1" placeholder="Filter instruments…" style="font-size:12px;background:rgba(255,255,255,0.05);border-color:rgba(0,240,255,0.25);color:var(--cs-cyan);" autocomplete="off">
+                            <select id="instrumentSelect" class="form-select form-select-sm mb-2" style="font-size:12px;border-color:rgba(0,240,255,0.25);color:var(--cs-cyan);">
+                                <option value="">-- Select instrument --</option>
+                            </select>
                             <div class="mt-2 pt-1 border-top border-secondary-subtle">
                                 <label class="slider-label text-secondary d-block mb-1">Game SFX</label>
                                 <div class="d-flex flex-wrap gap-1" id="sfxButtons"></div>
@@ -715,7 +719,8 @@ npm install <span class="string">@8bitforge/chiptune-synth</span></pre></div>
     </div>
 </footer>
 
-<script src="src/chiptune-synth.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
 <script>
 (function () {
     'use strict';
@@ -840,27 +845,90 @@ npm install <span class="string">@8bitforge/chiptune-synth</span></pre></div>
     });
 
     // =======================================
-    // Instrument buttons
+    // Instrument select (grouped by category)
     // =======================================
-    var instContainer = document.getElementById('instrumentButtons');
-    var activeInstBtn = null;
+    var instSelect = document.getElementById('instrumentSelect');
+    var instCountBadge = document.getElementById('instCount');
     var _instObj = ChiptuneSynth.getInstruments();
-    Object.keys(_instObj).forEach(function (k) { var inst = _instObj[k];
-        var btn = document.createElement('button');
-        btn.className = 'inst-btn';
-        btn.innerHTML = '<i class="bi bi-' + inst.icon + '"></i> ' + inst.label;
-        btn.addEventListener('click', function () {
-            ensureInit().then(function () {
-                synth.loadInstrument(inst.name, currentTrack);
-                updateControlsFromTrack();
-                if (activeInstBtn) activeInstBtn.classList.remove('active');
-                btn.classList.add('active');
-                activeInstBtn = btn;
-                // Play a demo note so user hears it
-                synth.playNoteByName('C', 4, currentTrack, 0.6);
-            });
+    var _instByCategory = ChiptuneSynth.getInstrumentsByCategory ? ChiptuneSynth.getInstrumentsByCategory() : {};
+
+    // Category display names
+    var catLabels = {
+        leads: 'Leads', bass: 'Bass', chords: 'Chords', arps: 'Arpeggios',
+        drums: 'Drums & Percussion', fx: 'FX & Game SFX', retro: 'Retro / 8-Bit',
+        acoustic: 'Acoustic', pads: 'Pads & Ambient', synths: 'Synths',
+        community: 'Community', other: 'Other'
+    };
+    // Category order
+    var catOrder = ['leads', 'bass', 'chords', 'arps', 'pads', 'synths', 'acoustic', 'retro', 'drums', 'fx', 'community', 'other'];
+
+    var totalInst = 0;
+    catOrder.forEach(function (cat) {
+        var keys = _instByCategory[cat];
+        if (!keys || keys.length === 0) return;
+        var optgroup = document.createElement('optgroup');
+        optgroup.label = (catLabels[cat] || cat) + ' (' + keys.length + ')';
+        keys.sort(function (a, b) {
+            var la = (_instObj[a] && _instObj[a].label) || a;
+            var lb = (_instObj[b] && _instObj[b].label) || b;
+            return la.localeCompare(lb);
         });
-        instContainer.appendChild(btn);
+        keys.forEach(function (key) {
+            var opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = (_instObj[key] && _instObj[key].label) || key;
+            optgroup.appendChild(opt);
+            totalInst++;
+        });
+        instSelect.appendChild(optgroup);
+    });
+
+    if (instCountBadge) instCountBadge.textContent = totalInst;
+
+    instSelect.addEventListener('change', function () {
+        var key = instSelect.value;
+        if (!key) return;
+        ensureInit().then(function () {
+            synth.loadInstrument(key, currentTrack);
+            updateControlsFromTrack();
+        });
+    });
+
+    // Filter input: show only matching options/optgroups
+    var instFilterInput = document.getElementById('instrumentFilter');
+    // Store original optgroups for reset
+    var _origOptgroups = [];
+    instSelect.querySelectorAll('optgroup').forEach(function (og) { _origOptgroups.push(og); });
+
+    instFilterInput.addEventListener('input', function () {
+        var q = this.value.trim().toLowerCase();
+        var currentVal = instSelect.value;
+
+        // Remove all optgroups
+        instSelect.querySelectorAll('optgroup').forEach(function (og) { og.remove(); });
+
+        if (!q) {
+            // Restore all
+            _origOptgroups.forEach(function (og) { instSelect.appendChild(og); });
+        } else {
+            _origOptgroups.forEach(function (og) {
+                var matches = [];
+                og.querySelectorAll('option').forEach(function (opt) {
+                    if (opt.textContent.toLowerCase().indexOf(q) !== -1 || opt.value.toLowerCase().indexOf(q) !== -1) {
+                        matches.push(opt);
+                    }
+                });
+                if (matches.length > 0) {
+                    var cloneGroup = document.createElement('optgroup');
+                    cloneGroup.label = og.label;
+                    matches.forEach(function (opt) { cloneGroup.appendChild(opt.cloneNode(true)); });
+                    instSelect.appendChild(cloneGroup);
+                }
+            });
+        }
+
+        // Restore selection if still visible
+        instSelect.value = currentVal;
     });
 
     // SFX preset buttons (smaller, under instruments)
@@ -1151,9 +1219,11 @@ npm install <span class="string">@8bitforge/chiptune-synth</span></pre></div>
         if (ev.repeat) return;
         var k = ev.key.toLowerCase();
 
-        // If a form control has focus, only intercept musical keys
+        // If a text input has focus, let the browser handle everything
         var tag = ev.target.tagName;
-        if ((tag === 'INPUT' || tag === 'SELECT') && !MUSICAL_KEYS[k]) return;
+        var inputType = ev.target.type || '';
+        if (tag === 'INPUT' && inputType !== 'range' && inputType !== 'checkbox') return;
+        if (tag === 'SELECT' || tag === 'TEXTAREA') return;
 
         if (k === 'w') { ev.preventDefault(); if (currentOctave > 1) { currentOctave--; document.getElementById('octaveDisplay').textContent = currentOctave; buildKeyboard(); } return; }
         if (k === 'x') { ev.preventDefault(); if (currentOctave < 7) { currentOctave++; document.getElementById('octaveDisplay').textContent = currentOctave; buildKeyboard(); } return; }
@@ -1179,6 +1249,11 @@ npm install <span class="string">@8bitforge/chiptune-synth</span></pre></div>
 
     document.addEventListener('keyup', function (ev) {
         var k = ev.key.toLowerCase();
+        // If a text input has focus, ignore
+        var tag = ev.target.tagName;
+        var inputType = ev.target.type || '';
+        if (tag === 'INPUT' && inputType !== 'range' && inputType !== 'checkbox') return;
+        if (tag === 'SELECT' || tag === 'TEXTAREA') return;
         if (k === '1' || k === '2') { synth.pitchBend = 0; document.getElementById('pitchBendVal').textContent = '0'; if (initDone) synth.updatePitchBend(); return; }
         if (!pcKeyNotes[k]) return;
         synth.stopNote(pcKeyNotes[k]);
