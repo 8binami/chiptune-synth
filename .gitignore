@@ -51,8 +51,10 @@ src/
 build.js
 build-soundfont.js
 
-# Server / npm config — not part of the public repo
+# Server config — not part of the public repo
 .php/
+.htaccess
+index.php
 package.json
 package-lock.json
 robots.txt
