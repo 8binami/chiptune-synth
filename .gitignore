@@ -51,6 +51,13 @@ src/
 build.js
 build-soundfont.js
 
+# Server / npm config — not part of the public repo
+.php/
+package.json
+package-lock.json
+robots.txt
+sitemap.xml
+
 # Large media files
 *.mp4
 *.tiff

@@ -432,19 +432,12 @@ ChiptuneSynth.getInstrumentsByCategory(); // Instruments grouped by category
 
 ChiptuneSynth is **proprietary software** developed by [8Binami](https://8binami.com).
 
-| Tier | Revenue | Price |
-|------|---------|-------|
-| **Free** | Non-commercial + < $25K/year | $0 |
-| **Indie Pro** | Up to $100K/year | $149/yr or $299 one-time |
-| **Studio** | Up to $1M/year | $499/yr or $999 one-time |
-| **Enterprise** | Unlimited | $1,499/yr or custom |
+Free for non-commercial use with attribution: `"Audio powered by ChiptuneSynth — 8Binami.com"`
 
-All paid tiers include: attribution removal, unlimited projects, email support, all updates within major version, and full CDN access.
-
-**Free use requires attribution:** `"Audio powered by ChiptuneSynth — 8Binami.com"`
+Commercial licenses are available for Indie, Studio and Enterprise use.
+See [8binami.com/pricing](https://8binami.com/pricing) or contact [licensing@8binami.com](mailto:licensing@8binami.com).
 
 See [LICENSE](LICENSE) for full terms.
-Purchase at [8binami.com/pricing](https://8binami.com/pricing) — licensing@8binami.com
 
 ---
 
