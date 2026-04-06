@@ -5,7 +5,8 @@
 
 # Node artifact files
 node_modules/
-dist/
+
+# dist/ is committed (obfuscated bundles only — no source)
 
 # Compiled Java class files
 *.class
@@ -21,7 +22,6 @@ dist/
 
 # Maven
 target/
-dist/
 
 # JetBrains IDE
 .idea/
@@ -45,6 +45,11 @@ codepen/_publish.php
 
 # Server-only files (SEO, i18n, analytics — not part of the open source repo)
 .server/
+
+# Proprietary source — do not publish
+src/
+build.js
+build-soundfont.js
 
 # Large media files
 *.mp4
