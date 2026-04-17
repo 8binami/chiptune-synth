@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:codepen.io)",
+      "WebSearch",
+      "WebFetch(domain:blog.codepen.io)"
+    ]
+  }
+}

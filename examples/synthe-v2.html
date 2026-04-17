@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChiptuneSynth — Synth Lab</title>
+  <meta name="description" content="Interactive synthesizer lab — design and export custom instrument presets with ChiptuneSynth v3.1.0.">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --cs-cyan:#00f0ff; --cs-violet:#a855f7; --cs-pink:#ff6eb4;
+      --cs-amber:#ffb347; --cs-green:#4ade80; --cs-red:#f87171; --cs-blue:#60a5fa;
+      --cs-bg:#0a0a0f;
+    }
+    body { background:var(--cs-bg); font-size:13px; }
+    .text-cyan  { color:var(--cs-cyan)!important; }
+    .bg-glass   { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); }
+    .btn-cyan   { background:var(--cs-cyan); color:#000; font-weight:600; border:none; }
+    .btn-cyan:hover { background:#00d4e0; color:#000; }
+    input[type=range] { accent-color:var(--cs-cyan); height:14px; }
+    canvas { display:block; border-radius:6px; background:rgba(0,0,0,.3); border:1px solid rgba(255,255,255,.07); }
+
+    /* ══ RACK SYSTEM ══ */
+    .rack {
+      display:flex; align-items:stretch; gap:0;
+      background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.07);
+      border-radius:8px; overflow:hidden; margin-bottom:6px;
+    }
+    .rack-label {
+      writing-mode:vertical-rl; text-orientation:mixed;
+      font-size:8px; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+      color:#444; background:rgba(255,255,255,.02);
+      border-right:1px solid rgba(255,255,255,.07);
+      padding:8px 5px; display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; min-width:20px;
+    }
+    .ru {
+      display:flex; flex-direction:column; gap:4px;
+      padding:8px 10px; border-right:1px solid rgba(255,255,255,.06);
+      flex:1; min-width:0;
+    }
+    .ru:last-child { border-right:none; }
+    .ru.ru-fixed { flex:0 0 auto; }
+    .ru-title {
+      font-size:8px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+      color:#555; margin-bottom:2px; white-space:nowrap;
+    }
+    .ru.active { background:rgba(0,240,255,.03); }
+    .ru.active .ru-title { color:#888; }
+    .rk { display:flex; flex-direction:column; gap:2px; }
+    .rk label { font-size:9px; color:#666; display:flex; justify-content:space-between; align-items:center; }
+    .rk label span { color:#aaa; font-family:monospace; font-size:9px; }
+    .rk input[type=range] { width:100%; }
+    .ru select {
+      background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12);
+      color:#ccc; border-radius:4px; font-size:10px; padding:2px 4px;
+      width:100%; cursor:pointer;
+    }
+    .ru select:focus { outline:none; border-color:var(--cs-cyan); }
+
+    /* ══ LED ══ */
+    .led { width:9px; height:9px; border-radius:50%; background:#1a1a1a; border:1px solid #333; cursor:pointer; flex-shrink:0; transition:.1s; }
+    .led.on { box-shadow:0 0 5px currentColor; }
+    .led.c-cyan   { color:var(--cs-cyan);   } .led.c-cyan.on   { background:var(--cs-cyan);   border-color:var(--cs-cyan); }
+    .led.c-violet { color:var(--cs-violet); } .led.c-violet.on { background:var(--cs-violet); border-color:var(--cs-violet); }
+    .led.c-amber  { color:var(--cs-amber);  } .led.c-amber.on  { background:var(--cs-amber);  border-color:var(--cs-amber); }
+    .led.c-blue   { color:var(--cs-blue);   } .led.c-blue.on   { background:var(--cs-blue);   border-color:var(--cs-blue); }
+    .led.c-pink   { color:var(--cs-pink);   } .led.c-pink.on   { background:var(--cs-pink);   border-color:var(--cs-pink); }
+    .led.c-green  { color:var(--cs-green);  } .led.c-green.on  { background:var(--cs-green);  border-color:var(--cs-green); }
+    .ru-head { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:2px; }
+    .sep-v { width:1px; background:rgba(255,255,255,.06); align-self:stretch; margin:4px 0; flex-shrink:0; }
+
+    /* ══ VERTICAL SLIDERS (wheels & master) ══ */
+    .slider-v {
+      writing-mode: vertical-lr;
+      direction: rtl;
+      width: 22px;
+      cursor: pointer;
+    }
+    .wheel-col { display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .wheel-label { font-size:7px; color:#444; letter-spacing:1.5px; text-transform:uppercase; }
+    .wheel-val { font-size:8px; color:#666; font-family:monospace; }
+
+    /* ══ KEYBOARD (responsive, octave-based) ══ */
+    .keyboard { display:flex; width:100%; align-items:flex-start; user-select:none; -webkit-user-select:none; }
+    .kb-oct { flex:1; position:relative; min-width:0; }
+    .kb-whites { display:flex; width:100%; position:relative; }
+    .key { cursor:pointer; transition:background .05s; }
+    .key-white {
+      flex:1; min-width:0;
+      height:100px; position:relative;
+      background:linear-gradient(180deg,#ddd 0%,#fff 10%,#f0f0f0 100%);
+      border:1px solid #888; border-top:none;
+      border-radius:0 0 5px 5px;
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:4px;
+    }
+    .key-white:hover { background:linear-gradient(180deg,#ccc 0%,#e8e8e8 10%,#d8d8d8 100%); }
+    .key-white.active { background:var(--cs-cyan)!important; border-color:#00a0aa; }
+    .key-black {
+      position:absolute; top:0; z-index:2;
+      width:calc(100% / 7 * 0.62); height:62px;
+      background:linear-gradient(180deg,#1a1a2e 0%,#0a0a1a 100%);
+      border:1px solid #111; border-top:none; border-radius:0 0 4px 4px;
+      display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:2px;
+    }
+    .key-black:hover { background:linear-gradient(180deg,#2a2a4e,#111); }
+    .key-black.active { background:var(--cs-violet)!important; border-color:#7c3aed; }
+    .key-note { font-size:6px; color:#999; line-height:1; }
+    .key-kb   { font-size:7px; font-weight:700; color:#bbb; line-height:1; }
+    .key-white.active .key-kb,.key-white.active .key-note { color:#003344; }
+    .key-black .key-note { color:#555; } .key-black .key-kb { color:#777; }
+    .key-black.active .key-kb,.key-black.active .key-note { color:#fff; }
+
+    /* ══ HARMONICS ══ */
+    .harm-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; }
+    .harm-col  { display:flex; flex-direction:column; align-items:center; gap:2px; }
+    .harm-bar  { width:100%; height:50px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08); border-radius:3px; position:relative; cursor:ns-resize; overflow:hidden; }
+    .harm-fill { position:absolute; bottom:0; left:0; right:0; background:var(--cs-violet); border-radius:2px; }
+    .harm-bar:hover .harm-fill { background:var(--cs-cyan); }
+    .harm-idx  { font-size:7px; color:#555; }
+
+    /* ══ EXPORT BOX ══ */
+    .export-box {
+      background:#0d1117; border:1px solid rgba(255,255,255,.07); border-radius:6px;
+      padding:8px; font-size:10px; font-family:monospace; color:#8b949e;
+      max-height:160px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; line-height:1.4;
+      flex:1;
+    }
+    .preset-input {
+      background:rgba(255,255,255,.05); border:1px solid rgba(0,240,255,.2);
+      color:var(--cs-cyan); border-radius:4px; padding:3px 8px;
+      font-size:11px; font-family:monospace; width:100%;
+    }
+    .preset-input:focus { outline:none; border-color:var(--cs-cyan); }
+
+    /* ══ MISC ══ */
+    .badge-cyan { background:rgba(0,240,255,.15); color:var(--cs-cyan); font-size:8px; padding:2px 5px; border-radius:8px; font-weight:700; }
+    #wavetableRack { display:none; }
+
+    /* ══ DRAG HANDLE ══ */
+    .rack-drag {
+      width:20px; background:rgba(255,255,255,.01); border-right:1px solid rgba(255,255,255,.04);
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+      cursor:grab; color:#242424; transition:color .15s,background .15s; user-select:none; -webkit-user-select:none;
+    }
+    .rack-drag:hover { color:#666; background:rgba(255,255,255,.06); }
+    .rack-drag:active { cursor:grabbing; }
+    .rack.dragging { opacity:.25; outline:2px dashed rgba(0,240,255,.3); outline-offset:-2px; }
+    .rack.drag-over { border-color:rgba(0,240,255,.55)!important; box-shadow:0 0 14px rgba(0,240,255,.14); }
+
+    /* ══ RESPONSIVE ══ */
+    @media (max-width:1024px){
+      .rack { flex-wrap:wrap; }
+      .rack-drag { display:none; }
+      .rack-label { writing-mode:horizontal-tb; min-width:100%; width:100%; border-right:none; border-bottom:1px solid rgba(255,255,255,.07); padding:3px 10px; letter-spacing:1.5px; }
+      .sep-v { display:none; }
+      .ru { flex:1 1 140px; border-right:none; border-bottom:1px solid rgba(255,255,255,.04); }
+      .ru.ru-fixed { flex:0 0 auto; }
+    }
+    @media (max-width:600px){
+      .ru { flex:1 1 100%; }
+      .key-white { height:70px; }
+      .key-black { height:44px; }
+      .key-kb { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+<section class="py-3">
+<div class="container-fluid" style="max-width:1400px">
+
+  <!-- ══ HEADER ══ -->
+  <div class="bg-glass rounded-3 p-3 mb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <div>
+      <h5 class="text-cyan mb-0"><i class="bi bi-sliders me-2"></i>Synth Lab <span class="badge-cyan ms-1">v2</span></h5>
+      <p class="text-secondary mb-0" style="font-size:11px">Design &amp; export custom presets — ChiptuneSynth v3.1.0</p>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <span class="text-secondary" style="font-size:10px" id="statusInfo">Q S D F G H J · W E T Y U · Z=oct− X=oct+</span>
+      <span class="text-cyan fw-bold font-monospace" style="font-size:16px" id="noteDisplay">—</span>
+    </div>
+  </div>
+
+  <!-- ══ RACK 1: VIZ ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">VIZ</div>
+    <div class="ru" style="padding:6px 10px">
+      <div class="ru-title">Waveform</div>
+      <canvas id="vizCanvas" class="w-100" style="height:48px;display:block"></canvas>
+    </div>
+    <div class="ru" style="padding:6px 10px">
+      <div class="ru-title">Spectrum</div>
+      <canvas id="specCanvas" class="w-100" style="height:48px;display:block"></canvas>
+    </div>
+  </div>
+
+  <!-- ══ RACK 2: KEYBOARD ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">KEYBOARD</div>
+
+    <!-- Wheels -->
+    <div class="ru ru-fixed" style="padding:8px 10px;flex-direction:row;gap:8px;align-items:center;justify-content:center">
+      <div class="wheel-col">
+        <span class="wheel-label">Pitch</span>
+        <input type="range" class="slider-v" id="wheelPitch" min="-100" max="100" value="0" step="1"
+          style="height:85px;accent-color:var(--cs-cyan)"
+          oninput="applyPitchBend(+this.value)"
+          onpointerup="this.value=0;applyPitchBend(0)">
+        <span class="wheel-val" id="vWP">0</span>
+      </div>
+      <div class="wheel-col">
+        <span class="wheel-label">Mod</span>
+        <input type="range" class="slider-v" id="wheelMod" min="0" max="127" value="0" step="1"
+          style="height:85px;accent-color:var(--cs-amber)"
+          oninput="applyModWheel(+this.value)">
+        <span class="wheel-val" id="vWM">0</span>
+      </div>
+    </div>
+
+    <!-- Piano keyboard -->
+    <div class="ru" style="padding:4px 8px;overflow:hidden">
+      <div class="d-flex justify-content-between align-items-center mb-1" style="flex-shrink:0">
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:10px" onclick="shiftOctave(-1)"><i class="bi bi-chevron-left"></i> Z Oct−</button>
+          <span class="text-cyan fw-bold font-monospace" style="font-size:13px">Oct <span id="vKbOct">4</span></span>
+          <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:10px" onclick="shiftOctave(+1)">Oct+ X <i class="bi bi-chevron-right"></i></button>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span class="text-secondary" style="font-size:9px">A S D F G H J · W E T Y U</span>
+          <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:10px" onclick="synth&&synth.stopAllNotes()"><i class="bi bi-stop-fill"></i></button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;padding-bottom:2px">
+        <div class="keyboard" id="pianoKb" style="min-width:300px"></div>
+      </div>
+    </div>
+
+    <!-- Master vol vertical -->
+    <div class="ru ru-fixed" style="padding:8px 12px;align-items:center;justify-content:center;gap:4px">
+      <span style="font-size:7px;color:#444;writing-mode:vertical-rl;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Master</span>
+      <input type="range" class="slider-v" min="0" max="1" step="0.01" value="0.5"
+        style="height:90px"
+        oninput="synth&&synth.setMasterVolume(+this.value);sv('vMvol',this.value,2)">
+      <span id="vMvol" style="font-size:9px;color:#aaa;font-family:monospace">0.50</span>
+    </div>
+  </div>
+
+  <!-- ══ RACK 3: FX CHAIN ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">FX CHAIN</div>
+
+    <div class="ru" id="ruDist">
+      <div class="ru-head"><span class="ru-title">Distortion</span><div class="led c-cyan" id="ledDist" onclick="toggleFX('Dist','cyan')"></div></div>
+      <div class="rk"><label>Drive <span id="fvDrv">0%</span></label>
+        <input type="range" min="0" max="1" step="0.01" value="0"
+          oninput="synth&&synth.setDistortion(0,+this.value);fxV('fvDrv',(+this.value*100|0)+'%');setFX('Dist',+this.value>0,'cyan')"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="ruChorus">
+      <div class="ru-head"><span class="ru-title">Chorus</span><div class="led c-violet" id="ledChorus" onclick="toggleFX('Chorus','violet')"></div></div>
+      <div class="rk"><label>Rate <span id="fvChrR">1.0</span></label>
+        <input type="range" min="0.1" max="10" step="0.1" value="1" style="accent-color:var(--cs-violet)"
+          oninput="synth&&synth.setChorusRate(0,+this.value);fxV('fvChrR',(+this.value).toFixed(1))"></div>
+      <div class="rk"><label>Depth <span id="fvChrD">0%</span></label>
+        <input type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-violet)"
+          oninput="synth&&synth.setChorusDepth(0,+this.value/100);fxV('fvChrD',this.value+'%');setFX('Chorus',+this.value>0,'violet')"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="ruDelay">
+      <div class="ru-head"><span class="ru-title">Delay</span><div class="led c-blue" id="ledDelay" onclick="toggleFX('Delay','blue')"></div></div>
+      <div class="rk"><label>Time <span id="fvDelT">250ms</span></label>
+        <input type="range" min="50" max="2000" step="10" value="250" style="accent-color:var(--cs-blue)"
+          oninput="synth&&synth.setDelayTime(0,+this.value/1000);document.getElementById('fvDelT').textContent=this.value+'ms'"></div>
+      <div class="rk"><label>Fdbk <span id="fvDelF">0%</span></label>
+        <input type="range" min="0" max="95" step="1" value="0" style="accent-color:var(--cs-blue)"
+          oninput="synth&&synth.setDelayFeedback(0,+this.value/100);fxV('fvDelF',this.value+'%');setFX('Delay',+this.value>0,'blue')"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="ruReverb">
+      <div class="ru-head"><span class="ru-title">Reverb</span><div class="led c-cyan" id="ledReverb" onclick="toggleFX('Reverb','cyan')"></div></div>
+      <div class="rk"><label>Mix <span id="fvRevM">0%</span></label>
+        <input type="range" min="0" max="100" step="1" value="0"
+          oninput="synth&&synth.setReverbMix(0,+this.value/100);fxV('fvRevM',this.value+'%');setFX('Reverb',+this.value>0,'cyan')"></div>
+      <div class="rk"><label>Decay <span id="fvRevD">0.5</span></label>
+        <input type="range" min="0.1" max="1" step="0.01" value="0.5"
+          oninput="fxV('fvRevD',(+this.value).toFixed(2))"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="ruCrush">
+      <div class="ru-head"><span class="ru-title">Bitcrusher</span><div class="led c-amber" id="ledCrush" onclick="toggleFX('Crush','amber')"></div></div>
+      <div class="rk"><label>Bits <span id="fvCrB">16</span></label>
+        <input type="range" min="1" max="16" step="1" value="16" style="accent-color:var(--cs-amber)"
+          oninput="synth&&synth.setBitcrusherBits(0,+this.value);fxV('fvCrB',this.value);setFX('Crush',+this.value<16,'amber')"></div>
+      <div class="rk"><label>Rate <span id="fvCrR">1.00</span></label>
+        <input type="range" min="0.05" max="1" step="0.01" value="1" style="accent-color:var(--cs-amber)"
+          oninput="synth&&synth.setBitcrusherRate(0,+this.value);fxV('fvCrR',(+this.value).toFixed(2))"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="ruFenv">
+      <div class="ru-head"><span class="ru-title">Filter Env</span><div class="led c-pink" id="ledFenv" onclick="toggleFX('Fenv','pink')"></div></div>
+      <div class="rk"><label>Amt <span id="fvFEA">0</span></label>
+        <input type="range" min="-24" max="24" step="0.5" value="0" style="accent-color:var(--cs-pink)"
+          oninput="P('filterEnvAmount',+this.value);fxV('fvFEA',(+this.value).toFixed(1));setFX('Fenv',+this.value!==0,'pink')"></div>
+      <div class="rk"><label>Atk <span id="fvFEAt">10ms</span></label>
+        <input type="range" min="1" max="2000" step="1" value="10" style="accent-color:var(--cs-pink)"
+          oninput="P('filterEnvAttack',+this.value/1000);document.getElementById('fvFEAt').textContent=this.value+'ms'"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 4: OSCILLATOR ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">OSCILLATOR</div>
+
+    <div class="ru">
+      <div class="ru-title">Waveform <span class="badge-cyan" id="oscBadge">SQ</span></div>
+      <select id="waveform" onchange="P('type',this.value);updateWaveUI()">
+        <option value="square">Square (PWM)</option>
+        <option value="triangle">Triangle</option>
+        <option value="sawtooth">Sawtooth</option>
+        <option value="sine">Sine</option>
+        <option value="noise">Noise</option>
+        <option value="wavetable">Wavetable</option>
+        <option value="karplus">Karplus-Strong</option>
+      </select>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="dutyRu">
+      <div class="ru-title">PWM</div>
+      <div class="rk"><label>Duty <span id="vDuty">0.50</span></label>
+        <input type="range" min="0.1" max="0.9" step="0.01" value="0.5"
+          oninput="P('dutyCycle',+this.value);sv('vDuty',this.value,2)"></div>
+    </div>
+    <div class="sep-v" id="dutySep"></div>
+
+    <div class="ru">
+      <div class="ru-title">Level</div>
+      <div class="rk"><label>Volume <span id="vVol">0.30</span></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.3"
+          oninput="P('volume',+this.value);sv('vVol',this.value,2)"></div>
+      <div class="rk"><label>Glide <span id="vGlide">0.00s</span></label>
+        <input type="range" min="0" max="2" step="0.01" value="0"
+          oninput="P('glide',+this.value);sv('vGlide',this.value,2)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Tune</div>
+      <div class="rk"><label>Octave <span id="vOct">0</span></label>
+        <input type="range" min="-3" max="3" step="1" value="0" style="accent-color:var(--cs-violet)"
+          oninput="P('octaveOffset',+this.value);sv('vOct',this.value,0)"></div>
+      <div class="rk"><label>Semi <span id="vSemi">0</span></label>
+        <input type="range" min="-12" max="12" step="1" value="0" style="accent-color:var(--cs-violet)"
+          oninput="P('semitoneOffset',+this.value);sv('vSemi',this.value,0)"></div>
+      <div class="rk"><label>Detune <span id="vDetune">0¢</span></label>
+        <input type="range" min="-100" max="100" step="1" value="0" style="accent-color:var(--cs-blue)"
+          oninput="P('detune',+this.value);document.getElementById('vDetune').textContent=this.value+'¢'"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru" id="karplusRu" style="display:none">
+      <div class="ru-title">Karplus</div>
+      <div class="rk"><label>Decay <span id="vKDec">0.996</span></label>
+        <input type="range" min="0.9" max="0.999" step="0.001" value="0.996"
+          oninput="P('karplusDecay',+this.value);sv('vKDec',this.value,3)"></div>
+      <div class="rk"><label>Bright <span id="vKBri">0.50</span></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.5" style="accent-color:var(--cs-violet)"
+          oninput="P('karplusBrightness',+this.value);sv('vKBri',this.value,2)"></div>
+    </div>
+    <div class="sep-v" id="karplusSep" style="display:none"></div>
+
+    <div class="ru">
+      <div class="ru-title">Pitch Env</div>
+      <div class="rk"><label>Amount <span id="vPE">0</span></label>
+        <input type="range" min="-24" max="24" step="0.5" value="0" style="accent-color:var(--cs-pink)"
+          oninput="P('pitchEnv',+this.value);sv('vPE',this.value,1)"></div>
+      <div class="rk"><label>Portamento <span id="vPort">off</span></label>
+        <input type="range" min="0" max="1" step="1" value="0" style="accent-color:var(--cs-pink)"
+          oninput="P('portamento',!!+this.value);document.getElementById('vPort').textContent=+this.value?'on':'off'"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 5: ADSR ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">ADSR</div>
+
+    <div class="ru">
+      <div class="ru-title">Attack</div>
+      <div class="rk"><label>Time <span id="vA">10ms</span></label>
+        <input type="range" min="0.001" max="2" step="0.001" value="0.01"
+          oninput="E('attack',+this.value);document.getElementById('vA').textContent=fmtT(this.value)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Decay</div>
+      <div class="rk"><label>Time <span id="vD">100ms</span></label>
+        <input type="range" min="0.001" max="2" step="0.001" value="0.1"
+          oninput="E('decay',+this.value);document.getElementById('vD').textContent=fmtT(this.value)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Sustain</div>
+      <div class="rk"><label>Level <span id="vS">0.70</span></label>
+        <input type="range" min="0" max="1" step="0.01" value="0.7"
+          oninput="E('sustain',+this.value);sv('vS',this.value,2)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Release</div>
+      <div class="rk"><label>Time <span id="vR">300ms</span></label>
+        <input type="range" min="0.01" max="4" step="0.01" value="0.3"
+          oninput="E('release',+this.value);document.getElementById('vR').textContent=fmtT(this.value)"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 6: UNISON + FILTER ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">UNISON</div>
+
+    <div class="ru">
+      <div class="ru-title">Voices</div>
+      <div class="rk"><label>Count <span id="vUniV">1</span></label>
+        <input type="range" min="1" max="8" step="1" value="1" style="accent-color:var(--cs-green)"
+          oninput="P('unisonVoices',+this.value);sv('vUniV',this.value,0)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Spread</div>
+      <div class="rk"><label>Detune ¢ <span id="vUniD">0</span></label>
+        <input type="range" min="0" max="50" step="1" value="0" style="accent-color:var(--cs-green)"
+          oninput="P('unisonDetune',+this.value);sv('vUniD',this.value,0)"></div>
+      <div class="rk"><label>Pan <span id="vUniS">0</span></label>
+        <input type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-green)"
+          oninput="P('unisonSpread',+this.value);sv('vUniS',this.value,0)"></div>
+    </div>
+
+    <div class="rack-label" style="border-left:1px solid rgba(255,255,255,.06);border-right:none;writing-mode:vertical-rl">FILTER</div>
+
+    <div class="ru">
+      <div class="ru-title">Type</div>
+      <select onchange="P('filterType',this.value);P('filterEnabled',true)">
+        <option value="lowpass">Lowpass</option>
+        <option value="highpass">Highpass</option>
+        <option value="bandpass">Bandpass</option>
+        <option value="notch">Notch</option>
+      </select>
+      <div class="rk" style="margin-top:2px"><label>KeyTrack <span id="vFKT">0</span></label>
+        <input type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-blue)"
+          oninput="P('filterKeyTrack',+this.value);sv('vFKT',this.value,0)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Cutoff &amp; Resonance</div>
+      <div class="rk"><label>Cutoff <span id="vFCut">20kHz</span></label>
+        <input type="range" min="20" max="20000" step="10" value="20000"
+          oninput="P('filterCutoff',+this.value);P('filterEnabled',+this.value<20000);document.getElementById('vFCut').textContent=fmtHz(this.value)"></div>
+      <div class="rk"><label>Q <span id="vFQ">0.1</span></label>
+        <input type="range" min="0.1" max="20" step="0.1" value="0.1" style="accent-color:var(--cs-violet)"
+          oninput="P('filterQ',+this.value);sv('vFQ',this.value,1)"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 7: LFOs ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">LFO</div>
+
+    <!-- LFO 1 Vibrato -->
+    <div class="ru">
+      <div class="ru-head"><span class="ru-title">1 — Vibrato</span><div class="led c-violet" id="ledLfo1"></div></div>
+      <div class="rk"><label>Wave</label>
+        <select onchange="P('lfo1Wave',this.value)" style="accent-color:var(--cs-violet)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Saw</option>
+        </select>
+      </div>
+      <div class="rk"><label>Rate <span id="vL1R">0 Hz</span></label>
+        <input type="range" min="0" max="15" step="0.1" value="0" style="accent-color:var(--cs-violet)"
+          oninput="V('rate',+this.value);document.getElementById('vL1R').textContent=fmtHz(this.value);setLedOn('ledLfo1',+this.value>0,'violet')"></div>
+      <div class="rk"><label>Depth <span id="vL1D">0</span></label>
+        <input type="range" min="0" max="50" step="0.5" value="0" style="accent-color:var(--cs-violet)"
+          oninput="V('depth',+this.value);sv('vL1D',this.value,1)"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <!-- LFO 2 Filter -->
+    <div class="ru">
+      <div class="ru-head"><span class="ru-title">2 — Filter Mod</span><div class="led c-cyan" id="ledLfo2"></div></div>
+      <div class="rk"><label>Wave</label>
+        <select onchange="P('lfo2Wave',this.value)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Saw</option>
+        </select>
+      </div>
+      <div class="rk"><label>Rate <span id="vL2R">0 Hz</span></label>
+        <input type="range" min="0" max="15" step="0.1" value="0"
+          oninput="P('filterLfoRate',+this.value);document.getElementById('vL2R').textContent=fmtHz(this.value);setLedOn('ledLfo2',+this.value>0,'cyan')"></div>
+      <div class="rk"><label>Depth <span id="vL2D">0%</span></label>
+        <input type="range" min="0" max="100" step="1" value="0"
+          oninput="P('filterLfoDepth',+this.value);document.getElementById('vL2D').textContent=this.value+'%'"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <!-- LFO 3 Tremolo -->
+    <div class="ru">
+      <div class="ru-head"><span class="ru-title">3 — Tremolo</span><div class="led c-amber" id="ledLfo3"></div></div>
+      <div class="rk"><label>Wave</label>
+        <select onchange="P('tremoloWave',this.value)" style="accent-color:var(--cs-amber)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Saw</option>
+        </select>
+      </div>
+      <div class="rk"><label>Rate <span id="vL3R">0 Hz</span></label>
+        <input type="range" min="0" max="20" step="0.1" value="0" style="accent-color:var(--cs-amber)"
+          oninput="P('tremoloRate',+this.value);document.getElementById('vL3R').textContent=fmtHz(this.value);setLedOn('ledLfo3',+this.value>0,'amber')"></div>
+      <div class="rk"><label>Depth <span id="vL3D">0%</span></label>
+        <input type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-amber)"
+          oninput="P('tremoloDepth',+this.value);document.getElementById('vL3D').textContent=this.value+'%'"></div>
+    </div>
+    <div class="sep-v"></div>
+
+    <!-- LFO Timing -->
+    <div class="ru">
+      <div class="ru-title" style="color:#444">LFO Timing</div>
+      <div class="rk"><label>Delay <span id="vL1Del">0ms</span></label>
+        <input type="range" min="0" max="2" step="0.01" value="0" style="accent-color:var(--cs-pink)"
+          oninput="P('lfo1Delay',+this.value);document.getElementById('vL1Del').textContent=fmtT(this.value)"></div>
+      <div class="rk"><label>Hold <span id="vL1Hold">0ms</span></label>
+        <input type="range" min="0" max="2" step="0.01" value="0" style="accent-color:var(--cs-pink)"
+          oninput="P('lfo1HoldTime',+this.value);document.getElementById('vL1Hold').textContent=fmtT(this.value)"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 8: WAVETABLE (shown only in wavetable mode) ══ -->
+  <div class="rack" id="wavetableRack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">WAVETABLE</div>
+    <div class="ru" style="padding:8px 12px">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="ru-title" style="color:var(--cs-violet)">Harmonics Editor</span>
+        <div class="d-flex gap-1">
+          <button class="btn btn-sm py-0 px-2" style="font-size:9px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#aaa" onclick="setHP('saw')">SAW</button>
+          <button class="btn btn-sm py-0 px-2" style="font-size:9px;background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);color:var(--cs-violet)" onclick="setHP('violin')">VIOLIN</button>
+          <button class="btn btn-sm py-0 px-2" style="font-size:9px;background:rgba(0,240,255,.08);border:1px solid rgba(0,240,255,.3);color:var(--cs-cyan)" onclick="setHP('cello')">CELLO</button>
+          <button class="btn btn-sm py-0 px-2" style="font-size:9px;background:rgba(255,179,71,.08);border:1px solid rgba(255,179,71,.3);color:var(--cs-amber)" onclick="setHP('organ')">ORGAN</button>
+          <button class="btn btn-sm py-0 px-2" style="font-size:9px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);color:#666" onclick="setHP('clear')">CLR</button>
+        </div>
+      </div>
+      <div class="harm-grid" id="harmonicsGrid"></div>
+    </div>
+  </div>
+
+  <!-- ══ RACK 9: PRESET ══ -->
+  <div class="rack">
+    <div class="rack-drag" title="Drag to reorder"><svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor"><circle cx="3" cy="3" r="1.5"/><circle cx="7" cy="3" r="1.5"/><circle cx="3" cy="8" r="1.5"/><circle cx="7" cy="8" r="1.5"/><circle cx="3" cy="13" r="1.5"/><circle cx="7" cy="13" r="1.5"/></svg></div>
+    <div class="rack-label">PRESET</div>
+
+    <div class="ru">
+      <div class="ru-title">Load Instrument</div>
+      <select id="instSelect" onchange="loadBuiltIn(this.value)">
+        <option value="">— select —</option>
+        <optgroup label="Bowed Strings">
+          <option value="violinNatural">Violin Natural</option>
+          <option value="violinClassic">Violin Classic</option>
+          <option value="violinJazz">Violin Jazz</option>
+          <option value="violinLofi">Violin Lo-Fi</option>
+          <option value="violaReal">Viola</option>
+          <option value="celloNatural">Cello Natural</option>
+          <option value="celloJazz">Cello Jazz</option>
+          <option value="celloLofi">Cello Lo-Fi</option>
+          <option value="contrabass">Contrabass</option>
+        </optgroup>
+        <optgroup label="Plucked / Karplus">
+          <option value="harp">Harp</option>
+          <option value="harpJazz">Harp Jazz</option>
+          <option value="harpCeltic">Celtic Harp</option>
+          <option value="acousticGuitar">Acoustic Guitar</option>
+          <option value="nylonGuitar">Nylon Guitar</option>
+          <option value="guitarJazz">Guitar Jazz</option>
+          <option value="acousticBass">Acoustic Bass</option>
+        </optgroup>
+        <optgroup label="Piano">
+          <option value="pianoAcoustic">Piano Acoustic</option>
+          <option value="pianoClassic">Piano Concert</option>
+          <option value="pianoJazz">Piano Jazz</option>
+          <option value="pianoLofi">Piano Lo-Fi</option>
+          <option value="pianoUpright">Piano Upright</option>
+        </optgroup>
+        <optgroup label="Legacy">
+          <option value="piano">Piano</option>
+          <option value="violin">Violin</option>
+          <option value="electricGuitar">Electric Guitar</option>
+          <option value="synthPad">Synth Pad</option>
+        </optgroup>
+      </select>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="ru-title">Export JSON</div>
+      <input class="preset-input mb-1" id="presetName" type="text" placeholder="myPreset" value="myPreset" autocomplete="off">
+      <div class="d-flex gap-1">
+        <button class="btn btn-cyan btn-sm flex-fill" style="font-size:10px" onclick="exportPreset()"><i class="bi bi-download me-1"></i>Export</button>
+        <button class="btn btn-sm flex-fill" id="copyBtn" onclick="copyPreset()"
+          style="font-size:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#aaa"><i class="bi bi-clipboard me-1"></i>Copy</button>
+        <button class="btn btn-sm" onclick="resetSynth()" title="Reset"
+          style="font-size:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);color:#666"><i class="bi bi-arrow-counterclockwise"></i></button>
+      </div>
+    </div>
+    <div class="sep-v"></div>
+
+    <div class="ru">
+      <div class="export-box" id="exportBox" style="flex:1">— adjust controls then click Export —</div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+</section>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+<script>
+var synth=null, kbOctave=4;
+var harmonics=[1,.5,.33,.25,.2,.16,.14,.12,.1,.08,.06,.04];
+
+/* helpers */
+function sv(id,v,d){var e=document.getElementById(id);if(e)e.textContent=d===''?v:parseFloat(v).toFixed(d);}
+function fmtT(v){var f=parseFloat(v);return f>=1?f.toFixed(2)+'s':Math.round(f*1000)+'ms';}
+function fmtHz(v){var f=parseFloat(v);return f>=1000?(f/1000).toFixed(1)+'kHz':Math.round(f)+' Hz';}
+function P(k,v){if(synth&&synth.initialized)synth.tracks[0][k]=v;}
+function E(k,v){if(synth&&synth.initialized)synth.envelopes[0][k]=v;}
+function V(k,v){if(synth&&synth.initialized)synth.vibrato[0][k]=v;}
+
+/* init — audio requires a user gesture (Web Audio policy) */
+var _audioReady=false;
+async function initAudio(){
+  if(_audioReady)return; _audioReady=true;
+  try{
+    synth=new ChiptuneSynth(); await synth.init();
+    synth.setMasterVolume(0.5);
+    startViz();
+    document.getElementById('statusInfo').textContent='ChiptuneSynth v3.1.0 ready';
+  }catch(err){console.error('AudioContext failed',err);_audioReady=false;}
+}
+/* Auto-init on first user interaction */
+function _firstGesture(){
+  document.removeEventListener('pointerdown',_firstGesture);
+  document.removeEventListener('keydown',_firstGesture);
+  initAudio();
+}
+document.addEventListener('pointerdown',_firstGesture);
+document.addEventListener('keydown',_firstGesture);
+
+/* waveform UI */
+function updateWaveUI(){
+  var wf=document.getElementById('waveform').value;
+  var lb={square:'SQ',triangle:'TRI',sawtooth:'SAW',sine:'SIN',noise:'NOI',wavetable:'WT',karplus:'KP'};
+  document.getElementById('oscBadge').textContent=lb[wf]||wf.toUpperCase();
+  var isDuty=wf==='square', isKP=wf==='karplus', isWT=wf==='wavetable';
+  document.getElementById('dutyRu').style.display=isDuty?'':'none';
+  document.getElementById('dutySep').style.display=isDuty?'':'none';
+  document.getElementById('karplusRu').style.display=isKP?'':'none';
+  document.getElementById('karplusSep').style.display=isKP?'':'none';
+  document.getElementById('wavetableRack').style.display=isWT?'flex':'none';
+  if(isWT) P('harmonics',harmonics.slice());
+}
+updateWaveUI();
+
+/* FX rack LEDs */
+function fxV(id,v){var e=document.getElementById(id);if(e)e.textContent=v;}
+function setFX(id,on,c){
+  var ru=document.getElementById('ru'+id),led=document.getElementById('led'+id);
+  if(!ru||!led)return;
+  if(on){ru.classList.add('active');led.className='led c-'+c+' on';}
+  else  {ru.classList.remove('active');led.className='led c-'+c;}
+}
+function toggleFX(id,c){var ru=document.getElementById('ru'+id);setFX(id,!ru.classList.contains('active'),c);}
+function setLedOn(id,on,c){var led=document.getElementById(id);if(!led)return;led.className='led c-'+c+(on?' on':'');}
+
+/* ── Wheels ── */
+function applyPitchBend(val){
+  document.getElementById('vWP').textContent=val;
+  if(synth&&synth.initialized) synth.tracks[0].detune=(val/100)*200; // ±200 cents
+}
+function applyModWheel(val){
+  document.getElementById('vWM').textContent=val;
+  if(synth&&synth.initialized) synth.vibrato[0].depth=val/127*25;
+}
+
+/* ── Keyboard (responsive octave-based) ── */
+// Black key positions: left offset = (whiteIndex / 7) - half_black_width
+// Black key width = 0.62 / 7. Half = 0.31 / 7.
+// C# after C(0):  left = (1/7 - 0.31/7) = 0.69/7
+// D# after D(1):  left = (2/7 - 0.31/7) = 1.69/7
+// F# after F(3):  left = (4/7 - 0.31/7) = 3.69/7
+// G# after G(4):  left = (5/7 - 0.31/7) = 4.69/7
+// A# after A(5):  left = (6/7 - 0.31/7) = 5.69/7
+var WHITE_NOTES=['C','D','E','F','G','A','B'];
+var BLACK_KEYS=[{n:'C#',f:0.69},{n:'D#',f:1.69},{n:'F#',f:3.69},{n:'G#',f:4.69},{n:'A#',f:5.69}];
+var KBL={
+  'C0':'A','D0':'S','E0':'D','F0':'F','G0':'G','A0':'H','B0':'J',
+  'C#0':'W','D#0':'E','F#0':'T','G#0':'Y','A#0':'U',
+  'C1':'K','D1':'L','E1':'M','F1':'Ù',
+  'C#1':'O','D#1':'P'
+};
+
+function buildKeyboard(){
+  var kb=document.getElementById('pianoKb'); kb.innerHTML='';
+  [0,1].forEach(function(oct){
+    var octDiv=document.createElement('div');
+    octDiv.className='kb-oct';
+
+    var wRow=document.createElement('div');
+    wRow.className='kb-whites';
+
+    WHITE_NOTES.forEach(function(note){
+      var k=document.createElement('div');
+      k.className='key key-white';
+      k.dataset.n=note; k.dataset.o=oct;
+      var lbl=KBL[note+oct]||'';
+      k.innerHTML='<span class="key-kb">'+lbl+'</span><span class="key-note">'+note+'</span>';
+      addKE(k,note,oct);
+      wRow.appendChild(k);
+    });
+    octDiv.appendChild(wRow);
+
+    BLACK_KEYS.forEach(function(b){
+      var k=document.createElement('div');
+      k.className='key key-black';
+      k.style.left='calc(100%/7*'+b.f+')';
+      k.dataset.n=b.n; k.dataset.o=oct;
+      var lbl=KBL[b.n+oct]||'';
+      k.innerHTML='<span class="key-kb">'+lbl+'</span>';
+      addKE(k,b.n,oct);
+      octDiv.appendChild(k);
+    });
+
+    kb.appendChild(octDiv);
+  });
+}
+
+function addKE(el,note,octOff){
+  function on(e){e.preventDefault();if(!synth||!synth.initialized)return;
+    el.classList.add('active');el._nid=synth.playNoteByName(note,kbOctave+octOff,0,30);
+    document.getElementById('noteDisplay').textContent=note+(kbOctave+octOff);}
+  function off(){el.classList.remove('active');if(el._nid&&synth){synth.stopNote(el._nid);el._nid=null;}}
+  el.addEventListener('pointerdown',on); el.addEventListener('pointerup',off); el.addEventListener('pointerleave',off);
+}
+function shiftOctave(d){kbOctave=Math.max(1,Math.min(7,kbOctave+d));document.getElementById('vKbOct').textContent=kbOctave;}
+
+/* keyboard shortcuts */
+var CODE_MAP={'KeyA':'C','KeyS':'D','KeyD':'E','KeyF':'F','KeyG':'G','KeyH':'A','KeyJ':'B',
+  'KeyK':'C','KeyL':'D','Semicolon':'E','Quote':'F',
+  'KeyW':'C#','KeyE':'D#','KeyT':'F#','KeyY':'G#','KeyU':'A#','KeyO':'C#','KeyP':'D#'};
+var CODE_OCT={'KeyA':0,'KeyS':0,'KeyD':0,'KeyF':0,'KeyG':0,'KeyH':0,'KeyJ':0,
+  'KeyW':0,'KeyE':0,'KeyT':0,'KeyY':0,'KeyU':0,
+  'KeyK':1,'KeyL':1,'Semicolon':1,'Quote':1,'KeyO':1,'KeyP':1};
+
+var heldKeys={};
+document.addEventListener('keydown',function(e){
+  if(e.repeat||e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+  var c=e.code;
+  if(c==='KeyZ'){shiftOctave(-1);return;} if(c==='KeyX'){shiftOctave(+1);return;}
+  if(!CODE_MAP[c]||heldKeys[c]||!synth||!synth.initialized)return;
+  var note=CODE_MAP[c],oct=kbOctave+(CODE_OCT[c]||0);
+  heldKeys[c]=synth.playNoteByName(note,oct,0,30);
+  document.getElementById('noteDisplay').textContent=note+oct;
+  document.querySelectorAll('.key').forEach(function(k){if(k.dataset.n===note&&+k.dataset.o===(CODE_OCT[c]||0))k.classList.add('active');});
+});
+document.addEventListener('keyup',function(e){
+  var c=e.code;
+  if(heldKeys[c]&&heldKeys[c]!==true&&synth)synth.stopNote(heldKeys[c]);
+  delete heldKeys[c];
+  document.querySelectorAll('.key.active').forEach(function(k){k.classList.remove('active');});
+});
+
+/* visualizer */
+function startViz(){
+  var cv=document.getElementById('vizCanvas'),cs=document.getElementById('specCanvas');
+  var cw=cv.getContext('2d'),cs2=cs.getContext('2d');
+  function draw(){
+    requestAnimationFrame(draw);
+    var W=cv.offsetWidth,H=cv.offsetHeight||48;
+    if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;cs.width=cs.offsetWidth;cs.height=cs.offsetHeight||48;}
+    cw.fillStyle='rgba(0,0,0,.4)';cw.fillRect(0,0,W,H);
+    var td=synth&&synth.initialized?synth.getAnalyserData():null;
+    if(td&&td.length){
+      cw.beginPath();cw.strokeStyle='#00f0ff';cw.lineWidth=1.5;
+      for(var i=0;i<td.length;i++){var x=(i/td.length)*W,y=((td[i]/128)-1)*(H/2)+H/2;i===0?cw.moveTo(x,y):cw.lineTo(x,y);}
+      cw.stroke();
+    }else{cw.strokeStyle='rgba(255,255,255,.05)';cw.beginPath();cw.moveTo(0,H/2);cw.lineTo(W,H/2);cw.stroke();}
+    var SW=cs.offsetWidth,SH=cs.offsetHeight||54;
+    cs2.fillStyle='rgba(0,0,0,.4)';cs2.fillRect(0,0,SW,SH);
+    var fd=synth&&synth.initialized?synth.getFrequencyData():null;
+    if(fd&&fd.length){var bw=SW/(fd.length/4);
+      for(var j=0;j<fd.length/4;j++){var v=fd[j]/255,bh=v*SH,hue=180+v*80;
+        cs2.fillStyle='hsl('+hue+',100%,'+(30+v*40)+'%)';cs2.fillRect(j*bw,SH-bh,bw-1,bh);}
+    }
+  }
+  draw();
+}
+
+/* harmonics */
+var harmDragging=false,harmDragIdx=-1;
+function buildHarmonicsGrid(){
+  var grid=document.getElementById('harmonicsGrid');grid.innerHTML='';
+  for(var i=0;i<12;i++){(function(idx){
+    var col=document.createElement('div');col.className='harm-col';
+    var bar=document.createElement('div');bar.className='harm-bar';
+    var fill=document.createElement('div');fill.className='harm-fill';fill.id='hf'+idx;
+    fill.style.height=(harmonics[idx]*100)+'%';
+    bar.appendChild(fill);
+    var lbl=document.createElement('div');lbl.className='harm-idx';lbl.textContent='H'+(idx+1);
+    col.appendChild(bar);col.appendChild(lbl);grid.appendChild(col);
+    function upd(e){var rect=bar.getBoundingClientRect(),y=(e.clientY||(e.touches&&e.touches[0].clientY))-rect.top;
+      var v=Math.max(0,Math.min(1,1-y/rect.height));harmonics[idx]=Math.round(v*100)/100;
+      fill.style.height=(v*100)+'%';P('harmonics',harmonics.slice());}
+    bar.addEventListener('pointerdown',function(e){e.preventDefault();harmDragging=true;harmDragIdx=idx;upd(e);bar.setPointerCapture(e.pointerId);});
+    bar.addEventListener('pointermove',function(e){if(harmDragging&&harmDragIdx===idx)upd(e);});
+    bar.addEventListener('pointerup',function(){harmDragging=false;harmDragIdx=-1;});
+  })(i);}
+}
+function setHP(name){
+  var p={saw:[1,.5,.333,.25,.2,.167,.143,.125,.111,.1,.091,.083],
+    violin:[1,.88,.70,.55,.42,.32,.22,.16,.11,.08,.05,.03],
+    cello:[1,.60,.85,.55,.40,.30,.20,.14,.09,.06,.04,.02],
+    organ:[.8,1,.8,0,.5,0,.3,0,.1,0,0,0],clear:[1,0,0,0,0,0,0,0,0,0,0,0]};
+  if(!p[name])return;harmonics=p[name].slice();
+  for(var i=0;i<12;i++){var f=document.getElementById('hf'+i);if(f)f.style.height=(harmonics[i]*100)+'%';}
+  P('harmonics',harmonics.slice());
+}
+
+/* load instrument */
+function loadBuiltIn(name){
+  if(!name||!synth||!synth.initialized)return;
+  if(!synth.loadInstrument(name,0))return;
+  var t=synth.tracks[0],env=synth.envelopes[0],vib=synth.vibrato[0];
+  _sv('waveform',t.type);updateWaveUI();
+  _sv('dutyCycle',t.dutyCycle);          sv('vDuty',t.dutyCycle||.5,2);
+  _sv('volume',t.volume);                sv('vVol',t.volume,2);
+  _sv('octOffset',t.octaveOffset||0);    sv('vOct',t.octaveOffset||0,0);
+  _sv('semiOffset',t.semitoneOffset||0); sv('vSemi',t.semitoneOffset||0,0);
+  _sv('glide',t.glide||0);               sv('vGlide',t.glide||0,2);
+  _sv('unisonVoices',t.unisonVoices||1); sv('vUniV',t.unisonVoices||1,0);
+  _sv('unisonDetune',t.unisonDetune||0); sv('vUniD',t.unisonDetune||0,0);
+  _sv('unisonSpread',t.unisonSpread||0); sv('vUniS',t.unisonSpread||0,0);
+  _sv('attack',env.attack);   document.getElementById('vA').textContent=fmtT(env.attack);
+  _sv('decay',env.decay);     document.getElementById('vD').textContent=fmtT(env.decay);
+  _sv('sustain',env.sustain); sv('vS',env.sustain,2);
+  _sv('release',env.release); document.getElementById('vR').textContent=fmtT(env.release);
+  _sv('filterCutoff',t.filterCutoff||20000);document.getElementById('vFCut').textContent=fmtHz(t.filterCutoff||20000);
+  _sv('filterQ',t.filterQ||0.1);sv('vFQ',t.filterQ||0.1,1);
+  if(vib){document.getElementById('vL1R').textContent=fmtHz(vib.rate||0);sv('vL1D',vib.depth||0,1);}
+  if(t.harmonics&&t.type==='wavetable'){
+    harmonics=t.harmonics.slice(0,12);while(harmonics.length<12)harmonics.push(0);
+    for(var i=0;i<12;i++){var hf=document.getElementById('hf'+i);if(hf)hf.style.height=(harmonics[i]*100)+'%';}
+  }
+  document.getElementById('statusInfo').textContent='Loaded: '+name+' ['+t.type+(t.unisonVoices>1?', '+t.unisonVoices+'v':'')+']';
+}
+function _sv(id,val){var e=document.getElementById(id);if(e&&val!==undefined)e.value=val;}
+
+/* export */
+function exportPreset(){
+  if(!synth||!synth.initialized)return;
+  var t=synth.tracks[0],env=synth.envelopes[0],vib=synth.vibrato[0];
+  var name=document.getElementById('presetName').value||'myPreset';
+  var p={label:name,type:t.type,duty:t.dutyCycle,vol:t.volume,pitchEnv:t.pitchEnv||0,glide:t.glide||0,
+    env:{attack:env.attack,decay:env.decay,sustain:env.sustain,release:env.release},
+    vib:{rate:vib.rate||0,depth:vib.depth||0},
+    mod:{unisonVoices:t.unisonVoices||1,unisonDetune:t.unisonDetune||0,unisonSpread:t.unisonSpread||0,
+      octaveOffset:t.octaveOffset||0,semitoneOffset:t.semitoneOffset||0,
+      filterEnabled:t.filterEnabled||false,filterType:t.filterType||'lowpass',
+      filterCutoff:t.filterCutoff||20000,filterQ:t.filterQ||0.1,
+      lfo1Wave:t.lfo1Wave||'sine',lfo1Delay:t.lfo1Delay||0,lfo1HoldTime:t.lfo1HoldTime||0,
+      lfo2Wave:t.lfo2Wave||'sine',lfo3Wave:t.lfo3Wave||'sine',
+      tremoloRate:t.tremoloRate||0,tremoloDepth:t.tremoloDepth||0}};
+  if(t.type==='wavetable'){p.harmonics=harmonics.slice();
+    if(t.bowNoise){p.bowNoise=true;p.bowNoiseLevel=t.bowNoiseLevel||0.12;}
+    if(t.bodyEQ&&t.bodyEQ.length)p.bodyEQ=t.bodyEQ;}
+  if(t.type==='karplus'){p.karplusDecay=t.karplusDecay!==undefined?t.karplusDecay:0.996;
+    p.karplusBrightness=t.karplusBrightness!==undefined?t.karplusBrightness:0.5;
+    p.karplusExciter=t.karplusExciter||'noise';}
+  window._lastPreset=p;
+  document.getElementById('exportBox').innerHTML=hlJson(JSON.stringify(p,null,2));
+  document.getElementById('statusInfo').textContent='Exported: '+name;
+}
+function hlJson(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\w+)")\s*:/g,'<span style="color:#d2a8ff">$1</span>:')
+    .replace(/:\s*(".*?")/g,': <span style="color:#a5d6ff">$1</span>')
+    .replace(/:\s*(\d+\.?\d*)/g,': <span style="color:#79c0ff">$1</span>')
+    .replace(/:\s*(true|false|null)/g,': <span style="color:#ff7b72">$1</span>');
+}
+function copyPreset(){
+  exportPreset();
+  if(!window._lastPreset||!navigator.clipboard)return;
+  navigator.clipboard.writeText(JSON.stringify(window._lastPreset,null,2)).then(function(){
+    var btn=document.getElementById('copyBtn');
+    btn.innerHTML='<i class="bi bi-check-lg me-1"></i>Copié!';btn.style.color='#4ade80';
+    setTimeout(function(){btn.innerHTML='<i class="bi bi-clipboard me-1"></i>Copy';btn.style.color='';},1500);
+  });
+}
+function resetSynth(){
+  if(!synth||!synth.initialized)return;
+  var t=synth.tracks[0];
+  t.type='square';t.dutyCycle=0.5;t.volume=0.3;t.detune=0;t.pitchEnv=0;t.glide=0;
+  t.filterEnabled=false;t.filterCutoff=20000;t.unisonVoices=1;t.unisonDetune=0;
+  t.lfo1Delay=0;t.lfo1HoldTime=0;t.tremoloRate=0;t.tremoloDepth=0;
+  synth.envelopes[0]={attack:.01,decay:.1,sustain:.7,release:.3};
+  synth.vibrato[0]={rate:0,depth:0};
+  document.getElementById('waveform').value='square';updateWaveUI();
+  document.getElementById('instSelect').value='';
+  document.getElementById('exportBox').textContent='— adjust controls then click Export —';
+  document.getElementById('statusInfo').textContent='Reset to default';
+}
+
+/* Build UI immediately on load (no audio needed) */
+buildKeyboard(); buildHarmonicsGrid();
+
+/* ── Drag-and-drop rack reordering ── */
+(function(){
+  var container=document.querySelector('.container-fluid');
+  var dragSrc=null;
+  function getRacks(){return Array.from(container.querySelectorAll('.rack'));}
+  getRacks().forEach(initRack);
+  function initRack(rack){
+    var handle=rack.querySelector('.rack-drag');
+    if(!handle)return;
+    handle.addEventListener('mousedown',function(){rack.draggable=true;});
+    handle.addEventListener('touchstart',function(){rack.draggable=true;},{passive:true});
+    rack.addEventListener('dragstart',function(e){dragSrc=rack;rack.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','');});
+    rack.addEventListener('dragend',function(){rack.draggable=false;rack.classList.remove('dragging');getRacks().forEach(function(r){r.classList.remove('drag-over');});});
+    rack.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';if(rack!==dragSrc)rack.classList.add('drag-over');});
+    rack.addEventListener('dragleave',function(e){if(!rack.contains(e.relatedTarget))rack.classList.remove('drag-over');});
+    rack.addEventListener('drop',function(e){e.preventDefault();e.stopPropagation();rack.classList.remove('drag-over');if(!dragSrc||dragSrc===rack)return;var p=rack.parentNode,nodes=Array.from(p.children),si=nodes.indexOf(dragSrc),ti=nodes.indexOf(rack);if(si<ti)p.insertBefore(dragSrc,rack.nextSibling);else p.insertBefore(dragSrc,rack);});
+  }
+})();
+</script>
+</body>
+</html>

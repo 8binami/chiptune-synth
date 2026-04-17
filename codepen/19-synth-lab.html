@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ChiptuneSynth — Synth Lab</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07070d;--surface:#0f0f1a;--surface2:#14141f;--surface3:#1a1a28;
+  --border:rgba(255,255,255,.07);--border2:rgba(255,255,255,.12);
+  --cyan:#00f0ff;--violet:#a855f7;--pink:#ff6eb4;--amber:#ffb347;
+  --green:#4ade80;--red:#f87171;--blue:#60a5fa;--dim:#50506a;--text:#cccce0;
+  --r:8px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
+  min-height:100vh;padding:14px;user-select:none;font-size:12px;}
+
+/* ── Layout ── */
+.page-title{text-align:center;margin-bottom:14px}
+.page-title h1{font-size:1.3rem;color:var(--cyan);letter-spacing:3px;text-shadow:0 0 24px rgba(0,240,255,.4)}
+.page-title p{font-size:.55rem;color:var(--dim);letter-spacing:1px;margin-top:4px}
+
+.layout{display:grid;grid-template-columns:220px 1fr 260px;gap:10px;max-width:1200px;margin:0 auto}
+
+/* ── Panel ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px}
+.panel-title{font-size:.52rem;color:var(--dim);letter-spacing:2px;text-transform:uppercase;
+  margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between}
+.panel-title .badge{font-size:.5rem;padding:2px 6px;border-radius:20px;background:rgba(255,255,255,.06);color:var(--cyan)}
+
+/* ── Knob row ── */
+.row{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.row-h{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.row-h3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px}
+
+/* ── Control ── */
+.ctrl{display:flex;flex-direction:column;gap:3px}
+.ctrl label{font-size:.48rem;color:var(--dim);letter-spacing:.5px;display:flex;justify-content:space-between}
+.ctrl label span{color:var(--cyan);font-weight:700}
+.ctrl input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:2px;
+  background:var(--surface3);outline:none;cursor:pointer}
+.ctrl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;
+  border-radius:50%;cursor:pointer;box-shadow:0 0 4px rgba(0,0,0,.5)}
+.c-cyan::-webkit-slider-thumb{background:var(--cyan);box-shadow:0 0 6px rgba(0,240,255,.4)!important}
+.c-violet::-webkit-slider-thumb{background:var(--violet)!important}
+.c-pink::-webkit-slider-thumb{background:var(--pink)!important}
+.c-amber::-webkit-slider-thumb{background:var(--amber)!important}
+.c-green::-webkit-slider-thumb{background:var(--green)!important}
+.c-red::-webkit-slider-thumb{background:var(--red)!important}
+.c-blue::-webkit-slider-thumb{background:var(--blue)!important}
+
+/* ── Select ── */
+.ctrl select{background:var(--surface3);border:1px solid var(--border2);color:var(--text);
+  font-family:inherit;font-size:.52rem;padding:3px 6px;border-radius:4px;cursor:pointer;width:100%}
+.ctrl select:focus{outline:none;border-color:var(--cyan)}
+
+/* ── Toggle ── */
+.toggle-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.toggle-btn{padding:3px 8px;border-radius:4px;border:1px solid var(--border2);
+  background:var(--surface2);color:var(--dim);font-family:inherit;font-size:.5rem;
+  cursor:pointer;transition:.12s;letter-spacing:.5px}
+.toggle-btn:hover{color:var(--text);border-color:var(--dim)}
+.toggle-btn.active{background:rgba(0,240,255,.12);border-color:var(--cyan);color:var(--cyan)}
+.toggle-btn.active-v{background:rgba(168,85,247,.12);border-color:var(--violet);color:var(--violet)}
+.toggle-btn.active-p{background:rgba(255,110,180,.12);border-color:var(--pink);color:var(--pink)}
+
+/* ── Separator ── */
+.sep{height:1px;background:var(--border);margin:8px 0}
+
+/* ── Visualizer ── */
+#vizCanvas{width:100%;height:80px;border-radius:6px;background:#060609;display:block}
+#specCanvas{width:100%;height:60px;border-radius:6px;background:#060609;display:block;margin-top:6px}
+
+/* ── Keyboard ── */
+.keyboard-wrap{margin-top:10px}
+.keyboard{position:relative;display:flex;height:90px;justify-content:center;margin-top:6px}
+.key{position:relative;border-radius:0 0 5px 5px;cursor:pointer;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;font-size:.38rem}
+.key-white{width:30px;height:90px;z-index:1;background:linear-gradient(180deg,#ddd 0%,#fff 8%,#f0f0f0 100%);
+  border:1px solid #444;border-top:none;color:#888}
+.key-white:hover{background:linear-gradient(180deg,#ccc 0%,#eee 8%,#e0e0e0 100%)}
+.key-white.active{background:linear-gradient(180deg,#00c8d5 0%,#00f0ff 20%,#00e0ef 100%)!important;
+  box-shadow:0 0 14px rgba(0,240,255,.5);color:#003344}
+.key-black{width:20px;height:58px;z-index:2;background:linear-gradient(180deg,#1a1a1a 0%,#0a0a0a 100%);
+  border:1px solid #000;border-top:none;color:#555;margin-left:-10px;margin-right:-10px}
+.key-black:hover{background:linear-gradient(180deg,#2a2a2a,#111)}
+.key-black.active{background:linear-gradient(180deg,#007888,#005566)!important;
+  box-shadow:0 0 10px rgba(0,240,255,.4);color:#00f0ff}
+
+/* ── Oct/Vol controls ── */
+.kb-controls{display:flex;gap:10px;align-items:center;margin-top:8px}
+.kb-controls .ctrl{flex:1}
+
+/* ── Preset Export ── */
+.export-area{margin-top:10px}
+.export-box{background:var(--surface3);border:1px solid var(--border2);border-radius:var(--r);
+  padding:10px;font-size:.48rem;color:#8888aa;font-family:'Courier New',monospace;
+  max-height:240px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.4}
+.export-box .k{color:var(--violet)}
+.export-box .v{color:var(--cyan)}
+.export-box .s{color:var(--green)}
+.btn-row{display:flex;gap:6px;margin-top:8px}
+.btn{padding:6px 14px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);
+  color:var(--dim);font-family:inherit;font-size:.55rem;cursor:pointer;transition:.12s;letter-spacing:.5px}
+.btn:hover{color:var(--text);border-color:var(--dim)}
+.btn.primary{background:rgba(0,240,255,.1);border-color:var(--cyan);color:var(--cyan)}
+.btn.primary:hover{background:rgba(0,240,255,.2)}
+.btn.success{background:rgba(74,222,128,.1);border-color:var(--green);color:var(--green)}
+
+/* ── Status ── */
+.status-bar{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:5px 10px;font-size:.48rem;color:var(--dim);margin-bottom:8px;
+  display:flex;justify-content:space-between;align-items:center}
+.status-bar .note{color:var(--cyan);font-weight:700;font-size:.6rem}
+.status-bar .info{color:var(--dim)}
+
+/* ── Wavetable editor ── */
+.harmonics-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:2px;margin-top:6px}
+.harm-col{display:flex;flex-direction:column;align-items:center;gap:2px}
+.harm-bar{width:100%;background:var(--surface3);border-radius:2px;position:relative;height:60px;
+  cursor:ns-resize;overflow:hidden;border:1px solid var(--border)}
+.harm-fill{position:absolute;bottom:0;left:0;right:0;background:var(--violet);
+  transition:height .1s;border-radius:1px}
+.harm-bar:hover .harm-fill{background:var(--cyan)}
+.harm-idx{font-size:.38rem;color:var(--dim)}
+
+/* ── Middle column ── */
+.mid-col{display:flex;flex-direction:column;gap:10px}
+
+/* ── FX section ── */
+.fx-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fx-box{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px}
+.fx-box-title{font-size:.46rem;color:var(--dim);letter-spacing:1px;margin-bottom:6px;
+  display:flex;justify-content:space-between;align-items:center}
+.fx-box-title span{color:var(--amber);font-weight:700}
+
+/* ── Overlay ── */
+.overlay{position:fixed;inset:0;background:rgba(7,7,13,.92);display:flex;
+  align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(8px)}
+.overlay-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;
+  padding:32px 40px;text-align:center}
+.overlay-box h2{color:var(--cyan);font-size:1.1rem;letter-spacing:2px;margin-bottom:8px}
+.overlay-box p{color:var(--dim);font-size:.6rem;margin-bottom:20px}
+.start-btn{padding:12px 32px;background:rgba(0,240,255,.1);border:1px solid var(--cyan);
+  color:var(--cyan);border-radius:8px;font-family:inherit;font-size:.75rem;cursor:pointer;
+  letter-spacing:1px;transition:.15s}
+.start-btn:hover{background:rgba(0,240,255,.2)}
+
+/* ── Preset name ── */
+.preset-name{background:var(--surface3);border:1px solid var(--border2);color:var(--cyan);
+  font-family:inherit;font-size:.65rem;padding:5px 10px;border-radius:6px;width:100%;
+  margin-bottom:8px}
+.preset-name:focus{outline:none;border-color:var(--cyan)}
+
+/* ══ FX RACK ══ */
+.rack-wrap{max-width:1200px;margin:0 auto 12px auto}
+.rack{background:linear-gradient(180deg,#1a1a22 0%,#111118 100%);
+  border:1px solid #2a2a3a;border-radius:6px;padding:8px 12px;
+  display:flex;gap:6px;align-items:stretch;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 4px 20px rgba(0,0,0,.5)}
+.rack-label{writing-mode:vertical-rl;text-orientation:mixed;font-size:.42rem;
+  color:var(--dim);letter-spacing:2px;text-transform:uppercase;
+  padding:0 4px;opacity:.5;display:flex;align-items:center}
+/* Each rack unit */
+.ru{background:linear-gradient(180deg,#1e1e2a 0%,#16161f 100%);
+  border:1px solid #2a2a3a;border-radius:4px;padding:8px 10px;
+  display:flex;flex-direction:column;gap:6px;min-width:140px;flex:1;
+  position:relative;transition:.15s}
+.ru.active{border-color:rgba(255,255,255,.2);background:linear-gradient(180deg,#22222e 0%,#1a1a26 100%)}
+/* Rack screws */
+.ru::before,.ru::after{content:'✦';position:absolute;font-size:.4rem;color:#2a2a3a;top:4px}
+.ru::before{left:5px} .ru::after{right:5px}
+/* Rack header */
+.ru-head{display:flex;align-items:center;justify-content:space-between;padding-top:2px}
+.ru-name{font-size:.48rem;color:#666;letter-spacing:1.5px;text-transform:uppercase}
+.ru.active .ru-name{color:#aaa}
+/* Power LED button */
+.ru-pwr{width:12px;height:12px;border-radius:50%;border:1px solid #333;
+  background:#1a1a1a;cursor:pointer;transition:.1s;flex-shrink:0}
+.ru-pwr.on{background:var(--green);border-color:var(--green);
+  box-shadow:0 0 6px var(--green),0 0 12px rgba(74,222,128,.3)}
+.ru-pwr.warn{background:var(--amber);border-color:var(--amber);
+  box-shadow:0 0 6px var(--amber)}
+/* Rack controls inside each unit */
+.ru-ctrls{display:flex;flex-direction:column;gap:4px}
+.ru-row{display:flex;gap:6px}
+.ru-ctrl{flex:1;display:flex;flex-direction:column;gap:2px}
+.ru-ctrl label{font-size:.42rem;color:#555;display:flex;justify-content:space-between}
+.ru-ctrl label span{color:#888}
+.ru-ctrl input[type=range]{-webkit-appearance:none;width:100%;height:3px;
+  border-radius:2px;background:#2a2a3a;cursor:pointer}
+.ru-ctrl input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
+  border-radius:50%;cursor:pointer}
+.ru.active .ru-ctrl input[type=range]{background:#333}
+/* Connector arrow between units */
+.rack-arrow{display:flex;align-items:center;color:#2a2a3a;font-size:.7rem;flex-shrink:0;padding:0 2px}
+.rack.has-active .rack-arrow{color:#333}
+/* VU bar inside rack unit */
+.ru-vu{height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden;margin-top:2px}
+.ru-vu-fill{height:100%;width:0%;border-radius:2px;transition:width .1s}
+
+/* ── keyboard labels on piano keys ── */
+.key-label-note{font-size:.36rem;color:#999;display:block;text-align:center;line-height:1}
+.key-label-kb{font-size:.38rem;color:#bbb;font-weight:700;display:block;text-align:center}
+.key-black .key-label-kb{color:#888}
+.key-white.active .key-label-kb{color:#003344}
+.key-octave-bar{display:flex;align-items:center;justify-content:space-between;
+  margin-top:6px;padding:4px 8px;background:var(--surface2);border-radius:4px;
+  border:1px solid var(--border)}
+.oct-btn{padding:3px 10px;border-radius:4px;border:1px solid var(--border2);
+  background:var(--surface3);color:var(--dim);font-family:inherit;font-size:.52rem;
+  cursor:pointer;transition:.12s;letter-spacing:.5px}
+.oct-btn:hover{color:var(--cyan);border-color:var(--cyan)}
+.oct-display{font-size:.65rem;color:var(--cyan);font-weight:700}
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <h2>SYNTH LAB</h2>
+    <p>ChiptuneSynth v3.1.0 — Design & export custom presets</p>
+    <button class="start-btn" onclick="initAudio()">▶ Start Audio</button>
+  </div>
+</div>
+
+<div class="page-title">
+  <h1>⚗ SYNTH LAB</h1>
+  <p>ChiptuneSynth v3.1.0 &nbsp;·&nbsp; Design synth presets &nbsp;·&nbsp; Export reusable JSON</p>
+</div>
+
+<div class="status-bar">
+  <span class="note" id="noteDisplay">—</span>
+  <span class="info" id="statusInfo">Ready — Q S D F G H J · Z E T Y U · W=oct− &nbsp;X=oct+</span>
+</div>
+
+<!-- ══ FX RACK ══ -->
+<div class="rack-wrap">
+  <div class="rack" id="fxRack">
+    <div class="rack-label">FX CHAIN</div>
+
+    <!-- DISTORTION -->
+    <div class="ru" id="ruDist">
+      <div class="ru-head">
+        <span class="ru-name">Distortion</span>
+        <div class="ru-pwr" id="pwrDist" onclick="toggleRU('Dist')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-ctrl"><label>Drive <span id="vRDrv">0</span></label>
+          <input type="range" style="--c:var(--red)" min="0" max="1" step="0.01" value="0"
+            oninput="synth&&synth.setDistortion(0,+this.value);D('vRDrv',(+this.value*100).toFixed(0)+'%','');setRUActive('Dist',+this.value>0)" class="c-red"></div>
+        <div class="ru-ctrl"><label>Mix <span id="vRDistMix">0%</span></label>
+          <input type="range" min="0" max="100" step="1" value="0"
+            oninput="D('vRDistMix',this.value+'%','')" class="c-red"></div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuDist" style="background:var(--red)"></div></div>
+    </div>
+    <div class="rack-arrow">›</div>
+
+    <!-- CHORUS -->
+    <div class="ru" id="ruChorus">
+      <div class="ru-head">
+        <span class="ru-name">Chorus</span>
+        <div class="ru-pwr" id="pwrChorus" onclick="toggleRU('Chorus')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-row">
+          <div class="ru-ctrl"><label>Rate <span id="vRChrR">1.0</span></label>
+            <input type="range" min="0.1" max="10" step="0.1" value="1"
+              oninput="synth&&synth.setChorusRate(0,+this.value);D('vRChrR',this.value,1)" class="c-violet"></div>
+          <div class="ru-ctrl"><label>Depth <span id="vRChrD">0%</span></label>
+            <input type="range" min="0" max="100" step="1" value="0"
+              oninput="synth&&synth.setChorusDepth(0,+this.value/100);D('vRChrD',this.value+'%','');setRUActive('Chorus',+this.value>0)" class="c-violet"></div>
+        </div>
+        <div class="ru-ctrl"><label>Mix <span id="vRChrM">0%</span></label>
+          <input type="range" min="0" max="100" step="1" value="0"
+            oninput="synth&&synth.setChorusMix(0,+this.value/100);D('vRChrM',this.value+'%','')" class="c-violet"></div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuChorus" style="background:var(--violet)"></div></div>
+    </div>
+    <div class="rack-arrow">›</div>
+
+    <!-- DELAY -->
+    <div class="ru" id="ruDelay">
+      <div class="ru-head">
+        <span class="ru-name">Delay</span>
+        <div class="ru-pwr" id="pwrDelay" onclick="toggleRU('Delay')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-row">
+          <div class="ru-ctrl"><label>Time <span id="vRDelT">250ms</span></label>
+            <input type="range" min="50" max="2000" step="10" value="250"
+              oninput="synth&&synth.setDelayTime(0,+this.value/1000);document.getElementById('vRDelT').textContent=this.value+'ms'" class="c-blue"></div>
+          <div class="ru-ctrl"><label>Fdbk <span id="vRDelF">0%</span></label>
+            <input type="range" min="0" max="95" step="1" value="0"
+              oninput="synth&&synth.setDelayFeedback(0,+this.value/100);D('vRDelF',this.value+'%','');setRUActive('Delay',+this.value>0)" class="c-blue"></div>
+        </div>
+        <div class="ru-ctrl"><label>Mix <span id="vRDelM">0%</span></label>
+          <input type="range" min="0" max="100" step="1" value="0"
+            oninput="synth&&synth.setDelayMix(0,+this.value/100);D('vRDelM',this.value+'%','')" class="c-blue"></div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuDelay" style="background:var(--blue)"></div></div>
+    </div>
+    <div class="rack-arrow">›</div>
+
+    <!-- REVERB -->
+    <div class="ru" id="ruReverb">
+      <div class="ru-head">
+        <span class="ru-name">Reverb</span>
+        <div class="ru-pwr" id="pwrReverb" onclick="toggleRU('Reverb')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-ctrl"><label>Mix <span id="vRRevM">0%</span></label>
+          <input type="range" min="0" max="100" step="1" value="0"
+            oninput="synth&&synth.setReverbMix(0,+this.value/100);D('vRRevM',this.value+'%','');setRUActive('Reverb',+this.value>0)" class="c-cyan"></div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuReverb" style="background:var(--cyan)"></div></div>
+    </div>
+    <div class="rack-arrow">›</div>
+
+    <!-- BITCRUSHER -->
+    <div class="ru" id="ruCrush">
+      <div class="ru-head">
+        <span class="ru-name">Bitcrusher</span>
+        <div class="ru-pwr" id="pwrCrush" onclick="toggleRU('Crush')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-row">
+          <div class="ru-ctrl"><label>Bits <span id="vRCrB">16</span></label>
+            <input type="range" min="1" max="16" step="1" value="16"
+              oninput="synth&&synth.setBitcrusherBits(0,+this.value);D('vRCrB',this.value,0);setRUActive('Crush',+this.value<16)" class="c-amber"></div>
+          <div class="ru-ctrl"><label>Rate <span id="vRCrR">1.0</span></label>
+            <input type="range" min="0.05" max="1" step="0.01" value="1"
+              oninput="synth&&synth.setBitcrusherRate(0,+this.value);D('vRCrR',this.value,2)" class="c-amber"></div>
+        </div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuCrush" style="background:var(--amber)"></div></div>
+    </div>
+
+    <!-- FILTER ENV -->
+    <div class="rack-arrow">›</div>
+    <div class="ru" id="ruFenv">
+      <div class="ru-head">
+        <span class="ru-name">Filter Env</span>
+        <div class="ru-pwr" id="pwrFenv" onclick="toggleRU('Fenv')"></div>
+      </div>
+      <div class="ru-ctrls">
+        <div class="ru-row">
+          <div class="ru-ctrl"><label>Amt <span id="vRFEA">0</span></label>
+            <input type="range" min="-24" max="24" step="0.5" value="0"
+              oninput="P('filterEnvAmount',+this.value);D('vRFEA',this.value,1);setRUActive('Fenv',+this.value!==0)" class="c-pink"></div>
+          <div class="ru-ctrl"><label>Atk <span id="vRFEAt">10ms</span></label>
+            <input type="range" min="1" max="2000" step="1" value="10"
+              oninput="P('filterEnvAttack',+this.value/1000);document.getElementById('vRFEAt').textContent=this.value+'ms'" class="c-pink"></div>
+        </div>
+      </div>
+      <div class="ru-vu"><div class="ru-vu-fill" id="vuFenv" style="background:var(--pink)"></div></div>
+    </div>
+
+  </div><!-- /.rack -->
+</div><!-- /.rack-wrap -->
+
+<div class="layout">
+
+  <!-- ══ LEFT: OSC + ADSR + FILTER ══ -->
+  <div>
+
+    <!-- OSC -->
+    <div class="panel">
+      <div class="panel-title">OSC <span class="badge" id="oscBadge">SQUARE</span></div>
+      <div class="ctrl row">
+        <label>Waveform</label>
+        <select id="waveform" onchange="P('type',this.value);updateWaveformUI()">
+          <option value="square">Square (PWM)</option>
+          <option value="triangle">Triangle</option>
+          <option value="sawtooth">Sawtooth</option>
+          <option value="sine">Sine</option>
+          <option value="noise">Noise</option>
+          <option value="wavetable">Wavetable</option>
+          <option value="karplus">Karplus-Strong</option>
+        </select>
+      </div>
+      <div class="row-h" id="dutyRow">
+        <div class="ctrl"><label>Duty Cycle <span id="vDuty">0.50</span></label>
+          <input type="range" class="c-cyan" id="dutyCycle" min="0.1" max="0.9" step="0.01" value="0.5"
+            oninput="P('dutyCycle',+this.value);D('vDuty',this.value,2)"></div>
+        <div class="ctrl"><label>Glide <span id="vGlide">0.00</span></label>
+          <input type="range" class="c-cyan" id="glide" min="0" max="2" step="0.01" value="0"
+            oninput="P('glide',+this.value);D('vGlide',this.value,2)"></div>
+      </div>
+      <div class="row-h">
+        <div class="ctrl"><label>Octave <span id="vOct">0</span></label>
+          <input type="range" class="c-violet" id="octOffset" min="-3" max="3" step="1" value="0"
+            oninput="P('octaveOffset',+this.value);D('vOct',this.value,0)"></div>
+        <div class="ctrl"><label>Semi <span id="vSemi">0</span></label>
+          <input type="range" class="c-violet" id="semiOffset" min="-12" max="12" step="1" value="0"
+            oninput="P('semitoneOffset',+this.value);D('vSemi',this.value,0)"></div>
+      </div>
+      <div class="row-h">
+        <div class="ctrl"><label>Detune <span id="vDetune">0</span></label>
+          <input type="range" class="c-blue" id="detune" min="-100" max="100" step="1" value="0"
+            oninput="P('detune',+this.value);D('vDetune',this.value,0)"></div>
+        <div class="ctrl"><label>PitchEnv <span id="vPitchEnv">0</span></label>
+          <input type="range" class="c-pink" id="pitchEnv" min="-24" max="24" step="0.5" value="0"
+            oninput="P('pitchEnv',+this.value);D('vPitchEnv',this.value,1)"></div>
+      </div>
+      <div class="ctrl row">
+        <label>Volume <span id="vVol">0.30</span></label>
+        <input type="range" class="c-amber" id="volume" min="0" max="1" step="0.01" value="0.3"
+          oninput="P('volume',+this.value);D('vVol',this.value,2)">
+      </div>
+
+      <!-- Unison -->
+      <div class="sep"></div>
+      <div class="panel-title">UNISON</div>
+      <div class="row-h3">
+        <div class="ctrl"><label>Voices <span id="vUniV">1</span></label>
+          <input type="range" class="c-green" id="unisonVoices" min="1" max="8" step="1" value="1"
+            oninput="P('unisonVoices',+this.value);D('vUniV',this.value,0)"></div>
+        <div class="ctrl"><label>Detune¢ <span id="vUniD">0</span></label>
+          <input type="range" class="c-green" id="unisonDetune" min="0" max="50" step="1" value="0"
+            oninput="P('unisonDetune',+this.value);D('vUniD',this.value,0)"></div>
+        <div class="ctrl"><label>Spread <span id="vUniS">0</span></label>
+          <input type="range" class="c-green" id="unisonSpread" min="0" max="100" step="1" value="0"
+            oninput="P('unisonSpread',+this.value);D('vUniS',this.value,0)"></div>
+      </div>
+
+      <!-- Karplus params (shown only for karplus) -->
+      <div id="karplusSection" style="display:none">
+        <div class="sep"></div>
+        <div class="panel-title">KARPLUS-STRONG</div>
+        <div class="ctrl row">
+          <label>Decay <span id="vKDec">0.996</span></label>
+          <input type="range" class="c-cyan" id="kDec" min="0.9" max="0.999" step="0.001" value="0.996"
+            oninput="P('karplusDecay',+this.value);D('vKDec',this.value,3)">
+        </div>
+        <div class="ctrl row">
+          <label>Brightness <span id="vKBri">0.50</span></label>
+          <input type="range" class="c-violet" id="kBri" min="0" max="1" step="0.01" value="0.5"
+            oninput="P('karplusBrightness',+this.value);D('vKBri',this.value,2)">
+        </div>
+        <div class="ctrl row">
+          <label>Exciter</label>
+          <select id="kExciter" onchange="P('karplusExciter',this.value)">
+            <option value="noise">Noise</option>
+            <option value="sine">Sine</option>
+            <option value="mixed">Mixed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADSR -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">ADSR ENVELOPE</div>
+      <div class="ctrl row"><label>Attack <span id="vA">0.01s</span></label>
+        <input type="range" class="c-cyan" id="attack" min="0.001" max="2" step="0.001" value="0.01"
+          oninput="E('attack',+this.value);document.getElementById('vA').textContent=fmtMs(this.value)"></div>
+      <div class="ctrl row"><label>Decay <span id="vD">0.10s</span></label>
+        <input type="range" class="c-cyan" id="decay" min="0.001" max="2" step="0.001" value="0.1"
+          oninput="E('decay',+this.value);document.getElementById('vD').textContent=fmtMs(this.value)"></div>
+      <div class="ctrl row"><label>Sustain <span id="vS">0.70</span></label>
+        <input type="range" class="c-cyan" id="sustain" min="0" max="1" step="0.01" value="0.7"
+          oninput="E('sustain',+this.value);D('vS',this.value,2)"></div>
+      <div class="ctrl row"><label>Release <span id="vR">0.30s</span></label>
+        <input type="range" class="c-cyan" id="release" min="0.01" max="4" step="0.01" value="0.3"
+          oninput="E('release',+this.value);document.getElementById('vR').textContent=fmtMs(this.value)"></div>
+    </div>
+
+  </div>
+
+  <!-- ══ MIDDLE: VIZ + KEYBOARD + WAVETABLE + FX ══ -->
+  <div class="mid-col">
+
+    <!-- Visualizer -->
+    <div class="panel">
+      <div class="panel-title">WAVEFORM <span class="badge" id="vizBadge">LIVE</span></div>
+      <canvas id="vizCanvas"></canvas>
+      <canvas id="specCanvas"></canvas>
+    </div>
+
+    <!-- Keyboard -->
+    <div class="panel">
+      <div class="panel-title">KEYBOARD
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="font-size:.44rem;color:var(--dim)">Q S D F G H J · Z E T Y U</span>
+          <button class="btn" onclick="synth&&synth.stopAllNotes()" style="padding:2px 8px;font-size:.44rem">■ STOP</button>
+        </div>
+      </div>
+      <div class="keyboard" id="keyboard"></div>
+      <div class="key-octave-bar">
+        <button class="oct-btn" onclick="shiftOctave(-1)">◄ W &nbsp;oct−</button>
+        <span class="oct-display">Oct <span id="vKbOct">4</span></span>
+        <button class="oct-btn" onclick="shiftOctave(+1)">oct+ &nbsp;X ►</button>
+      </div>
+      <div class="kb-controls">
+        <div class="ctrl" style="flex:1">
+          <label>Master Vol <span id="vMvol">0.5</span></label>
+          <input type="range" class="c-amber" id="masterVol" min="0" max="1" step="0.01" value="0.5"
+            oninput="synth&&synth.setMasterVolume(+this.value);D('vMvol',this.value,2)">
+        </div>
+      </div>
+    </div>
+
+    <!-- Wavetable harmonics editor -->
+    <div class="panel" id="wavetablePanel" style="display:none">
+      <div class="panel-title">WAVETABLE HARMONICS
+        <div style="display:flex;gap:4px">
+          <button class="btn" onclick="setHarmonicsPreset('saw')">SAW</button>
+          <button class="btn" onclick="setHarmonicsPreset('violin')">VIOLIN</button>
+          <button class="btn" onclick="setHarmonicsPreset('cello')">CELLO</button>
+          <button class="btn" onclick="setHarmonicsPreset('organ')">ORGAN</button>
+          <button class="btn" onclick="setHarmonicsPreset('clear')">CLEAR</button>
+        </div>
+      </div>
+      <div class="harmonics-grid" id="harmonicsGrid"></div>
+    </div>
+
+
+  </div>
+
+  <!-- ══ RIGHT: FILTER + LFOs + PRESET ══ -->
+  <div>
+
+    <!-- Filter -->
+    <div class="panel">
+      <div class="panel-title">FILTER</div>
+      <div class="ctrl row"><label>Type</label>
+        <select id="filterType" onchange="P('filterType',this.value);P('filterEnabled',true)">
+          <option value="lowpass">Lowpass</option>
+          <option value="highpass">Highpass</option>
+          <option value="bandpass">Bandpass</option>
+          <option value="notch">Notch</option>
+        </select>
+      </div>
+      <div class="ctrl row"><label>Cutoff <span id="vFCut">20000 Hz</span></label>
+        <input type="range" class="c-cyan" id="filterCutoff" min="20" max="20000" step="10" value="20000"
+          oninput="P('filterCutoff',+this.value);P('filterEnabled',+this.value<20000);document.getElementById('vFCut').textContent=fmtHz(this.value)"></div>
+      <div class="ctrl row"><label>Resonance Q <span id="vFQ">0.1</span></label>
+        <input type="range" class="c-violet" id="filterQ" min="0.1" max="20" step="0.1" value="0.1"
+          oninput="P('filterQ',+this.value);D('vFQ',this.value,1)"></div>
+      <div class="ctrl row"><label>Key Track <span id="vFKT">0%</span></label>
+        <input type="range" class="c-blue" min="0" max="100" step="1" value="0"
+          oninput="P('filterKeyTrack',+this.value);D('vFKT',this.value+'%','')"></div>
+    </div>
+
+    <!-- LFO 1 Vibrato -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">LFO 1 — VIBRATO</div>
+      <div class="ctrl row"><label>Wave</label>
+        <select onchange="P('lfo1Wave',this.value)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Sawtooth</option>
+        </select>
+      </div>
+      <div class="ctrl row"><label>Rate <span id="vL1R">0.0 Hz</span></label>
+        <input type="range" class="c-violet" min="0" max="15" step="0.1" value="0"
+          oninput="V('rate',+this.value);document.getElementById('vL1R').textContent=fmtHz(this.value)"></div>
+      <div class="ctrl row"><label>Depth <span id="vL1D">0</span></label>
+        <input type="range" class="c-violet" min="0" max="50" step="0.5" value="0"
+          oninput="V('depth',+this.value);D('vL1D',this.value,1)"></div>
+      <div class="ctrl row"><label>Delay <span id="vL1Del">0.00s</span></label>
+        <input type="range" class="c-pink" min="0" max="2" step="0.01" value="0"
+          oninput="P('lfo1Delay',+this.value);document.getElementById('vL1Del').textContent=fmtMs(this.value)"></div>
+      <div class="ctrl row"><label>Hold <span id="vL1Hold">0.00s</span></label>
+        <input type="range" class="c-pink" min="0" max="2" step="0.01" value="0"
+          oninput="P('lfo1HoldTime',+this.value);document.getElementById('vL1Hold').textContent=fmtMs(this.value)"></div>
+    </div>
+
+    <!-- LFO 2 Filter -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">LFO 2 — FILTER MOD</div>
+      <div class="ctrl row"><label>Wave</label>
+        <select onchange="P('lfo2Wave',this.value)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Sawtooth</option>
+        </select>
+      </div>
+      <div class="ctrl row"><label>Rate <span id="vL2R">0.0 Hz</span></label>
+        <input type="range" class="c-cyan" min="0" max="15" step="0.1" value="0"
+          oninput="P('filterLfoRate',+this.value);document.getElementById('vL2R').textContent=fmtHz(this.value)"></div>
+      <div class="ctrl row"><label>Depth <span id="vL2D">0%</span></label>
+        <input type="range" class="c-cyan" min="0" max="100" step="1" value="0"
+          oninput="P('filterLfoDepth',+this.value);D('vL2D',this.value+'%','')"></div>
+    </div>
+
+    <!-- LFO 3 Tremolo -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">LFO 3 — TREMOLO</div>
+      <div class="ctrl row"><label>Wave</label>
+        <select onchange="P('lfo3Wave',this.value)">
+          <option value="sine">Sine</option><option value="triangle">Triangle</option>
+          <option value="square">Square</option><option value="sawtooth">Sawtooth</option>
+        </select>
+      </div>
+      <div class="ctrl row"><label>Rate <span id="vL3R">0.0 Hz</span></label>
+        <input type="range" class="c-amber" min="0" max="20" step="0.1" value="0"
+          oninput="P('tremoloRate',+this.value);document.getElementById('vL3R').textContent=fmtHz(this.value)"></div>
+      <div class="ctrl row"><label>Depth <span id="vL3D">0%</span></label>
+        <input type="range" class="c-amber" min="0" max="100" step="1" value="0"
+          oninput="P('tremoloDepth',+this.value);D('vL3D',this.value+'%','')"></div>
+    </div>
+
+    <!-- Preset Export -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">PRESET EXPORT</div>
+      <input class="preset-name" id="presetName" type="text" placeholder="myPreset" value="myPreset">
+      <div class="btn-row" style="margin-bottom:8px">
+        <button class="btn primary" onclick="exportPreset()">⬇ EXPORT JSON</button>
+        <button class="btn" onclick="copyPreset()">⎘ COPY</button>
+        <button class="btn" onclick="resetSynth()">↺ RESET</button>
+      </div>
+      <div class="export-box" id="exportBox">— adjust controls then click EXPORT —</div>
+      <div style="margin-top:8px;font-size:.46rem;color:var(--dim);line-height:1.5">
+        Reuse with:<br>
+        <code style="color:var(--cyan)">synth.loadInstrument('myPreset', 0)</code><br>
+        or register in SoundFont:<br>
+        <code style="color:var(--green)">synth.registerSoundFont({ instruments: { myPreset: preset } })</code>
+      </div>
+    </div>
+
+    <!-- Load instrument preset -->
+    <div class="panel" style="margin-top:10px">
+      <div class="panel-title">LOAD INSTRUMENT</div>
+      <div class="ctrl row">
+        <label>Built-in preset</label>
+        <select id="instSelect" onchange="loadBuiltIn(this.value)">
+          <option value="">— select —</option>
+          <optgroup label="Bowed Strings">
+            <option value="violinNatural">Violin Natural</option>
+            <option value="violinClassic">Violin Classic</option>
+            <option value="violinJazz">Violin Jazz</option>
+            <option value="violinLofi">Violin Lo-Fi</option>
+            <option value="violaReal">Viola</option>
+            <option value="celloNatural">Cello</option>
+            <option value="celloJazz">Cello Jazz</option>
+            <option value="celloLofi">Cello Lo-Fi</option>
+            <option value="contrabass">Contrabass</option>
+          </optgroup>
+          <optgroup label="Plucked / Karplus">
+            <option value="harp">Harp</option>
+            <option value="harpJazz">Harp Jazz</option>
+            <option value="harpCeltic">Celtic Harp</option>
+            <option value="harpAmbient">Harp Ambient</option>
+            <option value="acousticGuitar">Acoustic Guitar</option>
+            <option value="nylonGuitar">Nylon Guitar</option>
+            <option value="guitarJazz">Guitar Jazz</option>
+            <option value="acousticBass">Acoustic Bass</option>
+          </optgroup>
+          <optgroup label="Piano">
+            <option value="pianoAcoustic">Piano Acoustic</option>
+            <option value="pianoClassic">Piano Concert</option>
+            <option value="pianoJazz">Piano Jazz</option>
+            <option value="pianoLofi">Piano Lo-Fi</option>
+            <option value="pianoUpright">Piano Upright</option>
+            <option value="pianoBarRoom">Piano Bar</option>
+          </optgroup>
+          <optgroup label="Legacy">
+            <option value="piano">Piano (legacy)</option>
+            <option value="violin">Violin (legacy)</option>
+            <option value="electricGuitar">Electric Guitar</option>
+            <option value="synthPad">Synth Pad</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../dist/3.1.0/chiptune-synth.min.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════
+   SYNTH LAB — ChiptuneSynth v3.1.0
+   ═══════════════════════════════════════════════════════ */
+
+var synth = null;
+var kbOctave = 4;
+var activeNoteId = null;
+var harmonics = [1,0.5,0.33,0.25,0.2,0.16,0.14,0.12,0.1,0.08,0.06,0.04];
+var animId = null;
+
+/* ── Helpers ── */
+function D(id, v, dec) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = dec === '' ? v : parseFloat(v).toFixed(dec);
+}
+function fmtMs(v) {
+  var f = parseFloat(v);
+  return f >= 1 ? f.toFixed(2) + 's' : Math.round(f * 1000) + 'ms';
+}
+function fmtHz(v) {
+  var f = parseFloat(v);
+  return f >= 1000 ? (f/1000).toFixed(1) + 'kHz' : Math.round(f) + ' Hz';
+}
+
+/* ── Synth param setters ── */
+function P(key, value) {
+  if (!synth || !synth.initialized) return;
+  var t = synth.tracks[0];
+  t[key] = value;
+}
+function E(key, value) {
+  if (!synth || !synth.initialized) return;
+  synth.envelopes[0][key] = value;
+}
+function V(key, value) {
+  if (!synth || !synth.initialized) return;
+  synth.vibrato[0][key] = value;
+}
+function FX(param, value) {
+  if (!synth || !synth.initialized) return;
+  if (param === 'distortion') synth.setDistortion(0, value);
+}
+function FXmix(param, value) {
+  if (!synth || !synth.initialized) return;
+}
+
+/* ── Init ── */
+async function initAudio() {
+  synth = new ChiptuneSynth();
+  await synth.init();
+  synth.setMasterVolume(0.5);
+  document.getElementById('overlay').style.display = 'none';
+  buildKeyboard();
+  buildHarmonicsGrid();
+  startViz();
+  document.getElementById('statusInfo').textContent = 'Initialized — ' + (synth.constructor.name || 'ChiptuneSynth') + ' ready';
+}
+
+/* ── Waveform UI visibility ── */
+function updateWaveformUI() {
+  var wf = document.getElementById('waveform').value;
+  document.getElementById('dutyRow').style.display = (wf === 'square') ? '' : 'none';
+  document.getElementById('karplusSection').style.display = (wf === 'karplus') ? '' : 'none';
+  document.getElementById('wavetablePanel').style.display = (wf === 'wavetable') ? '' : 'none';
+  document.getElementById('oscBadge').textContent = wf.toUpperCase();
+  if (wf === 'wavetable') P('harmonics', harmonics.slice());
+}
+updateWaveformUI();
+
+/* ── Keyboard ──
+   Uses e.code (physical position) = works on AZERTY + QWERTY
+   Home row:  KeyA=C  KeyS=D  KeyD=E  KeyF=F  KeyG=G  KeyH=A  KeyJ=B   (AZERTY: Q S D F G H J)
+   2nd oct:   KeyK=C+ KeyL=D+ Semicol=E+ Quote=F+
+   Black 1st: KeyW=C# KeyE=D# KeyT=F# KeyY=G# KeyU=A# (AZERTY: Z E T Y U)
+   Black 2nd: KeyO=C#+ KeyP=D#+
+   Octave:    KeyZ = down (W on AZERTY), KeyX = up
+*/
+var CODE_MAP = {
+  'KeyA':'C',  'KeyS':'D',  'KeyD':'E',  'KeyF':'F',  'KeyG':'G',  'KeyH':'A',  'KeyJ':'B',
+  'KeyK':'C',  'KeyL':'D',  'Semicolon':'E', 'Quote':'F',
+  'KeyW':'C#', 'KeyE':'D#', 'KeyT':'F#', 'KeyY':'G#', 'KeyU':'A#',
+  'KeyO':'C#', 'KeyP':'D#'
+};
+var CODE_OCT = {
+  'KeyA':0,'KeyS':0,'KeyD':0,'KeyF':0,'KeyG':0,'KeyH':0,'KeyJ':0,
+  'KeyW':0,'KeyE':0,'KeyT':0,'KeyY':0,'KeyU':0,
+  'KeyK':1,'KeyL':1,'Semicolon':1,'Quote':1,'KeyO':1,'KeyP':1
+};
+// AZERTY display labels for each note slot
+var NOTE_KB_LABEL = {
+  'C':['Q','K'], 'D':['S','L'], 'E':['D','M'], 'F':['F','Ù'],
+  'G':'G', 'A':'H', 'B':'J',
+  'C#':'Z', 'D#':'E', 'F#':'T', 'G#':'Y', 'A#':'U'
+};
+
+// Piano key layout: 2 octaves
+var PIANO_WHITES = [
+  {note:'C',oct:0},{note:'D',oct:0},{note:'E',oct:0},{note:'F',oct:0},
+  {note:'G',oct:0},{note:'A',oct:0},{note:'B',oct:0},
+  {note:'C',oct:1},{note:'D',oct:1},{note:'E',oct:1},{note:'F',oct:1},
+  {note:'G',oct:1},{note:'A',oct:1},{note:'B',oct:1}
+];
+var PIANO_BLACKS = [
+  {note:'C#',oct:0,wpos:0},{note:'D#',oct:0,wpos:1},
+  {note:'F#',oct:0,wpos:3},{note:'G#',oct:0,wpos:4},{note:'A#',oct:0,wpos:5},
+  {note:'C#',oct:1,wpos:7},{note:'D#',oct:1,wpos:8},
+  {note:'F#',oct:1,wpos:10},{note:'G#',oct:1,wpos:11},{note:'A#',oct:1,wpos:12}
+];
+var KB_LABELS_WHITE = ['Q','S','D','F','G','H','J','K','L','M','Ù','','',''];
+var KB_LABELS_BLACK = ['Z','E','','T','Y','U','O','P','','',''];
+
+function buildKeyboard() {
+  var kb = document.getElementById('keyboard');
+  kb.innerHTML = '';
+  var KW = 30, KH = 90;
+
+  PIANO_WHITES.forEach(function(w, i) {
+    var k = document.createElement('div');
+    k.className = 'key key-white';
+    k.dataset.note = w.note; k.dataset.oct = w.oct;
+    var lbl = KB_LABELS_WHITE[i] || '';
+    k.innerHTML = '<span class="key-label-kb">' + lbl + '</span><span class="key-label-note">' + w.note + '</span>';
+    addKeyEvents(k, w.note, w.oct);
+    kb.appendChild(k);
+  });
+  PIANO_BLACKS.forEach(function(b, i) {
+    var k = document.createElement('div');
+    k.className = 'key key-black';
+    k.dataset.note = b.note; k.dataset.oct = b.oct;
+    k.style.left = (b.wpos * KW + 20) + 'px';
+    k.style.position = 'absolute';
+    var lbl = KB_LABELS_BLACK[i] || '';
+    k.innerHTML = '<span class="key-label-kb">' + lbl + '</span>';
+    addKeyEvents(k, b.note, b.oct);
+    kb.appendChild(k);
+  });
+}
+
+function addKeyEvents(el, note, octOffset) {
+  function noteOn(e) {
+    e.preventDefault();
+    if (!synth || !synth.initialized) return;
+    el.classList.add('active');
+    var nid = synth.playNoteByName(note, kbOctave + octOffset, 0, 30);
+    el._nid = nid;
+    document.getElementById('noteDisplay').textContent = note + (kbOctave + octOffset);
+  }
+  function noteOff() {
+    el.classList.remove('active');
+    if (el._nid && synth) { synth.stopNote(el._nid); el._nid = null; }
+  }
+  el.addEventListener('pointerdown', noteOn);
+  el.addEventListener('pointerup', noteOff);
+  el.addEventListener('pointerleave', noteOff);
+}
+
+/* ── Octave shift ── */
+function shiftOctave(delta) {
+  kbOctave = Math.max(1, Math.min(7, kbOctave + delta));
+  D('vKbOct', kbOctave, 0);
+}
+
+/* ── Computer keyboard — e.code based (AZERTY + QWERTY) ── */
+var heldKeys = {};
+document.addEventListener('keydown', function(e) {
+  if (e.repeat || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  var code = e.code;
+  // Octave shift: KeyZ = W on AZERTY (oct down), KeyX = X (oct up)
+  if (code === 'KeyZ') { shiftOctave(-1); return; }
+  if (code === 'KeyX') { shiftOctave(+1); return; }
+  if (!CODE_MAP[code] || heldKeys[code]) return;
+  if (!synth || !synth.initialized) return;
+  heldKeys[code] = true;
+  var note = CODE_MAP[code];
+  var oct = kbOctave + (CODE_OCT[code] || 0);
+  var noteId = synth.playNoteByName(note, oct, 0, 30);
+  heldKeys[code] = noteId;
+  document.getElementById('noteDisplay').textContent = note + oct;
+  // Highlight piano key
+  var keys = document.querySelectorAll('.key');
+  keys.forEach(function(k) {
+    if (k.dataset.note === note && +k.dataset.oct === (CODE_OCT[code]||0)) k.classList.add('active');
+  });
+});
+document.addEventListener('keyup', function(e) {
+  var code = e.code;
+  if (heldKeys[code] && heldKeys[code] !== true && synth) synth.stopNote(heldKeys[code]);
+  delete heldKeys[code];
+  var keys = document.querySelectorAll('.key.active');
+  keys.forEach(function(k) { k.classList.remove('active'); });
+});
+
+/* ── Visualizer ── */
+function startViz() {
+  var cv = document.getElementById('vizCanvas');
+  var cs = document.getElementById('specCanvas');
+  var cw = cv.getContext('2d');
+  var cs2 = cs.getContext('2d');
+
+  function draw() {
+    animId = requestAnimationFrame(draw);
+    var W = cv.offsetWidth, H = cv.offsetHeight;
+    if (cv.width !== W) { cv.width = W; cs.width = W; }
+    cv.height = H; cs.height = cs.offsetHeight;
+
+    // Waveform
+    cw.fillStyle = '#060609';
+    cw.fillRect(0, 0, W, H);
+    var td = synth && synth.initialized ? synth.getAnalyserData() : null;
+    if (td && td.length) {
+      cw.beginPath();
+      cw.strokeStyle = '#00f0ff';
+      cw.lineWidth = 1.5;
+      for (var i = 0; i < td.length; i++) {
+        var x = (i / td.length) * W;
+        var y = ((td[i] / 128) - 1) * (H / 2) + H / 2;
+        i === 0 ? cw.moveTo(x, y) : cw.lineTo(x, y);
+      }
+      cw.stroke();
+    } else {
+      cw.beginPath(); cw.strokeStyle='#1a1a2e'; cw.lineWidth=1;
+      cw.moveTo(0,H/2); cw.lineTo(W,H/2); cw.stroke();
+    }
+
+    // Spectrum
+    cs2.fillStyle = '#060609';
+    cs2.fillRect(0, 0, W, cs.height);
+    var fd = synth && synth.initialized ? synth.getFrequencyData() : null;
+    if (fd && fd.length) {
+      var bw = W / (fd.length / 4);
+      for (var i = 0; i < fd.length / 4; i++) {
+        var v = fd[i] / 255;
+        var bh = v * cs.height;
+        var hue = 180 + v * 80;
+        cs2.fillStyle = 'hsl(' + hue + ',100%,' + (30 + v * 40) + '%)';
+        cs2.fillRect(i * bw, cs.height - bh, bw - 1, bh);
+      }
+    }
+  }
+  draw();
+}
+
+/* ── Wavetable harmonics editor ── */
+var harmDragging = false;
+var harmDragIdx = -1;
+
+function buildHarmonicsGrid() {
+  var grid = document.getElementById('harmonicsGrid');
+  grid.innerHTML = '';
+  for (var i = 0; i < 12; i++) {
+    (function(idx) {
+      var col = document.createElement('div');
+      col.className = 'harm-col';
+      var bar = document.createElement('div');
+      bar.className = 'harm-bar';
+      var fill = document.createElement('div');
+      fill.className = 'harm-fill';
+      fill.id = 'hfill' + idx;
+      fill.style.height = (harmonics[idx] * 100) + '%';
+      bar.appendChild(fill);
+      var lbl = document.createElement('div');
+      lbl.className = 'harm-idx';
+      lbl.textContent = 'H' + (idx + 1);
+      col.appendChild(bar);
+      col.appendChild(lbl);
+      grid.appendChild(col);
+
+      function updateFromPointer(e) {
+        var rect = bar.getBoundingClientRect();
+        var y = (e.clientY || (e.touches && e.touches[0].clientY)) - rect.top;
+        var v = Math.max(0, Math.min(1, 1 - y / rect.height));
+        harmonics[idx] = Math.round(v * 100) / 100;
+        fill.style.height = (v * 100) + '%';
+        P('harmonics', harmonics.slice());
+      }
+
+      bar.addEventListener('pointerdown', function(e) {
+        e.preventDefault();
+        harmDragging = true; harmDragIdx = idx;
+        updateFromPointer(e);
+        bar.setPointerCapture(e.pointerId);
+      });
+      bar.addEventListener('pointermove', function(e) {
+        if (harmDragging && harmDragIdx === idx) updateFromPointer(e);
+      });
+      bar.addEventListener('pointerup', function() { harmDragging = false; harmDragIdx = -1; });
+    })(i);
+  }
+}
+
+function setHarmonicsPreset(name) {
+  var presets = {
+    saw:    [1, 0.5, 0.333, 0.25, 0.2, 0.167, 0.143, 0.125, 0.111, 0.1, 0.091, 0.083],
+    violin: [1, 0.88, 0.70, 0.55, 0.42, 0.32, 0.22, 0.16, 0.11, 0.08, 0.05, 0.03],
+    cello:  [1, 0.60, 0.85, 0.55, 0.40, 0.30, 0.20, 0.14, 0.09, 0.06, 0.04, 0.02],
+    organ:  [0.8, 1, 0.8, 0, 0.5, 0, 0.3, 0, 0.1, 0, 0, 0],
+    clear:  [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  };
+  if (!presets[name]) return;
+  harmonics = presets[name].slice();
+  for (var i = 0; i < 12; i++) {
+    var f = document.getElementById('hfill' + i);
+    if (f) f.style.height = (harmonics[i] * 100) + '%';
+  }
+  P('harmonics', harmonics.slice());
+}
+
+/* ── Load built-in instrument ── */
+function loadBuiltIn(name) {
+  if (!name || !synth || !synth.initialized) return;
+  var ok = synth.loadInstrument(name, 0);
+  if (!ok) return;
+  var t = synth.tracks[0];
+  var env = synth.envelopes[0];
+  var vib = synth.vibrato[0];
+
+  // Sync UI to loaded instrument
+  setSliderVal('waveform', t.type); updateWaveformUI();
+  setSliderVal('dutyCycle', t.dutyCycle); D('vDuty', t.dutyCycle, 2);
+  setSliderVal('glide', t.glide); D('vGlide', t.glide, 2);
+  setSliderVal('octOffset', t.octaveOffset || 0); D('vOct', t.octaveOffset || 0, 0);
+  setSliderVal('semiOffset', t.semitoneOffset || 0); D('vSemi', t.semitoneOffset || 0, 0);
+  setSliderVal('volume', t.volume); D('vVol', t.volume, 2);
+  setSliderVal('unisonVoices', t.unisonVoices || 1); D('vUniV', t.unisonVoices || 1, 0);
+  setSliderVal('unisonDetune', t.unisonDetune || 0); D('vUniD', t.unisonDetune || 0, 0);
+  setSliderVal('unisonSpread', t.unisonSpread || 0); D('vUniS', t.unisonSpread || 0, 0);
+  setSliderVal('attack', env.attack); document.getElementById('vA').textContent = fmtMs(env.attack);
+  setSliderVal('decay', env.decay); document.getElementById('vD').textContent = fmtMs(env.decay);
+  setSliderVal('sustain', env.sustain); D('vS', env.sustain, 2);
+  setSliderVal('release', env.release); document.getElementById('vR').textContent = fmtMs(env.release);
+  setSliderVal('filterCutoff', t.filterCutoff || 20000); document.getElementById('vFCut').textContent = fmtHz(t.filterCutoff || 20000);
+  setSliderVal('filterQ', t.filterQ || 0.1); D('vFQ', t.filterQ || 0.1, 1);
+
+  if (vib) {
+    document.getElementById('vL1R').textContent = fmtHz(vib.rate || 0);
+    document.getElementById('vL1D').textContent = (vib.depth || 0).toFixed(1);
+  }
+
+  if (t.harmonics && t.type === 'wavetable') {
+    harmonics = t.harmonics.slice(0, 12);
+    while (harmonics.length < 12) harmonics.push(0);
+    for (var i = 0; i < 12; i++) {
+      var f2 = document.getElementById('hfill' + i);
+      if (f2) f2.style.height = (harmonics[i] * 100) + '%';
+    }
+  }
+
+  document.getElementById('statusInfo').textContent = 'Loaded: ' + name +
+    ' [' + t.type + (t.harmonics ? ', harmonics[' + t.harmonics.length + ']' : '') + ']';
+}
+
+function setSliderVal(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+/* ── Preset Export ── */
+function exportPreset() {
+  if (!synth || !synth.initialized) return;
+  var t = synth.tracks[0];
+  var env = synth.envelopes[0];
+  var vib = synth.vibrato[0];
+  var name = document.getElementById('presetName').value || 'myPreset';
+
+  var preset = {
+    label: name,
+    type: t.type,
+    duty: t.dutyCycle,
+    vol: t.volume,
+    pitchEnv: t.pitchEnv || 0,
+    glide: t.glide || 0,
+    env: { attack: env.attack, decay: env.decay, sustain: env.sustain, release: env.release },
+    vib: { rate: vib.rate || 0, depth: vib.depth || 0 },
+    mod: {
+      unisonVoices: t.unisonVoices || 1,
+      unisonDetune: t.unisonDetune || 0,
+      unisonSpread: t.unisonSpread || 0,
+      octaveOffset: t.octaveOffset || 0,
+      semitoneOffset: t.semitoneOffset || 0,
+      filterEnabled: t.filterEnabled || false,
+      filterType: t.filterType || 'lowpass',
+      filterCutoff: t.filterCutoff || 20000,
+      filterQ: t.filterQ || 0.1,
+      filterKeyTrack: t.filterKeyTrack || 0,
+      filterEnvAmount: t.filterEnvAmount || 0,
+      filterEnvAttack: t.filterEnvAttack || 0.01,
+      filterEnvRelease: t.filterEnvRelease || 0.2,
+      filterLfoRate: t.filterLfoRate || 0,
+      filterLfoDepth: t.filterLfoDepth || 0,
+      lfoFilterRate: t.lfoFilterRate || 0,
+      lfoFilterDepth: t.lfoFilterDepth || 0,
+      tremoloRate: t.tremoloRate || 0,
+      tremoloDepth: t.tremoloDepth || 0,
+      lfo1Wave: t.lfo1Wave || 'sine',
+      lfo1Delay: t.lfo1Delay || 0,
+      lfo1HoldTime: t.lfo1HoldTime || 0,
+      lfo2Wave: t.lfo2Wave || 'sine',
+      lfo3Wave: t.lfo3Wave || 'sine'
+    }
+  };
+
+  if (t.type === 'wavetable') {
+    preset.harmonics = harmonics.slice();
+    if (t.bowNoise) { preset.bowNoise = true; preset.bowNoiseLevel = t.bowNoiseLevel || 0.12; }
+    if (t.bodyEQ && t.bodyEQ.length) preset.bodyEQ = t.bodyEQ;
+  }
+  if (t.type === 'karplus') {
+    preset.karplusDecay = t.karplusDecay !== undefined ? t.karplusDecay : 0.996;
+    preset.karplusBrightness = t.karplusBrightness !== undefined ? t.karplusBrightness : 0.5;
+    preset.karplusExciter = t.karplusExciter || 'noise';
+  }
+
+  var json = JSON.stringify(preset, null, 2);
+  var box = document.getElementById('exportBox');
+  box.innerHTML = syntaxHighlight(json);
+
+  window._lastPreset = preset;
+  window._lastName = name;
+  document.getElementById('statusInfo').textContent = 'Preset exported: ' + name;
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\w+)")\s*:/g, '<span style="color:#a855f7">$1</span>:')
+    .replace(/:\s*(".*?")/g, ': <span style="color:#4ade80">$1</span>')
+    .replace(/:\s*(\d+\.?\d*)/g, ': <span style="color:#00f0ff">$1</span>')
+    .replace(/:\s*(true|false|null)/g, ': <span style="color:#ff6eb4">$1</span>');
+}
+
+function copyPreset() {
+  var box = document.getElementById('exportBox');
+  var text = box.innerText || box.textContent;
+  if (!text.trim() || text.indexOf('adjust controls') !== -1) { exportPreset(); }
+  navigator.clipboard && navigator.clipboard.writeText(
+    JSON.stringify(window._lastPreset, null, 2)
+  ).then(function() {
+    var btn = event.target;
+    btn.textContent = '✓ COPIED';
+    btn.classList.add('success');
+    setTimeout(function() { btn.textContent = '⎘ COPY'; btn.classList.remove('success'); }, 1500);
+  });
+}
+
+/* ── FX Rack LED / active state ── */
+function toggleRU(id) {
+  var ru  = document.getElementById('ru'  + id);
+  var pwr = document.getElementById('pwr' + id);
+  if (!ru || !pwr) return;
+  var isOn = pwr.classList.contains('on');
+  if (isOn) {
+    pwr.classList.remove('on');
+    ru.classList.remove('active');
+  } else {
+    pwr.classList.add('on');
+    ru.classList.add('active');
+  }
+}
+
+function setRUActive(id, condition) {
+  var ru  = document.getElementById('ru'  + id);
+  var pwr = document.getElementById('pwr' + id);
+  if (!ru || !pwr) return;
+  if (condition) {
+    pwr.classList.add('on');
+    ru.classList.add('active');
+  } else {
+    pwr.classList.remove('on');
+    ru.classList.remove('active');
+  }
+}
+
+function resetSynth() {
+  if (!synth || !synth.initialized) return;
+  // Reset to default square wave
+  synth.tracks[0].type = 'square';
+  synth.tracks[0].dutyCycle = 0.5;
+  synth.tracks[0].volume = 0.3;
+  synth.tracks[0].detune = 0;
+  synth.tracks[0].pitchEnv = 0;
+  synth.tracks[0].glide = 0;
+  synth.tracks[0].filterEnabled = false;
+  synth.tracks[0].filterCutoff = 20000;
+  synth.tracks[0].unisonVoices = 1;
+  synth.tracks[0].unisonDetune = 0;
+  synth.tracks[0].lfo1Delay = 0;
+  synth.tracks[0].lfo1HoldTime = 0;
+  synth.tracks[0].tremoloRate = 0;
+  synth.tracks[0].tremoloDepth = 0;
+  synth.envelopes[0] = { attack: 0.01, decay: 0.1, sustain: 0.7, release: 0.3 };
+  synth.vibrato[0] = { rate: 0, depth: 0 };
+  // Reset UI
+  ['waveform','dutyCycle','glide','octOffset','semiOffset','detune','pitchEnv','volume',
+   'unisonVoices','unisonDetune','unisonSpread','attack','decay','sustain','release',
+   'filterCutoff','filterQ'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) { var dv = el.defaultValue; if (dv !== undefined) el.value = dv; }
+  });
+  document.getElementById('waveform').value = 'square';
+  updateWaveformUI();
+  document.getElementById('exportBox').textContent = '— adjust controls then click EXPORT —';
+  document.getElementById('instSelect').value = '';
+  document.getElementById('statusInfo').textContent = 'Reset to default';
+}
+</script>
+</body>
+</html>

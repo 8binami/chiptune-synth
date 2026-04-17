@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head><title>ChiptuneSynth v3 — Build Test</title></head>
+<body style="background:#111;color:#0f0;font-family:monospace;padding:40px">
+<h2>ChiptuneSynth v3 — Obfuscated Build Test</h2>
+<pre id="log"></pre>
+<button id="testBtn" style="margin:20px 0;padding:12px 24px;font-size:16px;cursor:pointer;background:#0f0;color:#000;border:none;border-radius:6px">
+    Run Tests (click = user gesture for AudioContext)
+</button>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+<script>
+const log = document.getElementById('log');
+function print(msg, ok) {
+    log.textContent += (ok === undefined ? '       ' : (ok ? '[PASS] ' : '[FAIL] ')) + msg + '\n';
+}
+
+document.getElementById('testBtn').addEventListener('click', async function() {
+    log.textContent = '';
+    let passed = 0, failed = 0;
+
+    // Test 1: Constructor
+    try {
+        const s = new ChiptuneSynth();
+        print('new ChiptuneSynth() — constructor works', true); passed++;
+    } catch(e) { print('Constructor: ' + e.message, false); failed++; }
+
+    // Test 2: Static — 8 tracks
+    try {
+        const ok = Array.isArray(ChiptuneSynth.TRACK_NAMES) && ChiptuneSynth.TRACK_NAMES.length === 8;
+        print('TRACK_NAMES[8] = [' + ChiptuneSynth.TRACK_NAMES.join(', ') + ']', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('TRACK_NAMES: ' + e.message, false); failed++; }
+
+    try {
+        const ok = ChiptuneSynth.NUM_TRACKS === 8;
+        print('NUM_TRACKS = ' + ChiptuneSynth.NUM_TRACKS, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('NUM_TRACKS: ' + e.message, false); failed++; }
+
+    try {
+        const names = ChiptuneSynth.getPresetNames();
+        const ok = Array.isArray(names) && names.includes('coin') && names.includes('laser');
+        print('getPresetNames() = [' + names.join(', ') + ']', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getPresetNames: ' + e.message, false); failed++; }
+
+    try {
+        const inst = ChiptuneSynth.getInstrumentNames();
+        const ok = Array.isArray(inst) && inst.includes('piano') && inst.includes('violin');
+        print('getInstrumentNames() — ' + inst.length + ' instruments', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getInstrumentNames: ' + e.message, false); failed++; }
+
+    try {
+        const f = ChiptuneSynth.noteToFrequency('A', 4);
+        print('noteToFrequency("A",4) = ' + f, f === 440);
+        f === 440 ? passed++ : failed++;
+    } catch(e) { print('noteToFrequency: ' + e.message, false); failed++; }
+
+    try {
+        const f = ChiptuneSynth.midiToFrequency(69);
+        print('midiToFrequency(69) = ' + f, f === 440);
+        f === 440 ? passed++ : failed++;
+    } catch(e) { print('midiToFrequency: ' + e.message, false); failed++; }
+
+    try {
+        const m = ChiptuneSynth.frequencyToMidi(440);
+        print('frequencyToMidi(440) = ' + m, m === 69);
+        m === 69 ? passed++ : failed++;
+    } catch(e) { print('frequencyToMidi: ' + e.message, false); failed++; }
+
+    try {
+        const presets = ChiptuneSynth.getFxPresetNames();
+        const ok = Array.isArray(presets) && presets.includes('clean') && presets.includes('space');
+        print('getFxPresetNames() = [' + presets.join(', ') + ']', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getFxPresetNames: ' + e.message, false); failed++; }
+
+    // Test 3: Init
+    const synth = new ChiptuneSynth();
+    try {
+        await synth.init();
+        print('synth.init() — AudioContext + limiter + 8 channel strips + 8 FX chains', synth.initialized);
+        synth.initialized ? passed++ : failed++;
+    } catch(e) { print('init: ' + e.message, false); failed++; }
+
+    // Test 4: 8 channel strips & FX chains
+    try {
+        const ok = synth.channelStrips.length === 8 && synth._trackEffects.length === 8;
+        print('channelStrips[8] & _trackEffects[8] created', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('channelStrips: ' + e.message, false); failed++; }
+
+    // Test 5: Limiter node
+    try {
+        const ok = synth.limiter && synth.limiter.threshold.value === -3;
+        print('limiter (threshold=-3dB, ratio=20) ready', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('limiter: ' + e.message, false); failed++; }
+
+    // Test 6: Play SFX presets
+    try {
+        const id = synth.playPreset('coin');
+        const ok = typeof id === 'string' && id.startsWith('note-');
+        print('playPreset("coin") = ' + id, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('playPreset: ' + e.message, false); failed++; }
+
+    // Test 7: Load instrument + play (all 8 tracks)
+    try {
+        synth.loadInstrument('violin', 0);
+        const id = synth.playNoteByName('C', 4, 0, 0.2);
+        const ok = typeof id === 'string';
+        print('loadInstrument("violin", 0) + playNoteByName = ' + id, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('loadInstrument: ' + e.message, false); failed++; }
+
+    // Test 8: Play on different tracks (Kick=4, Snare=5, Hi-hat=6, FX=7)
+    try {
+        const ids = [
+            synth.playNote(60, 4, 0.2),  // Kick
+            synth.playNote(150, 5, 0.1), // Snare
+            synth.playNote(800, 6, 0.05),// Hi-hat
+            synth.playNote(440, 7, 0.3)  // FX
+        ];
+        const ok = ids.every(id => typeof id === 'string');
+        print('playNote on tracks 4-7 (Kick/Snare/Hi-hat/FX)', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('multi-track play: ' + e.message, false); failed++; }
+
+    // Test 9: updateTrack / updateEnvelope / updateVibrato
+    try {
+        synth.updateTrack(0, { filterCutoff: 3000, filterEnabled: true });
+        synth.updateEnvelope(0, { attack: 0.05 });
+        synth.updateVibrato(0, { rate: 5, depth: 10 });
+        print('updateTrack/Envelope/Vibrato — no errors', true); passed++;
+    } catch(e) { print('updateTrack: ' + e.message, false); failed++; }
+
+    // Test 10: Master volume
+    try {
+        synth.setMasterVolume(0.8);
+        const v = synth.getMasterVolume();
+        const ok = Math.abs(v - 0.8) < 0.01;
+        print('setMasterVolume(0.8) → getMasterVolume() = ' + v, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('masterVolume: ' + e.message, false); failed++; }
+
+    // Test 11: Mixer console
+    try {
+        synth.setTrackFaderVolume(0, 0.9);
+        synth.setTrackPan(1, -0.5);
+        synth.setTrackEQ(0, 'eqLow', 3);
+        synth.setTrackEQ(0, 'eqMid', -2);
+        synth.setTrackEQ(0, 'eqHigh', 1);
+        synth.setTrackMute(2, false);
+        synth.setTrackSolo(0, false);
+        const volOk = Math.abs(synth.channelStrips[0].gain.gain.value - 0.9) < 0.01;
+        const panOk = Math.abs(synth.channelStrips[1].pan.pan.value - (-0.5)) < 0.01;
+        print('Mixer: fader/pan/EQ/mute/solo — all set', volOk && panOk);
+        volOk && panOk ? passed++ : failed++;
+    } catch(e) { print('Mixer: ' + e.message, false); failed++; }
+
+    // Test 12: Per-track compressor
+    try {
+        synth.setTrackCompressorEnabled(0, true);
+        synth.setTrackCompressorThreshold(0, -18);
+        synth.setTrackCompressorRatio(0, 6);
+        synth.setTrackCompressorEnabled(0, false);
+        print('Per-track compressor enable/disable — no errors', true); passed++;
+    } catch(e) { print('Compressor: ' + e.message, false); failed++; }
+
+    // Test 13: VU metering
+    try {
+        const ml = synth.getMasterLevel();
+        const tl = synth.getTrackLevel(0);
+        const ok = typeof ml === 'number' && typeof tl === 'number';
+        print('getMasterLevel()=' + ml.toFixed(4) + ' getTrackLevel(0)=' + tl.toFixed(4), ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('VU meter: ' + e.message, false); failed++; }
+
+    // Test 14: Per-track effects
+    try {
+        synth.setDistortion(0, 0.5);
+        synth.setDelayTime(0, 0.3);
+        synth.setDelayFeedback(0, 0.4);
+        synth.setDelayMix(0, 0.3);
+        synth.setReverbMix(0, 0.2);
+        synth.setChorusRate(0, 2);
+        synth.setChorusDepth(0, 0.5);
+        synth.setChorusMix(0, 0.2);
+        synth.setBitcrusherBits(0, 8);
+        synth.setBitcrusherRate(0, 0.5);
+        const params = synth.getTrackFxParams(0);
+        const ok = params !== null && params.crushBits === 8;
+        print('Per-track FX (dist/delay/reverb/chorus/crush) — crushBits=' + (params && params.crushBits), ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('Per-track FX: ' + e.message, false); failed++; }
+
+    // Test 15: FX presets
+    try {
+        const ok = synth.loadFxPreset(1, 'space') && synth.loadFxPreset(2, 'dirty');
+        print('loadFxPreset("space","dirty") — loaded ok', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('FX presets: ' + e.message, false); failed++; }
+
+    // Test 16: Arpeggiator settings
+    try {
+        synth.setArpeggiator(0, { mode: 'up', rate: '1/16', octaves: 2, gate: 0.75 });
+        const s = synth.getArpeggiator(0);
+        const ok = s.mode === 'up' && s.rate === '1/16' && s.octaves === 2;
+        print('setArpeggiator → getArpeggiator: mode=' + s.mode + ' rate=' + s.rate + ' octaves=' + s.octaves, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('Arpeggiator: ' + e.message, false); failed++; }
+
+    // Test 17: Analyser data
+    try {
+        const d = synth.getWaveformData();
+        const f = synth.getFrequencyData();
+        const ok = d instanceof Uint8Array && f instanceof Uint8Array;
+        print('getWaveformData() + getFrequencyData() → Uint8Array', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('Analyser: ' + e.message, false); failed++; }
+
+    // Test 18: stopAllNotes
+    try {
+        synth.stopAllNotes();
+        print('stopAllNotes() — no errors', true); passed++;
+    } catch(e) { print('stopAllNotes: ' + e.message, false); failed++; }
+
+    // Test 19: resetToDefaults
+    try {
+        synth.resetToDefaults();
+        const ok = synth.tracks[0].type === 'square' && synth.tracks[4].type === 'sine'
+                && synth.mixerSettings[0].volume === 1.0 && synth.bpm === 120;
+        print('resetToDefaults() → track[0]=square track[4]=sine bpm=120', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('resetToDefaults: ' + e.message, false); failed++; }
+
+    // Test 20: getInstruments
+    try {
+        const all = ChiptuneSynth.getInstruments();
+        const ok = all.piano && all.piano.label === 'Piano' && all.piano.env;
+        print('getInstruments() → piano.label="' + (all.piano && all.piano.label) + '"', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getInstruments: ' + e.message, false); failed++; }
+
+    // Test 21: dispose
+    try {
+        synth.dispose();
+        const ok = !synth.initialized;
+        print('dispose() → initialized=' + synth.initialized, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('dispose: ' + e.message, false); failed++; }
+
+    // Summary
+    print('');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print(passed + '/' + (passed + failed) + ' tests passed' + (failed === 0 ? ' — ALL GOOD ✓' : ' — ' + failed + ' FAILED'), failed === 0);
+});
+</script>
+</body>
+</html>

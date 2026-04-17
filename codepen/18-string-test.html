@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChiptuneSynth 3.1.0 — Acoustic String Test</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0d0d; color: #e0e0e0;
+    font-family: 'Courier New', monospace; font-size: 13px;
+    padding: 24px; min-height: 100vh;
+  }
+  h1 { color: #7ec8e3; margin-bottom: 6px; font-size: 18px; }
+  .subtitle { color: #666; margin-bottom: 24px; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .card {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 8px;
+    padding: 12px; cursor: pointer; transition: border-color .15s, background .15s;
+    user-select: none;
+  }
+  .card:hover { border-color: #7ec8e3; background: #1e2a2e; }
+  .card.active { border-color: #4ecdc4; background: #1a2e2c; }
+  .card.playing { border-color: #ff6b6b; background: #2e1a1a; animation: pulse .3s ease; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.02)} }
+  .card-type { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .card-name { color: #e0e0e0; font-size: 14px; font-weight: bold; }
+  .card-key  { color: #666; font-size: 10px; margin-top: 2px; }
+  .section-label {
+    color: #4ecdc4; font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+    margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2a2a;
+  }
+  .piano {
+    display: flex; gap: 4px; margin-bottom: 24px;
+    flex-wrap: wrap; align-items: flex-end;
+  }
+  .key {
+    padding: 10px 14px; border-radius: 4px; cursor: pointer;
+    font-size: 12px; min-width: 50px; text-align: center;
+    border: 1px solid #333; transition: background .1s;
+    user-select: none;
+  }
+  .key.white { background: #2a2a2a; }
+  .key.black { background: #111; color: #aaa; font-size: 10px; }
+  .key:hover { background: #3a3a3a; }
+  .key.pressed { background: #4ecdc4 !important; color: #000; }
+  .status {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px;
+    padding: 12px 16px; margin-bottom: 16px; min-height: 36px;
+    color: #7ec8e3; font-size: 12px; line-height: 1.6;
+  }
+  .log {
+    background: #111; border: 1px solid #2a2a2a; border-radius: 6px;
+    padding: 12px 16px; max-height: 120px; overflow-y: auto;
+    font-size: 11px; line-height: 1.7; color: #888;
+  }
+  .log .ok  { color: #4ecdc4; }
+  .log .err { color: #ff6b6b; }
+  .log .info{ color: #7ec8e3; }
+  canvas {
+    display: block; width: 100%; height: 80px;
+    background: #111; border-radius: 6px; border: 1px solid #2a2a2a;
+    margin-bottom: 16px;
+  }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .controls label { color: #888; font-size: 11px; }
+  input[type=range] { width: 120px; accent-color: #4ecdc4; }
+  .btn {
+    padding: 6px 14px; border-radius: 4px; border: 1px solid #333;
+    background: #1e1e1e; color: #ccc; cursor: pointer; font-size: 11px;
+    font-family: inherit; transition: background .15s;
+  }
+  .btn:hover { background: #2a2a2a; }
+  .btn.danger { border-color: #ff6b6b; color: #ff6b6b; }
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .overlay-inner {
+    background: #1a1a1a; border: 1px solid #333; border-radius: 12px;
+    padding: 40px; text-align: center;
+  }
+  .overlay-inner h2 { color: #7ec8e3; margin-bottom: 10px; }
+  .overlay-inner p  { color: #888; margin-bottom: 24px; font-size: 12px; }
+  .start-btn {
+    padding: 12px 32px; background: #4ecdc4; color: #000; border: none;
+    border-radius: 6px; font-size: 15px; cursor: pointer; font-weight: bold;
+    transition: background .15s;
+  }
+  .start-btn:hover { background: #7ec8e3; }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-inner">
+    <h2>ChiptuneSynth 3.1.0</h2>
+    <p>Acoustic String Test — wavetable + Karplus-Strong</p>
+    <button class="start-btn" id="startBtn">Start Audio</button>
+  </div>
+</div>
+
+<h1>ChiptuneSynth v3.1.0 — Acoustic String Test</h1>
+<p class="subtitle">Verifying wavetable (bowed) + Karplus-Strong (plucked/piano) synthesis. Click an instrument then play notes.</p>
+
+<div class="status" id="status">Click "Start Audio" to begin.</div>
+<canvas id="cv"></canvas>
+
+<div class="controls">
+  <label>Volume <input type="range" id="vol" min="0" max="1" step="0.01" value="0.6"></label>
+  <label>Octave <input type="range" id="oct" min="2" max="6" step="1" value="4"></label>
+  <span id="octVal" style="color:#4ecdc4;min-width:12px">4</span>
+  <button class="btn danger" id="stopAll">Stop All</button>
+  <button class="btn" id="testChord">Test Chord (C-E-G)</button>
+  <button class="btn" id="arpBtn">Arpeggio</button>
+</div>
+
+<div class="section-label">Bowed Strings — Wavetable (PeriodicWave)</div>
+<div class="grid" id="bowedGrid"></div>
+
+<div class="section-label">Plucked Strings — Karplus-Strong</div>
+<div class="grid" id="pluckedGrid"></div>
+
+<div class="section-label">Piano — Karplus-Strong (multi-string)</div>
+<div class="grid" id="pianoGrid"></div>
+
+<div class="section-label">Legacy Instruments (should still work)</div>
+<div class="grid" id="legacyGrid"></div>
+
+<div class="section-label">Console Log</div>
+<div class="log" id="log"></div>
+
+<div class="section-label">Keyboard</div>
+<div class="piano" id="piano"></div>
+
+<script src="../dist/3.1.0/chiptune-synth.min.js"></script>
+<script>
+// ── Init ──────────────────────────────────────────────────────────────────
+var synth = new ChiptuneSynth();
+var currentInstrument = 'violinNatural';
+var activeNoteId = null;
+var raf = null;
+
+function log(msg, cls) {
+  var el = document.getElementById('log');
+  var line = document.createElement('div');
+  line.className = cls || '';
+  line.textContent = new Date().toLocaleTimeString('fr', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) + '  ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+  if (el.children.length > 60) el.removeChild(el.firstChild);
+}
+
+function setStatus(msg) { document.getElementById('status').textContent = msg; }
+
+// ── Instrument definitions ────────────────────────────────────────────────
+var BOWED = [
+  { key: 'violinNatural',  label: 'Violin',         type: 'wavetable' },
+  { key: 'violinClassic',  label: 'Violin Classic',  type: 'wavetable' },
+  { key: 'violinJazz',     label: 'Violin Jazz',     type: 'wavetable' },
+  { key: 'violinLofi',     label: 'Violin Lo-Fi',    type: 'wavetable' },
+  { key: 'violaReal',      label: 'Viola',           type: 'wavetable' },
+  { key: 'celloNatural',   label: 'Cello',           type: 'wavetable' },
+  { key: 'celloJazz',      label: 'Cello Jazz',      type: 'wavetable' },
+  { key: 'celloLofi',      label: 'Cello Lo-Fi',     type: 'wavetable' },
+  { key: 'contrabass',     label: 'Contrabass',      type: 'wavetable' },
+  { key: 'contrabassJazz', label: 'Bass Jazz',       type: 'karplus'   },
+];
+var PLUCKED = [
+  { key: 'harp',           label: 'Harp',            type: 'karplus' },
+  { key: 'harpJazz',       label: 'Harp Jazz',       type: 'karplus' },
+  { key: 'harpCeltic',     label: 'Celtic Harp',     type: 'karplus' },
+  { key: 'harpAmbient',    label: 'Harp Ambient',    type: 'karplus' },
+  { key: 'acousticGuitar', label: 'Guitar Steel',    type: 'karplus' },
+  { key: 'nylonGuitar',    label: 'Guitar Nylon',    type: 'karplus' },
+  { key: 'guitarJazz',     label: 'Guitar Jazz',     type: 'karplus' },
+  { key: 'acousticBass',   label: 'Acoustic Bass',   type: 'karplus' },
+];
+var PIANO = [
+  { key: 'pianoAcoustic',  label: 'Piano Acoustic',  type: 'karplus' },
+  { key: 'pianoClassic',   label: 'Piano Concert',   type: 'karplus' },
+  { key: 'pianoJazz',      label: 'Piano Jazz',      type: 'karplus' },
+  { key: 'pianoLofi',      label: 'Piano Lo-Fi',     type: 'karplus' },
+  { key: 'pianoUpright',   label: 'Piano Upright',   type: 'karplus' },
+  { key: 'pianoBarRoom',   label: 'Piano Bar',       type: 'karplus' },
+];
+var LEGACY = [
+  { key: 'piano',         label: 'Piano (legacy)',     type: 'triangle' },
+  { key: 'violin',        label: 'Violin (legacy)',    type: 'sawtooth' },
+  { key: 'cello',         label: 'Cello (legacy)',     type: 'sawtooth' },
+  { key: 'electricGuitar',label: 'Elec. Guitar',       type: 'square'   },
+  { key: 'synthPad',      label: 'Synth Pad',          type: 'sawtooth' },
+];
+
+function buildGrid(list, gridId) {
+  var grid = document.getElementById(gridId);
+  list.forEach(function(ins) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.key = ins.key;
+    card.innerHTML =
+      '<div class="card-type">' + ins.type + '</div>' +
+      '<div class="card-name">' + ins.label + '</div>' +
+      '<div class="card-key">' + ins.key + '</div>';
+    card.addEventListener('click', function() { selectInstrument(ins.key); });
+    grid.appendChild(card);
+  });
+}
+
+buildGrid(BOWED,   'bowedGrid');
+buildGrid(PLUCKED, 'pluckedGrid');
+buildGrid(PIANO,   'pianoGrid');
+buildGrid(LEGACY,  'legacyGrid');
+
+// ── Select instrument ─────────────────────────────────────────────────────
+function selectInstrument(key) {
+  if (!synth.initialized) return;
+  document.querySelectorAll('.card').forEach(function(c){ c.classList.remove('active'); });
+  var card = document.querySelector('[data-key="' + key + '"]');
+  if (card) card.classList.add('active');
+
+  currentInstrument = key;
+  var ok = synth.loadInstrument(key, 0);
+  var t = synth.tracks[0];
+  var msg = ok
+    ? 'Loaded: ' + key + '  [type=' + t.type + (t.harmonics ? ', harmonics['+t.harmonics.length+']' : '') +
+      (t.bowNoise ? ', bowNoise' : '') +
+      (t.type === 'karplus' ? ', decay=' + t.karplusDecay + ' brightness=' + t.karplusBrightness : '') + ']'
+    : 'ERROR: instrument not found: ' + key;
+  setStatus(msg);
+  log(msg, ok ? 'info' : 'err');
+}
+
+// ── Piano keyboard ────────────────────────────────────────────────────────
+var NOTES = ['C','D','E','F','G','A','B'];
+var SHARPS = { C:'C#', D:'D#', F:'F#', G:'G#', A:'A#' };
+var piano = document.getElementById('piano');
+NOTES.forEach(function(n) {
+  var w = document.createElement('div');
+  w.className = 'key white'; w.textContent = n;
+  w.dataset.note = n;
+  addKeyListeners(w);
+  piano.appendChild(w);
+  if (SHARPS[n]) {
+    var b = document.createElement('div');
+    b.className = 'key black'; b.textContent = n+'#';
+    b.dataset.note = n+'#';
+    addKeyListeners(b);
+    piano.appendChild(b);
+  }
+});
+
+function addKeyListeners(el) {
+  el.addEventListener('pointerdown', function(e) {
+    e.preventDefault();
+    if (!synth.initialized) return;
+    var oct = parseInt(document.getElementById('oct').value);
+    el.classList.add('pressed');
+    if (activeNoteId) { synth.stopNote(activeNoteId); activeNoteId = null; }
+    activeNoteId = synth.playNoteByName(el.dataset.note, oct, 0, 30);
+    var card = document.querySelector('[data-key="' + currentInstrument + '"]');
+    if (card) { card.classList.add('playing'); setTimeout(function(){ card.classList.remove('playing'); }, 300); }
+  });
+  el.addEventListener('pointerup', function() {
+    el.classList.remove('pressed');
+    if (activeNoteId) { synth.stopNote(activeNoteId); activeNoteId = null; }
+  });
+}
+
+// ── Controls ──────────────────────────────────────────────────────────────
+document.getElementById('oct').addEventListener('input', function() {
+  document.getElementById('octVal').textContent = this.value;
+});
+document.getElementById('vol').addEventListener('input', function() {
+  if (synth.initialized) synth.setMasterVolume(parseFloat(this.value));
+});
+document.getElementById('stopAll').addEventListener('click', function() {
+  if (synth.initialized) { synth.stopAllNotes(); log('Stop All', 'info'); }
+});
+document.getElementById('testChord').addEventListener('click', function() {
+  if (!synth.initialized) return;
+  var oct = parseInt(document.getElementById('oct').value);
+  ['C','E','G'].forEach(function(n, i) {
+    setTimeout(function() { synth.playNoteByName(n, oct, 0, 1.5); }, i * 80);
+  });
+  log('Chord C-E-G at octave ' + oct, 'info');
+});
+document.getElementById('arpBtn').addEventListener('click', function() {
+  if (!synth.initialized) return;
+  var oct = parseInt(document.getElementById('oct').value);
+  var arpNotes = ['C','E','G','C','G','E','C'];
+  arpNotes.forEach(function(n, i) {
+    setTimeout(function() {
+      var o = i === 3 ? oct + 1 : oct;
+      synth.playNoteByName(n, o, 0, 0.3);
+    }, i * 180);
+  });
+  log('Arp C-E-G at octave ' + oct, 'info');
+});
+
+// ── Waveform visualizer ───────────────────────────────────────────────────
+var cv = document.getElementById('cv');
+var ctx2 = cv.getContext('2d');
+function draw() {
+  raf = requestAnimationFrame(draw);
+  cv.width = cv.clientWidth * devicePixelRatio;
+  cv.height = cv.clientHeight * devicePixelRatio;
+  ctx2.fillStyle = '#111';
+  ctx2.fillRect(0, 0, cv.width, cv.height);
+  if (!synth.initialized) return;
+  var data = synth.getWaveformData();
+  if (!data) return;
+  ctx2.strokeStyle = '#4ecdc4';
+  ctx2.lineWidth = 1.5;
+  ctx2.beginPath();
+  var sliceW = cv.width / data.length;
+  for (var i = 0; i < data.length; i++) {
+    var v = (data[i] / 128) - 1;
+    var y = (cv.height / 2) + v * (cv.height * 0.4);
+    i === 0 ? ctx2.moveTo(0, y) : ctx2.lineTo(i * sliceW, y);
+  }
+  ctx2.stroke();
+}
+draw();
+
+// ── Start ─────────────────────────────────────────────────────────────────
+document.getElementById('startBtn').addEventListener('click', function() {
+  synth.init().then(function() {
+    synth.setMasterVolume(parseFloat(document.getElementById('vol').value));
+    document.getElementById('overlay').style.display = 'none';
+    setStatus('Ready. Select an instrument and click piano keys to test.');
+    log('ChiptuneSynth ' + '3.1.0' + ' initialized', 'ok');
+
+    // Auto-verify all new instruments exist
+    var allNew = [
+      'violinNatural','violinClassic','violinJazz','violinLofi','violaReal',
+      'celloNatural','celloJazz','celloLofi','contrabass','contrabassJazz',
+      'harp','harpJazz','harpCeltic','harpAmbient',
+      'acousticGuitar','nylonGuitar','guitarJazz','acousticBass',
+      'pianoAcoustic','pianoClassic','pianoJazz','pianoLofi','pianoUpright','pianoBarRoom'
+    ];
+    var names = ChiptuneSynth.getInstrumentNames();
+    var missing = [], found = 0;
+    allNew.forEach(function(k) {
+      if (names.indexOf(k) === -1) missing.push(k);
+      else found++;
+    });
+    if (missing.length === 0) {
+      log('All 24 new instruments found ✓', 'ok');
+    } else {
+      log('MISSING: ' + missing.join(', '), 'err');
+    }
+    log('Total instruments: ' + names.length, 'info');
+
+    // Also verify legacy instruments still work
+    ['piano','violin','cello','flute','organ','brass','synthLead','synthPad','electricGuitar'].forEach(function(k) {
+      if (names.indexOf(k) === -1) log('MISSING legacy: ' + k, 'err');
+    });
+    log('Legacy instruments: OK', 'ok');
+
+    // Auto-select first instrument
+    selectInstrument('violinNatural');
+  }).catch(function(e) {
+    log('Init error: ' + e, 'err');
+  });
+});
+</script>
+</body>
+</html>

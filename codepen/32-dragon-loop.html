@@ -1,0 +1,201 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DRAGON LOOP — MEGA 8BIT</title><style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#000;overflow:hidden;font-family:'Press Start 2P',monospace}
+  canvas{display:block;position:fixed;inset:0;image-rendering:pixelated;cursor:crosshair}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(circle,transparent 20%,rgba(0,0,0,.8) 100%)}
+  #start{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:#000;transition:opacity .5s}
+  #start.hide{opacity:0;pointer-events:none}
+  .si{text-align:center;color:#0f0;padding:20px}
+  .si-title{font-size:24px;color:#ff0;margin-bottom:20px;text-shadow:4px 4px #a00}
+  .si-btn{background:#000;border:4px solid #0f0;color:#0f0;font-family:'Press Start 2P';padding:15px 30px;cursor:pointer}
+  .si-btn:hover{background:#0f0;color:#000}
+  #hud{position:fixed;top:20px;width:100%;display:flex;justify-content:space-around;z-index:10;color:#0f0;font-size:10px;opacity:0}
+  #hud.show{opacity:1}
+  </style></head><body>
+  
+  <canvas id="c"></canvas>
+  <div id="vignette"></div>
+  <div id="start">
+    <div class="si">
+      <div class="si-title">DRAGON LOOP 8-BIT</div>
+      <p style="font-size:8px; line-height:2">DRAGONS GÉANTS · PIXELS BRUTS<br>SCROLL = VITESSE · CLIC = FEU</p>
+      <button class="si-btn" id="btn-start">INSERT COIN</button>
+    </div>
+  </div>
+  <div id="hud">
+    <div>CYCLES: <span id="hud-cycles">000</span></div>
+    <div>SCORE: <span id="hud-score">00000</span></div>
+  </div>
+  
+  <script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-synth.min.js"></script>
+  <script>
+  /* ═══════════════════════════════════════════════════════════════   
+     DRAGON LOOP — VERSION MEGA 8-BIT (Correction)
+     ═══════════════════════════════════════════════════════════════ */
+  
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  
+  // --- RENDU BASSE RÉSOLUTION (Pour l'effet gros pixels) ---
+  const V_W = 400; 
+  const V_H = 225;
+  const buffer = document.createElement('canvas');
+  buffer.width = V_W;
+  buffer.height = V_H;
+  const bctx = buffer.getContext('2d');
+  bctx.imageSmoothingEnabled = false;
+  
+  let W, H, CX, CY, HALF;
+  function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      CX = V_W / 2;
+      CY = V_H / 2;
+      HALF = Math.min(V_W, V_H) * 0.6; 
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  
+  /* ── Paramètres Tunnel & Dragons ────────────────────────────── */
+  const N_RINGS = 8;
+  const Z_NEAR = 0.1;
+  const Z_FAR = 4.5;
+  const Z_RANGE = Z_FAR - Z_NEAR;
+  const PERSP = 0.6;
+  const R_WORLD = 3.2; // Dragons beaucoup plus grands
+  const BODY_ARC = Math.PI * 1.85;
+  
+  function zScale(z) { return PERSP / (z + PERSP); }
+  
+  let tunnelOfs = 0;
+  let tunnelSpeed = 0.4, tgtTunnel = 0.4;
+  let snakeSpeed = Math.PI / 4;
+  let driftT = 0;
+  let score = 0, cycles = 0;
+  
+  const PAL = [
+      { b1: '#00ff44', b2: '#008822', head: '#ffffff', eye: '#ff0000', spike: '#00ffcc' },
+      { b1: '#ff2244', b2: '#880011', head: '#ffffff', eye: '#ffee00', spike: '#ffaa00' },
+      { b1: '#00ccff', b2: '#004488', head: '#ffffff', eye: '#ff00ff', spike: '#00ffff' },
+      { b1: '#ffcc00', b2: '#aa6600', head: '#ffffff', eye: '#ff2200', spike: '#ffff00' }
+  ];
+  
+  const rings = Array.from({ length: N_RINGS }, (_, i) => ({
+      id: i,
+      zBase: Z_NEAR + (i / N_RINGS) * Z_RANGE,
+      headAngle: i * (Math.PI * 2 / N_RINGS),
+      rotDir: (i % 2 === 0) ? 1 : -1,
+      prevZ: 0
+  }));
+  
+  function ringZ(ring) { return Z_NEAR + ((ring.zBase - Z_NEAR + tunnelOfs) % Z_RANGE); }
+  
+  /* ── Fonctions de Dessin ─────────────────────────────────────── */
+  function pxRect(x, y, w, h, col) {
+      bctx.fillStyle = col;
+      bctx.fillRect(Math.floor(x), Math.floor(y), Math.floor(w), Math.floor(h));
+  }
+  
+  function drawDragonRing(ring, z, ox, oy) {
+      const sc = zScale(z);
+      const r = HALF * R_WORLD * sc;
+      const pal = PAL[ring.id % PAL.length];
+      
+      // Taille des blocs (Pixel Size) augmentée
+      const ps = Math.max(1.5, 12 * sc); 
+      const nSeg = 36; 
+  
+      // Simulation de profondeur par opacité brute (8-bit style)
+      bctx.globalAlpha = z < 1.5 ? 1 : 0.4;
+  
+      for (let i = 0; i <= nSeg; i++) {
+          const t = i / nSeg;
+          const ag = ring.headAngle - BODY_ARC * (1 - t);
+          
+          // Oscillation crantée
+          const x = ox + Math.cos(ag) * r;
+          const y = oy + Math.sin(ag) * r;
+  
+          // Corps massif en alternance de couleurs
+          const col = (i === nSeg) ? pal.head : (i % 2 === 0 ? pal.b1 : pal.b2);
+          const sSize = (i === nSeg) ? ps * 1.5 : ps;
+          
+          pxRect(x - sSize/2, y - sSize/2, sSize, sSize, col);
+          
+          // Grosses écailles dorsales
+          if (i % 4 === 0 && t > 0.1 && t < 0.9) {
+              pxRect(x - ps/3, y - ps * 1.2, ps * 0.7, ps * 0.7, pal.spike);
+          }
+      }
+      
+      // Oeil (1 pixel blanc/rouge)
+      const hx = ox + Math.cos(ring.headAngle) * r;
+      const hy = oy + Math.sin(ring.headAngle) * r;
+      pxRect(hx + (ps*0.2), hy - (ps*0.2), ps*0.4, ps*0.4, pal.eye);
+      
+      bctx.globalAlpha = 1;
+  }
+  
+  /* ── Moteur Audio & Boucle ───────────────────────────────────── */
+  const synth = new ChiptuneSynth();
+  let audioReady = false;
+  
+  async function init() {
+      document.getElementById('start').classList.add('hide');
+      document.getElementById('hud').classList.add('show');
+      await synth.init();
+      synth.setMasterVolume(0.3);
+      audioReady = true;
+      animate(0);
+  }
+  document.getElementById('btn-start').onclick = init;
+  
+  function animate(ts) {
+      requestAnimationFrame(animate);
+      const dt = 0.016; // Fixe pour stabilité 8-bit
+  
+      tunnelOfs += tunnelSpeed * dt;
+      driftT += dt;
+  
+      // Légère vibration de caméra
+      const ox = CX + Math.sin(driftT * 2) * 2;
+      const oy = CY + Math.cos(driftT * 1.5) * 2;
+  
+      // 1. Fond
+      bctx.fillStyle = '#000';
+      bctx.fillRect(0, 0, V_W, V_H);
+  
+      // 2. Grille de fond (Grid)
+      bctx.fillStyle = '#001a00';
+      for(let i=0; i<V_W; i+=16) bctx.fillRect(i, 0, 1, V_H);
+      for(let i=0; i<V_H; i+=16) bctx.fillRect(0, i, V_W, 1);
+  
+      // 3. Dragons
+      const sorted = rings.map(r => ({ r, z: ringZ(r) })).sort((a, b) => b.z - a.z);
+      
+      for (const { r, z } of sorted) {
+          r.headAngle += snakeSpeed * dt * r.rotDir;
+          drawDragonRing(r, z, ox, oy);
+          
+          // Détection de cycle
+          if(r.prevZ > 0 && r.prevZ < 0.2 && z > 3) {
+              cycles++;
+              score += 100;
+              document.getElementById('hud-cycles').textContent = String(cycles).padStart(3, '0');
+              document.getElementById('hud-score').textContent = String(score).padStart(5, '0');
+          }
+          r.prevZ = z;
+      }
+  
+      // 4. Mise à l'échelle finale vers le grand canvas
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(buffer, 0, 0, V_W, V_H, 0, 0, W, H);
+  }
+  
+  // Input Vitesse
+  window.addEventListener('wheel', e => {
+      tunnelSpeed = Math.max(0.1, Math.min(2.5, tunnelSpeed + e.deltaY * -0.001));
+  });
+  </script></body></html>

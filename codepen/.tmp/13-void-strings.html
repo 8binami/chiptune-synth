@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Void Strings — #cpc-string</title>
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  CodePen Challenge: Code Words — Week 1: STRINGS         ║
+  ║                                                          ║
+  ║  Void Strings — Full immersive mouse-driven instrument   ║
+  ║                                                          ║
+  ║  · Move cursor → bow the strings (Y=pitch, X=timbre)     ║
+  ║  · Speed → vibrato intensity + particle emission         ║
+  ║  · Click → chord burst + explosion                       ║
+  ║  · All Web Audio effects: delay, reverb, filter, comp    ║
+  ║  · Particle system, ripples, trails, ambient glow        ║
+  ║                                                          ║
+  ║  Tags: cpc-string  codepenchallenge                      ║
+  ╚══════════════════════════════════════════════════════════╝
+  No external dependencies — pure Web Audio + Canvas
+-->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#030308}
+canvas{display:block;cursor:none}
+
+/* HUD */
+#hud{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  font-family:'Courier New',monospace;text-align:center;
+  pointer-events:none;letter-spacing:2px;
+}
+#hud .note-name{
+  font-size:1.1rem;font-weight:700;
+  text-shadow:0 0 20px currentColor;
+  transition:color .15s;
+}
+#hud .hint{font-size:.52rem;color:rgba(255,255,255,.2);margin-top:4px}
+#hud .tags{font-size:.44rem;color:rgba(255,255,255,.1);margin-top:3px}
+
+/* Corner waveform */
+#waveBox{
+  position:fixed;top:14px;right:14px;
+  border:1px solid rgba(255,255,255,.06);border-radius:8px;
+  background:rgba(0,0,0,.4);overflow:hidden;
+}
+#waveBox canvas{display:block}
+
+/* Overlay */
+#overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(2,2,8,.97);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;gap:18px;
+}
+#overlay h1{
+  font-family:'Courier New',monospace;
+  font-size:2.2rem;color:#00f0ff;letter-spacing:6px;
+  text-shadow:0 0 60px rgba(0,240,255,.6);
+}
+#overlay .sub{
+  font-family:'Courier New',monospace;
+  font-size:.75rem;color:rgba(255,255,255,.3);letter-spacing:2px;
+}
+#overlay .enter{
+  font-family:'Courier New',monospace;
+  font-size:.7rem;color:#a855f7;
+  border:1px solid rgba(168,85,247,.3);border-radius:10px;
+  padding:11px 32px;
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:.5;box-shadow:none}50%{opacity:1;box-shadow:0 0 30px rgba(168,85,247,.3)}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div class="note-name" id="noteHud" style="color:#00f0ff">—</div>
+  <div class="hint">move to bow · click to burst</div>
+  <div class="tags">#cpc-string · #codepenchallenge</div>
+</div>
+
+<div id="waveBox">
+  <canvas id="cvMini" width="120" height="40"></canvas>
+</div>
+
+<div id="overlay">
+  <h1>VOID STRINGS</h1>
+  <div class="sub">Every string is a string</div>
+  <div class="enter">▶ Enter the void</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════
+   VOID STRINGS — Immersive mouse-driven string instrument
+   ═══════════════════════════════════════════════════════════ */
+
+/* ─── Canvas setup ─── */
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = cv.width  = window.innerWidth;
+let H = cv.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  W = cv.width  = window.innerWidth;
+  H = cv.height = window.innerHeight;
+  buildStringPositions();
+});
+
+/* ─── Mini waveform ─── */
+const cvMini = document.getElementById('cvMini');
+const ctxM   = cvMini.getContext('2d');
+
+/* ─── String definitions ─── A minor pentatonic across 3 octaves ─── */
+const STRING_DATA = [
+  { note:'C6',  freq:1046.50, color:'#ff6eb4', rgb:[255,110,180] },
+  { note:'A5',  freq:880.00,  color:'#fb923c', rgb:[251,146,60]  },
+  { note:'G5',  freq:784.00,  color:'#facc15', rgb:[250,204,21]  },
+  { note:'E5',  freq:659.25,  color:'#a3e635', rgb:[163,230,53]  },
+  { note:'D5',  freq:587.33,  color:'#34d399', rgb:[52,211,153]  },
+  { note:'C5',  freq:523.25,  color:'#22d3ee', rgb:[34,211,238]  },
+  { note:'A4',  freq:440.00,  color:'#00f0ff', rgb:[0,240,255]   },
+  { note:'G4',  freq:392.00,  color:'#38bdf8', rgb:[56,189,248]  },
+  { note:'E4',  freq:329.63,  color:'#818cf8', rgb:[129,140,248] },
+  { note:'D4',  freq:293.66,  color:'#a855f7', rgb:[168,85,247]  },
+  { note:'C4',  freq:261.63,  color:'#e879f9', rgb:[232,121,249] },
+  { note:'A3',  freq:220.00,  color:'#f472b6', rgb:[244,114,182] },
+];
+const N_STRINGS = STRING_DATA.length;
+
+let stringY = []; // Y positions on screen
+function buildStringPositions() {
+  const margin = H * 0.12;
+  stringY = STRING_DATA.map((_, i) =>
+    margin + (i / (N_STRINGS - 1)) * (H - margin * 2)
+  );
+}
+buildStringPositions();
+
+/* ─── Mouse state ─── */
+const mouse = { x: W/2, y: H/2, px: W/2, py: H/2, vx:0, vy:0, speed:0, down:false };
+const ACTIVATION_RADIUS = H / (N_STRINGS * 1.6);
+
+document.addEventListener('mousemove', e => {
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  mouse.vx = mouse.x - mouse.px;
+  mouse.vy = mouse.y - mouse.py;
+  mouse.speed = Math.sqrt(mouse.vx*mouse.vx + mouse.vy*mouse.vy);
+});
+document.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  mouse.vx = mouse.x - mouse.px; mouse.vy = mouse.y - mouse.py;
+  mouse.speed = Math.sqrt(mouse.vx*mouse.vx + mouse.vy*mouse.vy);
+}, { passive:false });
+document.addEventListener('mousedown',  () => { mouse.down = true; });
+document.addEventListener('mouseup',    () => { mouse.down = false; });
+document.addEventListener('touchstart', e => { mouse.down = true; const t=e.touches[0]; mouse.x=t.clientX; mouse.y=t.clientY; });
+document.addEventListener('touchend',   () => { mouse.down = false; });
+
+/* ═══════════════════════════════════════════════════════════
+   AUDIO ENGINE
+   ═══════════════════════════════════════════════════════════ */
+let AC, ready = false;
+let strOsc = [], strGain = [], vibLFO = [], vibGain = [];
+let strBus, masterFilter, delayNode, delayFeedGain, delayWet;
+let reverbNode, reverbWet, dryGain, comp, analyser;
+const strIntensity = new Float32Array(N_STRINGS); // 0..1
+
+/* ── Violin PeriodicWave ── */
+function buildViolinWave() {
+  const amps = [0, 1.0, 0.88, 0.72, 0.55, 0.42, 0.32, 0.22, 0.16, 0.10, 0.07, 0.04, 0.02];
+  const n = amps.length;
+  const re = new Float32Array(n), im = new Float32Array(n);
+  amps.forEach((a,i) => im[i] = a);
+  return AC.createPeriodicWave(re, im);
+}
+
+/* ── Reverb impulse ── */
+function buildIR() {
+  const sr = AC.sampleRate, len = Math.floor(sr * 3.2);
+  const buf = AC.createBuffer(2, len, sr);
+  for (let c = 0; c < 2; c++) {
+    const d = buf.getChannelData(c);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      d[i] = (Math.random()*2-1) * Math.exp(-3.0*t);
+      if (t < 0.06) d[i] += (Math.random()*2-1) * 0.5 * Math.exp(-35*t);
+      if (t > 0.1 && t < 0.35) d[i] += (Math.random()*2-1) * 0.12 * Math.exp(-6*(t-0.1));
+    }
+  }
+  return buf;
+}
+
+async function initAudio() {
+  if (ready) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  await AC.resume();
+
+  const wave = buildViolinWave();
+
+  /* ── Analyser ── */
+  analyser = AC.createAnalyser();
+  analyser.fftSize = 1024;
+  analyser.smoothingTimeConstant = 0.88;
+
+  /* ── String oscillators (always running, gain = 0 by default) ── */
+  strBus = AC.createGain();
+  strBus.gain.value = 1;
+
+  const bowNoise = (() => {
+    // Shared noise buffer for bow texture
+    const len = Math.floor(AC.sampleRate * 0.5);
+    const b = AC.createBuffer(1, len, AC.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random()*2-1;
+    return b;
+  })();
+
+  STRING_DATA.forEach((s, i) => {
+    /* Main oscillator */
+    const osc = AC.createOscillator();
+    osc.setPeriodicWave(wave);
+    osc.frequency.value = s.freq;
+
+    /* Vibrato LFO per voice */
+    const lfo = AC.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 5.2 + Math.random() * 1.2;
+    const vg = AC.createGain();
+    vg.gain.value = 0;
+    lfo.connect(vg);
+    vg.connect(osc.frequency);
+
+    /* Gain envelope */
+    const g = AC.createGain();
+    g.gain.value = 0;
+
+    osc.connect(g);
+    g.connect(strBus);
+
+    osc.start();
+    lfo.start();
+
+    strOsc.push(osc);
+    strGain.push(g);
+    vibLFO.push(lfo);
+    vibGain.push(vg);
+  });
+
+  /* ── Master filter (X-controlled lowpass) ── */
+  masterFilter = AC.createBiquadFilter();
+  masterFilter.type = 'lowpass';
+  masterFilter.frequency.value = 4000;
+  masterFilter.Q.value = 1.2;
+
+  /* ── Delay with feedback ── */
+  delayNode     = AC.createDelay(2);
+  delayNode.delayTime.value = 0.28;
+  delayFeedGain = AC.createGain();
+  delayFeedGain.gain.value = 0.38;
+  delayWet      = AC.createGain();
+  delayWet.gain.value = 0.28;
+
+  delayNode.connect(delayFeedGain);
+  delayFeedGain.connect(delayNode); // feedback loop
+  delayNode.connect(delayWet);
+
+  /* ── Reverb ── */
+  reverbNode = AC.createConvolver();
+  reverbNode.buffer = buildIR();
+  reverbWet  = AC.createGain();
+  reverbWet.gain.value = 0.42;
+
+  /* ── Dry path ── */
+  dryGain = AC.createGain();
+  dryGain.gain.value = 0.55;
+
+  /* ── Compressor ── */
+  comp = AC.createDynamicsCompressor();
+  comp.threshold.value = -20;
+  comp.knee.value = 25;
+  comp.ratio.value = 5;
+  comp.attack.value = 0.005;
+  comp.release.value = 0.2;
+
+  /* ── Chain ──
+     strBus → masterFilter → dryGain → comp → analyser → dest
+                           → delayNode → delayWet → comp
+                           → reverbNode → reverbWet → comp
+  */
+  strBus.connect(masterFilter);
+  masterFilter.connect(dryGain);
+  masterFilter.connect(delayNode);
+  masterFilter.connect(reverbNode);
+  dryGain.connect(comp);
+  delayWet.connect(comp);
+  reverbWet.connect(comp);
+  reverbNode.connect(reverbWet);
+  comp.connect(analyser);
+  analyser.connect(AC.destination);
+
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+/* ── Update audio every frame ── */
+function updateAudio() {
+  if (!ready) return;
+  const now = AC.currentTime;
+
+  // Filter: X position → cutoff (300 → 9000 Hz)
+  const cutoff = 300 + (mouse.x / W) * 8700;
+  masterFilter.frequency.setTargetAtTime(cutoff, now, 0.05);
+
+  // Global vibrato depth from speed
+  const vibDepth = Math.min(mouse.speed * 0.15, 8);
+
+  STRING_DATA.forEach((s, i) => {
+    const dist = Math.abs(mouse.y - stringY[i]);
+    const target = Math.max(0, 1 - dist / ACTIVATION_RADIUS);
+    const targetGain = target * 0.18;
+
+    // Smooth gain
+    strGain[i].gain.setTargetAtTime(targetGain, now, 0.04);
+    strIntensity[i] = target;
+
+    // X position → pitch bend (±60 cents across screen)
+    const bend = (mouse.x / W - 0.5) * 60;
+    strOsc[i].detune.setTargetAtTime(bend, now, 0.05);
+
+    // Vibrato depth scales with speed
+    vibGain[i].gain.setTargetAtTime(
+      target > 0.05 ? s.freq * vibDepth * 0.0006 : 0,
+      now, 0.08
+    );
+  });
+}
+
+/* ── Chord burst on click ── */
+function triggerBurst() {
+  if (!ready) return;
+  const now = AC.currentTime;
+  // Flash all strings briefly
+  STRING_DATA.forEach((s, i) => {
+    strGain[i].gain.setTargetAtTime(0.25, now, 0.005);
+    strGain[i].gain.setTargetAtTime(0, now + 0.3, 0.1);
+  });
+  addExplosion(mouse.x, mouse.y);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PARTICLE SYSTEMS
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Trail ── */
+const trail = [];
+const TRAIL_LEN = 45;
+
+/* ── Floating particles ── */
+const particles = [];
+const MAX_PARTICLES = 400;
+
+function addParticle(x, y, color, vx, vy, size, life) {
+  if (particles.length >= MAX_PARTICLES) particles.splice(0, 5);
+  particles.push({ x, y, vx, vy, color, size, life, maxLife: life });
+}
+
+/* ── Ripples ── */
+const ripples = [];
+
+function addRipple(x, y, color, maxR) {
+  ripples.push({ x, y, color, r: 2, maxR: maxR || 100, alpha: 1 });
+}
+
+/* ── Explosion ── */
+function addExplosion(x, y) {
+  for (let i = 0; i < 60; i++) {
+    const angle = (i / 60) * Math.PI * 2 + Math.random() * 0.3;
+    const speed = 2 + Math.random() * 6;
+    const sd = STRING_DATA[Math.floor(Math.random() * N_STRINGS)];
+    addParticle(x, y, sd.color,
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed,
+      1.5 + Math.random() * 3,
+      0.8 + Math.random() * 0.5
+    );
+  }
+  STRING_DATA.forEach(s => addRipple(x, y, s.color, 80 + Math.random() * 80));
+}
+
+/* ── String activation particles ── */
+let lastParticleTime = 0;
+function emitStringParticles(i) {
+  const now = performance.now();
+  if (now - lastParticleTime < 30) return;
+  lastParticleTime = now;
+
+  const s = STRING_DATA[i];
+  const nx = mouse.x + (Math.random() - 0.5) * 40;
+  const ny = stringY[i];
+
+  addParticle(nx, ny, s.color,
+    (Math.random() - 0.5) * 1.5,
+    -(Math.random() * 2 + 0.5),
+    1 + Math.random() * 2,
+    0.6 + Math.random() * 0.6
+  );
+
+  if (mouse.speed > 3) {
+    addRipple(nx, ny, s.color, 30 + mouse.speed * 2);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DRAW
+   ═══════════════════════════════════════════════════════════ */
+
+let animT = 0;
+
+function draw() {
+  animT += 0.016;
+  requestAnimationFrame(draw);
+
+  /* ── Background ── */
+  ctx.fillStyle = 'rgba(3,3,8,0.88)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Ambient glow from active strings
+  let activeNote = null, activeColor = null;
+  STRING_DATA.forEach((s, i) => {
+    const intensity = strIntensity[i];
+    if (intensity < 0.02) return;
+    if (!activeNote || intensity > strIntensity[STRING_DATA.indexOf(activeNote)]) {
+      activeNote = s; activeColor = s.color;
+    }
+    const grd = ctx.createRadialGradient(mouse.x, stringY[i], 0, mouse.x, stringY[i], W * 0.5);
+    grd.addColorStop(0, `rgba(${s.rgb[0]},${s.rgb[1]},${s.rgb[2]},${intensity * 0.08})`);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+  });
+
+  /* ── Ripples ── */
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i];
+    r.r += 2.5;
+    r.alpha = Math.pow(1 - r.r / r.maxR, 1.4);
+    if (r.alpha <= 0) { ripples.splice(i, 1); continue; }
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.alpha * 0.7;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  /* ── Strings ── */
+  STRING_DATA.forEach((s, i) => {
+    const sy   = stringY[i];
+    const intens = strIntensity[i];
+    const [sr,sg,sb] = s.rgb;
+
+    if (intens > 0.01) emitStringParticles(i);
+
+    // Glow layers behind active string
+    if (intens > 0.02) {
+      for (let gl = 2; gl >= 0; gl--) {
+        const gAlpha = intens * (0.08 - gl * 0.02);
+        const gBlur  = (gl + 1) * 8 * intens;
+        ctx.shadowBlur  = gBlur;
+        ctx.shadowColor = s.color;
+        ctx.beginPath();
+        ctx.moveTo(0, sy); ctx.lineTo(W, sy);
+        ctx.strokeStyle = `rgba(${sr},${sg},${sb},${gAlpha * 3})`;
+        ctx.lineWidth = (gl + 1) * 4 * intens;
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    // String line (sine wave when active)
+    ctx.beginPath();
+    for (let x = 0; x < W; x += 2) {
+      const distFromCursor = Math.abs(x - mouse.x);
+      const env = Math.exp(-distFromCursor * 0.004) * intens;
+      const phase = animT * (6 + s.freq * 0.002) + x * 0.04;
+      const amplitude = env * 18 * (1 + mouse.speed * 0.04);
+      const y = sy + Math.sin(phase) * amplitude;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    const alpha = 0.15 + intens * 0.8;
+    ctx.strokeStyle = `rgba(${sr},${sg},${sb},${alpha})`;
+    ctx.lineWidth   = 0.8 + intens * 2.2;
+    ctx.shadowBlur  = intens * 12;
+    ctx.shadowColor = s.color;
+    ctx.stroke();
+    ctx.shadowBlur  = 0;
+
+    // Node dots at edges
+    const dotA = 0.12 + intens * 0.6;
+    ctx.beginPath();
+    ctx.arc(0, sy, 3 + intens * 3, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(${sr},${sg},${sb},${dotA})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(W, sy, 3 + intens * 3, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  /* ── Cursor trail ── */
+  trail.push({ x: mouse.x, y: mouse.y });
+  if (trail.length > TRAIL_LEN) trail.shift();
+
+  trail.forEach((pt, ti) => {
+    const progress = ti / trail.length;
+    const a = progress * progress * 0.6;
+    const size = progress * 4;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, size, 0, Math.PI * 2);
+    const hue = 180 + (mouse.x / W) * 120;
+    ctx.fillStyle = `hsla(${hue},100%,70%,${a})`;
+    ctx.fill();
+  });
+
+  /* ── Particles ── */
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.04;
+    p.vx *= 0.98;
+    p.life -= 0.018;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    const a = (p.life / p.maxLife) * (p.life / p.maxLife);
+    ctx.globalAlpha = a;
+    ctx.fillStyle   = p.color;
+    ctx.shadowBlur  = 6;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * (p.life / p.maxLife), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur  = 0;
+
+  /* ── Cursor orb ── */
+  const hue = 180 + (mouse.x / W) * 120;
+  const orbColor = `hsl(${hue},100%,70%)`;
+
+  // Outer glow
+  const grd = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 30 + mouse.speed);
+  grd.addColorStop(0,   `hsla(${hue},100%,80%,0.2)`);
+  grd.addColorStop(0.5, `hsla(${hue},100%,70%,0.08)`);
+  grd.addColorStop(1,   'transparent');
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(mouse.x, mouse.y, 30 + mouse.speed, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Core dot
+  ctx.beginPath();
+  ctx.arc(mouse.x, mouse.y, 3.5 + mouse.speed * 0.1, 0, Math.PI * 2);
+  ctx.fillStyle  = orbColor;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = orbColor;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Crosshair lines
+  ctx.strokeStyle = `hsla(${hue},100%,70%,0.35)`;
+  ctx.lineWidth = 0.6;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(mouse.x - 14, mouse.y); ctx.lineTo(mouse.x + 14, mouse.y);
+  ctx.moveTo(mouse.x, mouse.y - 14); ctx.lineTo(mouse.x, mouse.y + 14);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* ── HUD note name ── */
+  let closestI = 0, closestD = Infinity;
+  STRING_DATA.forEach((_, i) => {
+    const d = Math.abs(mouse.y - stringY[i]);
+    if (d < closestD) { closestD = d; closestI = i; }
+  });
+  const s = STRING_DATA[closestI];
+  const hudNote = document.getElementById('noteHud');
+  if (strIntensity[closestI] > 0.05) {
+    hudNote.textContent = s.note;
+    hudNote.style.color = s.color;
+  } else {
+    hudNote.textContent = '—';
+    hudNote.style.color = '#00f0ff';
+  }
+
+  /* ── Mini waveform ── */
+  ctxM.fillStyle = 'rgba(0,0,0,0.6)';
+  ctxM.fillRect(0, 0, 120, 40);
+  if (ready && analyser) {
+    const wData = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(wData);
+    ctxM.beginPath();
+    ctxM.strokeStyle = activeColor || '#00f0ff';
+    ctxM.lineWidth = 1.2;
+    const step = wData.length / 120;
+    for (let i = 0; i < 120; i++) {
+      const v = wData[Math.floor(i*step)] / 128 - 1;
+      const y = 20 + v * 17;
+      i === 0 ? ctxM.moveTo(0, y) : ctxM.lineTo(i, y);
+    }
+    ctxM.stroke();
+  }
+
+  /* ── Audio update ── */
+  updateAudio();
+}
+
+/* ── Click handler ── */
+cv.addEventListener('click', async () => {
+  if (!ready) { await initAudio(); return; }
+  triggerBurst();
+});
+
+/* ── Overlay ── */
+document.getElementById('overlay').addEventListener('click', async () => {
+  await initAudio();
+});
+
+/* ── Start ── */
+draw();
+</script>
+</body>
+</html>

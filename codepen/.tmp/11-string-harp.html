@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Code Strings — #cpc-string</title>
+<!--
+  ╔══════════════════════════════════════════════════════╗
+  ║  CodePen Challenge: Code Words — Week 1: STRINGS     ║
+  ║  Every string is a string.                           ║
+  ║  Pluck the harp. Each string = a JS string method.   ║
+  ║                                                      ║
+  ║  Tags: cpc-string  codepenchallenge                  ║
+  ╚══════════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Scripts:
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js
+-->
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --bg:#08080e;
+  --surface:#111118;
+  --border:rgba(255,255,255,.07);
+  --cyan:#00f0ff;
+  --violet:#a855f7;
+  --pink:#ff6eb4;
+  --amber:#ffb347;
+  --dim:#55556a;
+  --text:#d0d0e0;
+}
+
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Courier New',monospace;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:100vh;overflow:hidden;user-select:none;padding:20px;
+}
+
+/* ── Header ── */
+.header{text-align:center;margin-bottom:16px}
+.header h1{font-size:1.5rem;color:var(--cyan);letter-spacing:3px;text-shadow:0 0 30px rgba(0,240,255,.4)}
+.header p{font-size:.58rem;color:var(--dim);margin-top:5px;letter-spacing:1px}
+
+/* ── Container ── */
+.container{
+  background:linear-gradient(160deg,#0d0d14,#111118);
+  border:1px solid var(--border);border-radius:16px;
+  padding:24px;width:min(700px,96vw);
+  box-shadow:0 0 80px rgba(0,240,255,.03),0 20px 40px rgba(0,0,0,.5);
+}
+
+/* ── Waveform ── */
+canvas#wave{
+  width:100%;height:55px;display:block;
+  border-radius:8px;border:1px solid rgba(255,255,255,.04);
+  margin-bottom:22px;background:#060609;
+}
+
+/* ── Harp ── */
+.harp{
+  display:flex;justify-content:center;align-items:stretch;
+  height:230px;position:relative;margin-bottom:20px;padding:0 8px;
+}
+
+/* Bridge rails */
+.harp::before,.harp::after{
+  content:'';position:absolute;left:20px;right:20px;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),rgba(255,255,255,.08),transparent);
+  border-radius:2px;
+}
+.harp::before{top:28px}
+.harp::after{bottom:28px}
+
+/* ── String wrapper ── */
+.str-wrap{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:space-between;padding:0 3px;cursor:pointer;
+}
+
+/* Labels */
+.str-top{
+  height:28px;font-size:.48rem;color:var(--dim);
+  display:flex;align-items:center;justify-content:center;
+  text-align:center;line-height:1.2;transition:color .2s;
+}
+.str-bot{
+  height:28px;font-size:.52rem;color:var(--dim);
+  display:flex;align-items:center;justify-content:center;
+  transition:color .2s;
+}
+
+/* Code badge */
+.str-top code{
+  background:rgba(255,255,255,.05);border-radius:3px;
+  padding:1px 4px;border:1px solid rgba(255,255,255,.08);
+  font-family:inherit;font-size:inherit;
+  transition:background .2s,border-color .2s,color .2s;
+}
+
+/* The string line */
+.str-line{
+  flex:1;width:2px;border-radius:2px;position:relative;
+  transition:filter .3s;
+}
+
+/* Pluck animation */
+@keyframes pluck{
+  0%  {transform:translateX(0)   scaleX(1);   filter:blur(0px)}
+  7%  {transform:translateX(10px) scaleX(6);  filter:blur(2.5px)}
+  18% {transform:translateX(-8px) scaleX(4.5);filter:blur(1.8px)}
+  29% {transform:translateX(6px)  scaleX(3.5);filter:blur(1.2px)}
+  40% {transform:translateX(-4px) scaleX(2.5);filter:blur(.7px)}
+  52% {transform:translateX(3px)  scaleX(2);  filter:blur(.4px)}
+  64% {transform:translateX(-2px) scaleX(1.5);filter:blur(.2px)}
+  76% {transform:translateX(1px)  scaleX(1.2)}
+  88% {transform:translateX(0)    scaleX(1.05)}
+  100%{transform:translateX(0)    scaleX(1);  filter:blur(0px)}
+}
+
+.str-wrap.plucking .str-line{
+  animation:pluck .95s ease-out forwards;
+}
+
+/* Active state labels */
+.str-wrap.plucking .str-top,
+.str-wrap:hover .str-top{color:var(--text)}
+.str-wrap.plucking .str-top code{
+  background:rgba(0,240,255,.1);
+  border-color:rgba(0,240,255,.35);
+  color:var(--cyan);
+}
+.str-wrap.plucking .str-bot,
+.str-wrap:hover .str-bot{color:var(--cyan)}
+
+/* ── Controls ── */
+.controls{
+  display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;
+}
+.ctrl-btn{
+  padding:6px 16px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--dim);font-size:.62rem;font-family:inherit;
+  cursor:pointer;transition:.15s;white-space:nowrap;
+}
+.ctrl-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.ctrl-btn.active{
+  border-color:var(--cyan);color:var(--cyan);
+  background:rgba(0,240,255,.08);box-shadow:0 0 14px rgba(0,240,255,.15);
+}
+.ctrl-select{
+  padding:6px 10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--dim);font-size:.62rem;font-family:inherit;
+  cursor:pointer;outline:none;transition:.15s;
+}
+.ctrl-select:hover{border-color:var(--violet);color:var(--violet)}
+.bpm-display{
+  font-size:.62rem;color:var(--amber);min-width:62px;text-align:center;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:6px 10px;
+}
+
+/* ── Overlay ── */
+.overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(4,4,10,.94);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;gap:14px;
+}
+.overlay h2{font-size:1.9rem;color:var(--cyan);letter-spacing:4px;text-shadow:0 0 40px rgba(0,240,255,.5)}
+.overlay .sub{font-size:.75rem;color:var(--dim)}
+.overlay .hint{
+  font-size:.65rem;color:var(--violet);
+  border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:8px 22px;
+  animation:blink 1.6s ease-in-out infinite;
+}
+@keyframes blink{0%,100%{opacity:.4}50%{opacity:1}}
+.hidden{display:none!important}
+
+/* ── Footer ── */
+.foot{margin-top:14px;font-size:.5rem;color:#1e1e2e;text-align:center}
+.foot a{color:#00f0ff18;text-decoration:none}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<div class="overlay" id="overlay">
+  <h2>🎻 CODE STRINGS</h2>
+  <div class="sub">Every string is a string.</div>
+  <div class="hint">▶ Click to pluck</div>
+</div>
+
+<div class="header">
+  <h1>🎻 CODE STRINGS</h1>
+  <p>Every string is a string &nbsp;·&nbsp; #cpc-string &nbsp;·&nbsp; #codepenchallenge</p>
+</div>
+
+<div class="container">
+  <canvas id="wave"></canvas>
+  <div class="harp" id="harp"></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnStrum">⟡ STRUM ALL</button>
+    <select class="ctrl-select" id="selInst"></select>
+    <button class="ctrl-btn" id="btnBpmDown">−</button>
+    <div class="bpm-display" id="bpmDisplay">120 BPM</div>
+    <button class="ctrl-btn" id="btnBpmUp">+</button>
+  </div>
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth</a> — @8bitforge</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+const synth = new ChiptuneSynth();
+let ready = false;
+let strumming = false;
+let strumTimer = null;
+let bpm = 120;
+
+/* ── String definitions (pentatonic C4→A5) ── */
+const STRINGS = [
+  { note:'C', octave:4, label:'"string"',   color:'#00f0ff' },
+  { note:'E', octave:4, label:'.length',    color:'#38bdf8' },
+  { note:'G', octave:4, label:'.split()',   color:'#818cf8' },
+  { note:'A', octave:4, label:'.join()',    color:'#a855f7' },
+  { note:'C', octave:5, label:'.trim()',    color:'#c084fc' },
+  { note:'E', octave:5, label:'.slice()',   color:'#f472b6' },
+  { note:'G', octave:5, label:'.concat()', color:'#fb923c' },
+  { note:'A', octave:5, label:'.replace()',color:'#facc15' },
+];
+
+/* ── Build harp ── */
+const harpEl = document.getElementById('harp');
+const strEls = [];
+
+STRINGS.forEach((s, i) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'str-wrap';
+  wrap.innerHTML =
+    `<div class="str-top"><code>${s.label}</code></div>` +
+    `<div class="str-line" style="background:linear-gradient(to bottom,transparent 0%,${s.color} 20%,${s.color} 80%,transparent 100%)"></div>` +
+    `<div class="str-bot">${s.note}${s.octave}</div>`;
+
+  wrap.addEventListener('pointerdown', async (e) => {
+    e.preventDefault();
+    await ensureReady();
+    pluck(i);
+  });
+
+  harpEl.appendChild(wrap);
+  strEls.push(wrap);
+});
+
+/* ── Pluck ── */
+function pluck(i) {
+  if (!ready) return;
+  const el = strEls[i];
+  const s = STRINGS[i];
+
+  el.classList.remove('plucking');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('plucking');
+
+  const dur = Math.max(0.2, (60 / bpm) * 1.4);
+  synth.playNoteByName(s.note, s.octave, 0, dur);
+
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('plucking'), 1000);
+}
+
+/* ── Strum ── */
+document.getElementById('btnStrum').addEventListener('click', async () => {
+  await ensureReady();
+  if (strumming) { stopStrum(); } else { startStrum(); }
+});
+
+function startStrum() {
+  strumming = true;
+  const btn = document.getElementById('btnStrum');
+  btn.textContent = '■ STOP';
+  btn.classList.add('active');
+  let idx = 0;
+  const ms = (60000 / bpm) / 2; // 8th notes
+  (function step() {
+    if (!strumming) return;
+    pluck(idx % STRINGS.length);
+    idx++;
+    strumTimer = setTimeout(step, ms);
+  })();
+}
+
+function stopStrum() {
+  strumming = false;
+  clearTimeout(strumTimer);
+  const btn = document.getElementById('btnStrum');
+  btn.textContent = '⟡ STRUM ALL';
+  btn.classList.remove('active');
+  synth.stopAllNotes();
+}
+
+/* ── BPM ── */
+const bpmDisplay = document.getElementById('bpmDisplay');
+
+document.getElementById('btnBpmDown').addEventListener('click', () => {
+  bpm = Math.max(40, bpm - 10);
+  bpmDisplay.textContent = bpm + ' BPM';
+});
+document.getElementById('btnBpmUp').addEventListener('click', () => {
+  bpm = Math.min(240, bpm + 10);
+  bpmDisplay.textContent = bpm + ' BPM';
+});
+
+/* ── Instrument select ── */
+const selInst = document.getElementById('selInst');
+const PREF_INST = ['violin','cello','synthPad','synthLead','piano'];
+
+(function buildInstruments() {
+  let names;
+  try { names = ChiptuneSynth.getInstrumentNames(); } catch(e) { names = []; }
+  if (!names.length) names = PREF_INST;
+  const sorted = [...PREF_INST.filter(n => names.includes(n)), ...names.filter(n => !PREF_INST.includes(n))];
+  sorted.forEach(n => {
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = n.charAt(0).toUpperCase() + n.slice(1).replace(/([A-Z])/g, ' $1');
+    selInst.appendChild(o);
+  });
+})();
+
+selInst.addEventListener('change', () => {
+  if (ready) synth.loadInstrument(selInst.value, 0);
+});
+
+/* ── Init ── */
+async function ensureReady() {
+  if (ready) return;
+  await synth.init();
+  const inst = selInst.value || 'violin';
+  synth.loadInstrument(inst, 0);
+  synth.updateEnvelope(0, { attack:0.008, decay:0.25, sustain:0.45, release:0.5 });
+  synth.setMasterVolume(0.85);
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+document.getElementById('overlay').addEventListener('click', ensureReady);
+
+/* ── Waveform ── */
+const cvs = document.getElementById('wave');
+const ctx = cvs.getContext('2d');
+
+function resizeWave() {
+  const r = cvs.parentElement.getBoundingClientRect();
+  cvs.width = Math.floor(r.width - 48);
+  cvs.height = 55;
+}
+resizeWave();
+window.addEventListener('resize', resizeWave);
+
+(function drawWave() {
+  requestAnimationFrame(drawWave);
+  const w = cvs.width, h = cvs.height;
+  ctx.fillStyle = '#060609';
+  ctx.fillRect(0, 0, w, h);
+
+  const data = ready ? synth.getWaveformData() : null;
+
+  if (!data) {
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+    ctx.stroke();
+    return;
+  }
+
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0,    '#00f0ff');
+  grad.addColorStop(0.33, '#818cf8');
+  grad.addColorStop(0.66, '#a855f7');
+  grad.addColorStop(1,    '#facc15');
+
+  ctx.beginPath();
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 8;
+
+  const step = data.length / w;
+  for (let i = 0; i < w; i++) {
+    const v = data[Math.floor(i * step)] / 128 - 1;
+    const y = h/2 + v * (h/2 - 3);
+    if (i === 0) ctx.moveTo(0, y); else ctx.lineTo(i, y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Center guide
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,.03)';
+  ctx.lineWidth = 1;
+  ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+  ctx.stroke();
+})();
+</script>
+</body>
+</html>
