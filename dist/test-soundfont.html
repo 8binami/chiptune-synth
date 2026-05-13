@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head><title>ChiptuneSynth + SoundFont Test</title></head>
+<body style="background:#111;color:#0f0;font-family:monospace;padding:40px">
+<h2>ChiptuneSynth + SoundFont Test</h2>
+<pre id="log"></pre>
+<button id="testBtn" style="margin:20px 0;padding:12px 24px;font-size:16px;cursor:pointer;background:#0f0;color:#000;border:none;border-radius:6px">
+    Run Tests
+</button>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+<script>
+const log = document.getElementById('log');
+function print(msg, ok) {
+    log.textContent += (ok ? '[PASS]' : '[FAIL]') + ' ' + msg + '\n';
+}
+
+document.getElementById('testBtn').addEventListener('click', async function() {
+    log.textContent = '';
+    let passed = 0, failed = 0;
+
+    // Test 1: SoundFont registered
+    try {
+        const sf = ChiptuneSynth.getSoundFonts();
+        const ok = sf.length > 0 && sf[0].name === '8BitForge Default';
+        print('getSoundFonts() → ' + sf[0].name + ' v' + sf[0].version + ' (' + sf[0].count + ' presets)', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getSoundFonts: ' + e.message, false); failed++; }
+
+    // Test 2: Instruments expanded
+    try {
+        const names = ChiptuneSynth.getInstrumentNames();
+        const ok = names.length > 100;
+        print('getInstrumentNames() → ' + names.length + ' instruments (was 12)', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getInstrumentNames: ' + e.message, false); failed++; }
+
+    // Test 3: Categories
+    try {
+        const cats = ChiptuneSynth.getInstrumentsByCategory();
+        const catNames = Object.keys(cats);
+        print('getInstrumentsByCategory() → ' + catNames.join(', '), catNames.length >= 10);
+        catNames.length >= 10 ? passed++ : failed++;
+    } catch(e) { print('getInstrumentsByCategory: ' + e.message, false); failed++; }
+
+    // Test 4: Kits
+    try {
+        const kits = ChiptuneSynth.getKits();
+        const kitNames = Object.keys(kits);
+        const ok = kitNames.length >= 15;
+        print('getKits() → ' + kitNames.length + ' kits', ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('getKits: ' + e.message, false); failed++; }
+
+    // Test 5: Load a SoundFont instrument and play
+    const synth = new ChiptuneSynth();
+    try {
+        await synth.init();
+        print('synth.init() OK', true); passed++;
+    } catch(e) { print('init: ' + e.message, false); failed++; }
+
+    // Test 6: Load lead-classic (from SoundFont)
+    try {
+        const ok = synth.loadInstrument('lead-classic', 0);
+        print('loadInstrument("lead-classic") → ' + ok, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('loadInstrument lead-classic: ' + e.message, false); failed++; }
+
+    // Test 7: Load synth-acid303
+    try {
+        const ok = synth.loadInstrument('synth-acid303', 0);
+        print('loadInstrument("synth-acid303") → ' + ok, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('loadInstrument synth-acid303: ' + e.message, false); failed++; }
+
+    // Test 8: Load retro-nes-pulse
+    try {
+        const ok = synth.loadInstrument('retro-nes-pulse', 0);
+        print('loadInstrument("retro-nes-pulse") → ' + ok, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('loadInstrument retro-nes-pulse: ' + e.message, false); failed++; }
+
+    // Test 9: Load kick-808 (drum)
+    try {
+        const ok = synth.loadInstrument('kick-808', 2);
+        print('loadInstrument("kick-808", track 2) → ' + ok, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('loadInstrument kick-808: ' + e.message, false); failed++; }
+
+    // Test 10: Play a note with SoundFont instrument
+    try {
+        synth.loadInstrument('pad-warm', 0);
+        const id = synth.playNoteByName('C', 4, 0, 0.3);
+        const ok = typeof id === 'string';
+        print('pad-warm + playNoteByName("C",4) → ' + id, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('playNote with soundfont: ' + e.message, false); failed++; }
+
+    // Test 11: Original 12 instruments still work
+    try {
+        const ok = synth.loadInstrument('piano', 0);
+        print('loadInstrument("piano") (original) → ' + ok, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('piano original: ' + e.message, false); failed++; }
+
+    // Test 12: Original SFX presets still work
+    try {
+        const id = synth.playPreset('coin');
+        const ok = typeof id === 'string';
+        print('playPreset("coin") (original) → ' + id, ok);
+        ok ? passed++ : failed++;
+    } catch(e) { print('coin preset: ' + e.message, false); failed++; }
+
+    synth.dispose();
+
+    print('');
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print(passed + '/' + (passed + failed) + ' tests passed' + (failed === 0 ? ' — ALL GOOD!' : ' — ' + failed + ' FAILED'), failed === 0);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>String Ensemble — #cpc-string</title>
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  CodePen Challenge: Code Words — Week 1: STRINGS         ║
+  ║  ChiptuneSynth 3.0 — Violin ensemble synthesis           ║
+  ║                                                          ║
+  ║  Techniques:                                             ║
+  ║  · 8-track round-robin polyphony                         ║
+  ║  · Unison voices with micro-detuning (ensemble width)    ║
+  ║  · Delayed-onset vibrato (natural bow technique)         ║
+  ║  · 3-band body resonance EQ per track                    ║
+  ║  · Space reverb + chorus + delay (cathedral depth)       ║
+  ║  · Dynamics compressor per track                         ║
+  ║  · Stereo pan spread                                     ║
+  ║                                                          ║
+  ║  Tags: cpc-string  codepenchallenge                      ║
+  ╚══════════════════════════════════════════════════════════╝
+-->
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+:root{
+  --bg:#07070d;
+  --surface:#0f0f18;
+  --surface2:#161624;
+  --border:rgba(255,255,255,.06);
+  --cyan:#00f0ff;
+  --violet:#a855f7;
+  --pink:#ff6eb4;
+  --amber:#ffb347;
+  --green:#4ade80;
+  --dim:#50506a;
+  --text:#cccce0;
+  --r:10px;
+}
+
+body{
+  background:var(--bg);color:var(--text);
+  font-family:'Courier New',monospace;
+  display:flex;flex-direction:column;align-items:center;
+  min-height:100vh;padding:18px 12px;user-select:none;overflow-x:hidden;
+}
+
+.header{text-align:center;margin-bottom:14px}
+.header h1{font-size:1.45rem;color:var(--cyan);letter-spacing:3px;text-shadow:0 0 28px rgba(0,240,255,.35)}
+.header p{font-size:.56rem;color:var(--dim);margin-top:5px;letter-spacing:1px}
+
+.container{
+  background:linear-gradient(160deg,#0c0c14,#101018);
+  border:1px solid var(--border);border-radius:16px;
+  padding:20px 22px;width:min(720px,98vw);
+  box-shadow:0 0 100px rgba(0,240,255,.025),0 24px 50px rgba(0,0,0,.6);
+}
+
+.viz-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.viz-box{
+  background:#060609;border:1px solid rgba(255,255,255,.04);
+  border-radius:8px;padding:4px;position:relative;overflow:hidden;
+}
+.viz-box canvas{display:block;width:100%;border-radius:5px}
+.viz-label{
+  position:absolute;top:5px;right:8px;
+  font-size:.48rem;color:var(--dim);letter-spacing:1px;
+}
+
+.kb-wrap{position:relative;margin-bottom:18px}
+.kb-label{font-size:.55rem;color:var(--dim);letter-spacing:1px;margin-bottom:7px;text-transform:uppercase}
+.keyboard{position:relative;display:flex;height:120px;justify-content:center}
+.key{
+  position:relative;border-radius:0 0 6px 6px;cursor:pointer;
+  display:flex;align-items:flex-end;justify-content:center;
+  padding-bottom:6px;font-size:.42rem;transition:background .06s;
+}
+.key-white{
+  width:38px;height:120px;z-index:1;
+  background:linear-gradient(180deg,#ddd 0%,#fff 8%,#f0f0f0 100%);
+  border:1px solid #444;border-top:none;color:#666;
+}
+.key-white:hover{background:linear-gradient(180deg,#ccc 0%,#eee 8%,#e0e0e0 100%)}
+.key-white.active{
+  background:linear-gradient(180deg,#00c8d5 0%,#00f0ff 15%,#00e0ef 100%) !important;
+  box-shadow:0 0 18px rgba(0,240,255,.5),inset 0 0 8px rgba(0,240,255,.2);
+  color:#003344;
+}
+.key-black{
+  width:24px;height:76px;z-index:2;
+  background:linear-gradient(180deg,#1a1a1a 0%,#111 100%);
+  border:1px solid #000;border-top:none;color:#555;
+  margin-left:-12px;margin-right:-12px;
+}
+.key-black:hover{background:linear-gradient(180deg,#2a2a2a 0%,#1a1a1a 100%)}
+.key-black.active{
+  background:linear-gradient(180deg,#007888 0%,#005566 100%) !important;
+  box-shadow:0 0 14px rgba(0,240,255,.45);color:#00f0ff;
+}
+.key .bind{font-size:.38rem;opacity:.4;display:block;text-align:center;margin-top:1px}
+
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.ctrl-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r);padding:12px;
+}
+.ctrl-box label{
+  font-size:.55rem;color:var(--dim);letter-spacing:1px;
+  text-transform:uppercase;display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:8px;
+}
+.ctrl-box label span{color:var(--cyan);font-size:.65rem;font-weight:700}
+.ctrl-box input[type=range]{
+  -webkit-appearance:none;width:100%;height:5px;border-radius:3px;
+  background:var(--surface2);outline:none;cursor:pointer;
+  margin-bottom:6px;display:block;
+}
+.ctrl-box input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  cursor:pointer;box-shadow:0 0 6px rgba(0,0,0,.5);
+}
+.ctrl-box .cyan-thumb::-webkit-slider-thumb{background:var(--cyan);box-shadow:0 0 8px rgba(0,240,255,.4)}
+.ctrl-box .violet-thumb::-webkit-slider-thumb{background:var(--violet);box-shadow:0 0 8px rgba(168,85,247,.4)}
+.ctrl-box .amber-thumb::-webkit-slider-thumb{background:var(--amber)}
+.ctrl-box .pink-thumb::-webkit-slider-thumb{background:var(--pink)}
+.ctrl-box .sub-label{font-size:.48rem;color:var(--dim);margin-bottom:3px;display:block}
+
+.inst-row{display:flex;gap:6px;justify-content:center;margin-bottom:14px;flex-wrap:wrap}
+.inst-btn{
+  padding:5px 14px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);
+  color:var(--dim);font-size:.6rem;font-family:inherit;cursor:pointer;transition:.15s;
+}
+.inst-btn:hover{border-color:var(--violet);color:var(--violet)}
+.inst-btn.active{
+  border-color:var(--violet);color:#fff;background:rgba(168,85,247,.15);
+  box-shadow:0 0 12px rgba(168,85,247,.2);
+}
+
+.info-bar{
+  display:flex;gap:10px;align-items:center;justify-content:center;
+  font-size:.6rem;color:var(--dim);
+}
+.note-badge{
+  background:var(--surface);border:1px solid rgba(0,240,255,.15);
+  border-radius:8px;padding:5px 14px;color:var(--cyan);font-size:.65rem;
+  min-width:80px;text-align:center;
+}
+.voices-badge{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:5px 14px;color:var(--dim);font-size:.6rem;
+}
+
+.overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(3,3,10,.95);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;gap:16px;
+}
+.overlay h2{font-size:2rem;color:var(--cyan);letter-spacing:5px;text-shadow:0 0 50px rgba(0,240,255,.5)}
+.overlay .tagline{font-size:.75rem;color:var(--dim)}
+.overlay .tags{font-size:.6rem;color:var(--violet);opacity:.7}
+.overlay .click-btn{
+  font-size:.7rem;color:var(--cyan);
+  border:1px solid rgba(0,240,255,.25);border-radius:10px;
+  padding:10px 28px;animation:glow 1.8s ease-in-out infinite;
+  font-family:inherit;
+}
+@keyframes glow{0%,100%{box-shadow:0 0 10px rgba(0,240,255,.15);opacity:.6}50%{box-shadow:0 0 24px rgba(0,240,255,.4);opacity:1}}
+.hidden{display:none!important}
+
+.foot{margin-top:14px;font-size:.5rem;color:#1a1a28;text-align:center}
+.foot a{color:#00f0ff14;text-decoration:none}
+</style>
+</head>
+
+<body>
+
+<div class="overlay" id="overlay">
+  <h2>STRING ENSEMBLE</h2>
+  <div class="tagline">ChiptuneSynth 3.0 · 8-track ensemble synthesis · Reverb · Vibrato</div>
+  <div class="tags">#cpc-string &nbsp;·&nbsp; #codepenchallenge</div>
+  <div class="click-btn">&#9654; Click to open the hall</div>
+</div>
+
+<div class="header">
+  <h1>STRING ENSEMBLE</h1>
+  <p>ChiptuneSynth 3.0 &nbsp;·&nbsp; Violin synthesis &nbsp;·&nbsp; #cpc-string &nbsp;·&nbsp; #codepenchallenge</p>
+</div>
+
+<div class="container">
+
+  <div class="viz-row">
+    <div class="viz-box">
+      <canvas id="cvWave" height="60"></canvas>
+      <span class="viz-label">WAVEFORM</span>
+    </div>
+    <div class="viz-box">
+      <canvas id="cvFreq" height="60"></canvas>
+      <span class="viz-label">SPECTRUM</span>
+    </div>
+  </div>
+
+  <div class="inst-row" id="instRow">
+    <button class="inst-btn active" data-inst="violin">Violin</button>
+    <button class="inst-btn" data-inst="viola">Viola</button>
+    <button class="inst-btn" data-inst="cello">Cello</button>
+    <button class="inst-btn" data-inst="ensemble">Full Section</button>
+  </div>
+
+  <div class="kb-wrap">
+    <div class="kb-label">Keyboard — play or use ZXCVBNM / QWERTYU</div>
+    <div class="keyboard" id="keyboard"></div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl-box">
+      <label>Reverb (Hall) <span id="lblReverb">38%</span></label>
+      <span class="sub-label">Wet mix</span>
+      <input type="range" class="cyan-thumb" id="slReverb" min="0" max="100" value="38">
+      <span class="sub-label">Room size</span>
+      <input type="range" class="cyan-thumb" id="slRoom" min="10" max="100" value="65">
+    </div>
+    <div class="ctrl-box">
+      <label>Vibrato <span id="lblVib">5.8 Hz · 4.0</span></label>
+      <span class="sub-label">Rate (Hz)</span>
+      <input type="range" class="violet-thumb" id="slVibRate" min="30" max="90" value="58">
+      <span class="sub-label">Depth</span>
+      <input type="range" class="violet-thumb" id="slVibDepth" min="0" max="15" value="4">
+    </div>
+    <div class="ctrl-box">
+      <label>Ensemble <span id="lblVoices">6 voices</span></label>
+      <span class="sub-label">Voices</span>
+      <input type="range" class="amber-thumb" id="slVoices" min="1" max="8" value="6" step="1">
+      <span class="sub-label">Detune spread</span>
+      <input type="range" class="amber-thumb" id="slDetune" min="0" max="40" value="14">
+    </div>
+    <div class="ctrl-box">
+      <label>Bow <span id="lblBow">Legato</span></label>
+      <span class="sub-label">Attack</span>
+      <input type="range" class="pink-thumb" id="slAttack" min="5" max="80" value="18">
+      <span class="sub-label">Release</span>
+      <input type="range" class="pink-thumb" id="slRelease" min="10" max="150" value="50">
+    </div>
+  </div>
+
+  <div class="info-bar">
+    <div class="note-badge" id="noteDisplay">&mdash;</div>
+    <div class="voices-badge" id="voiceDisplay">Ready</div>
+  </div>
+
+</div>
+
+<div class="foot"><a href="https://chiptune-synth.8binami.com" target="_blank">8BitForge</a> — ChiptuneSynth violin synthesis</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   STRING ENSEMBLE — ChiptuneSynth 3.0 Edition
+   ════════════════════════════════════════════════════════════ */
+
+var synth = new ChiptuneSynth();
+var ready = false;
+
+/* ═══ Settings ═══ */
+var S = {
+  voices:      6,
+  detune:      14,
+  reverbWet:   0.38,
+  roomSize:    0.65,
+  vibRate:     5.8,
+  vibDepth:    4,
+  attack:      0.018,
+  release:     0.50,
+  inst:        'violin',
+};
+
+/* ═══ Instrument profiles ═══ */
+/*
+  Son de cordes : sawtooth (harmoniques pairs+impairs comme le vrai violon)
+  + filtre lowpass serré (coupe le buzz) + filterQ élevé (résonance de corps)
+  + filterKeyTrack (le filtre suit la hauteur → cohérence sur tout le clavier)
+  Triangle = harmoniques impairs seulement → son trop creux, pas assez riche
+*/
+var INSTRUMENTS = {
+  violin: {
+    type:'sawtooth', volume:0.18,
+    unisonVoices:6, unisonDetune:8, unisonSpread:55,
+    attack:0.055, decay:0.20, sustain:0.85, release:0.80,
+    filterCutoff:2800, filterQ:1.6, filterKeyTrack:60,
+    eqLow:1, eqMid:5, eqHigh:-2,
+    lfo1Delay:0.22, vibRate:5.8, vibDepth:4,
+    reverbMix:0.42, reverbDecay:0.68,
+  },
+  viola: {
+    type:'sawtooth', volume:0.18,
+    unisonVoices:5, unisonDetune:7, unisonSpread:50,
+    attack:0.075, decay:0.22, sustain:0.84, release:1.00,
+    filterCutoff:2200, filterQ:1.8, filterKeyTrack:55,
+    eqLow:4, eqMid:4, eqHigh:-3,
+    lfo1Delay:0.25, vibRate:5.2, vibDepth:3.5,
+    reverbMix:0.44, reverbDecay:0.70,
+  },
+  cello: {
+    type:'sawtooth', volume:0.20,
+    unisonVoices:4, unisonDetune:6, unisonSpread:45,
+    attack:0.120, decay:0.25, sustain:0.82, release:1.40,
+    filterCutoff:1600, filterQ:1.5, filterKeyTrack:50,
+    eqLow:7, eqMid:3, eqHigh:-4,
+    lfo1Delay:0.30, vibRate:4.8, vibDepth:3,
+    reverbMix:0.46, reverbDecay:0.72,
+  },
+  ensemble: {
+    type:'sawtooth', volume:0.16,
+    unisonVoices:8, unisonDetune:10, unisonSpread:65,
+    attack:0.065, decay:0.20, sustain:0.86, release:0.90,
+    filterCutoff:3200, filterQ:1.4, filterKeyTrack:65,
+    eqLow:2, eqMid:5, eqHigh:-1,
+    lfo1Delay:0.20, vibRate:5.5, vibDepth:5,
+    reverbMix:0.50, reverbDecay:0.75,
+  },
+};
+
+var PAN = [-0.55,-0.39,-0.22,-0.08, 0.08, 0.22, 0.39, 0.55];
+
+/* ═══ Track state ═══ */
+var NT = 8; // number of tracks
+var nextTrack = 0;
+var activeNotes = new Map();  // noteKey → {ti, noteId}
+var trackNotes = new Array(NT).fill(null); // noteId per track
+
+/* ═══ Init audio ═══ */
+async function initAudio() {
+  if (ready) return;
+  await synth.init();
+  applyInstrument(S.inst);
+  synth.setMasterVolume(0.65);
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+/* ═══ Apply instrument profile to all 8 tracks ═══ */
+function applyInstrument(name) {
+  var p = INSTRUMENTS[name];
+  if (!p) return;
+  S.inst = name;
+
+  // Sync sliders from profile
+  S.voices   = p.unisonVoices;
+  S.detune   = p.unisonDetune;
+  S.vibRate  = p.vibRate;
+  S.vibDepth = p.vibDepth;
+  S.attack   = p.attack;
+  S.release  = p.release;
+  S.reverbWet = p.reverbMix;
+  S.roomSize  = p.reverbDecay;
+
+  for (var i = 0; i < NT; i++) {
+    synth.updateTrack(i, {
+      type:           p.type,
+      dutyCycle:      0.5,
+      volume:         p.volume,
+      pitchEnv:       0,
+      detune:         0,
+      unisonVoices:   p.unisonVoices,
+      unisonDetune:   p.unisonDetune,
+      unisonSpread:   p.unisonSpread,
+      filterEnabled:  true,
+      filterType:     'lowpass',
+      filterCutoff:   p.filterCutoff,
+      filterQ:        p.filterQ,
+      filterKeyTrack: p.filterKeyTrack,
+      glide:          0,
+      lfo1Delay:      p.lfo1Delay,
+    });
+
+    synth.updateEnvelope(i, {
+      attack:  p.attack,
+      decay:   p.decay,
+      sustain: p.sustain,
+      release: p.release,
+    });
+
+    synth.updateVibrato(i, {
+      rate:  p.vibRate,
+      depth: p.vibDepth,
+    });
+
+    /* FX chain — cathedral space */
+    synth.loadFxPreset(i, 'space');
+    synth.setReverbMix(i, p.reverbMix);
+    synth.setReverbDecay(i, p.reverbDecay);
+    synth.setDelayTime(i, 0.12 + i * 0.01);
+    synth.setDelayFeedback(i, 0.20);
+    synth.setDelayMix(i, 0.10);
+    synth.setChorusRate(i, 0.8 + i * 0.05);
+    synth.setChorusDepth(i, 0.25);
+    synth.setChorusMix(i, 0.22);
+    synth.setTrackPan(i, PAN[i]);
+
+    /* EQ body resonance */
+    synth.setTrackEQ(i, 'eqLow',  p.eqLow);
+    synth.setTrackEQ(i, 'eqMid',  p.eqMid);
+    synth.setTrackEQ(i, 'eqHigh', p.eqHigh);
+
+    /* Compressor */
+    synth.setTrackCompressorEnabled(i, true);
+    synth.setTrackCompressorThreshold(i, -22);
+    synth.setTrackCompressorRatio(i, 5);
+
+    synth.setTrackFaderVolume(i, 0.80);
+  }
+
+  /* Update slider positions */
+  document.getElementById('slVoices').value  = p.unisonVoices;
+  document.getElementById('slDetune').value  = p.unisonDetune;
+  document.getElementById('slVibRate').value = Math.round(p.vibRate * 10);
+  document.getElementById('slVibDepth').value = p.vibDepth;
+  document.getElementById('slAttack').value  = Math.round(p.attack * 1000);
+  document.getElementById('slRelease').value = Math.round(p.release * 100);
+  document.getElementById('slReverb').value  = Math.round(p.reverbMix * 100);
+  document.getElementById('slRoom').value    = Math.round(p.reverbDecay * 100);
+
+  /* Update labels */
+  document.getElementById('lblVoices').textContent = p.unisonVoices + (p.unisonVoices === 1 ? ' voice' : ' voices');
+  updateVibLabel();
+  updateBowLabel();
+  document.getElementById('lblReverb').textContent = Math.round(p.reverbMix * 100) + '%';
+}
+
+/* ═══ Note On / Off (round-robin) ═══ */
+function noteOn(noteKey, noteName, octave) {
+  if (!ready || activeNotes.has(noteKey)) return;
+
+  var ti = nextTrack;
+  nextTrack = (nextTrack + 1) % NT;
+
+  /* If track is busy, stop previous note */
+  if (trackNotes[ti]) {
+    synth.stopNote(trackNotes[ti]);
+    trackNotes[ti] = null;
+  }
+
+  var noteId = synth.playNoteByName(noteName, octave, ti, 30);
+  activeNotes.set(noteKey, { ti: ti, noteId: noteId });
+  trackNotes[ti] = noteId;
+
+  /* Display */
+  document.getElementById('noteDisplay').textContent = noteKey;
+  document.getElementById('voiceDisplay').textContent = S.voices + (S.voices === 1 ? ' voice' : ' voices') + ' \u00b7 ' + S.inst;
+}
+
+function noteOff(noteKey) {
+  var info = activeNotes.get(noteKey);
+  if (!info) return;
+  synth.stopNote(info.noteId);
+  activeNotes.delete(noteKey);
+  trackNotes[info.ti] = null;
+
+  if (activeNotes.size === 0) {
+    document.getElementById('noteDisplay').textContent = '\u2014';
+  }
+}
+
+/* ════════════════════════════════════════════
+   KEYBOARD
+   ════════════════════════════════════════════ */
+
+var NOTES_LAYOUT = [
+  { note:'C',  oct:4, black:false }, { note:'C#', oct:4, black:true  },
+  { note:'D',  oct:4, black:false }, { note:'D#', oct:4, black:true  },
+  { note:'E',  oct:4, black:false }, { note:'F',  oct:4, black:false },
+  { note:'F#', oct:4, black:true  }, { note:'G',  oct:4, black:false },
+  { note:'G#', oct:4, black:true  }, { note:'A',  oct:4, black:false },
+  { note:'A#', oct:4, black:true  }, { note:'B',  oct:4, black:false },
+  { note:'C',  oct:5, black:false }, { note:'C#', oct:5, black:true  },
+  { note:'D',  oct:5, black:false }, { note:'D#', oct:5, black:true  },
+  { note:'E',  oct:5, black:false }, { note:'F',  oct:5, black:false },
+  { note:'F#', oct:5, black:true  }, { note:'G',  oct:5, black:false },
+  { note:'G#', oct:5, black:true  }, { note:'A',  oct:5, black:false },
+  { note:'A#', oct:5, black:true  }, { note:'B',  oct:5, black:false },
+];
+
+var KEY_BIND = {
+  'z':0,'s':1,'x':2,'d':3,'c':4,'v':5,'g':6,'b':7,'h':8,'n':9,'j':10,'m':11,
+  'q':12,'2':13,'w':14,'3':15,'e':16,'r':17,'5':18,'t':19,'6':20,'y':21,'7':22,'u':23,
+};
+
+var keyEls = [];
+
+function buildKeyboard() {
+  var kb = document.getElementById('keyboard');
+  var bindLabels = {};
+  Object.entries(KEY_BIND).forEach(function(pair) {
+    if (!bindLabels[pair[1]]) bindLabels[pair[1]] = pair[0].toUpperCase();
+  });
+
+  NOTES_LAYOUT.forEach(function(n, i) {
+    var el = document.createElement('div');
+    el.className = 'key ' + (n.black ? 'key-black' : 'key-white');
+    var lbl = bindLabels[i] || '';
+    el.innerHTML = n.black
+      ? '<span class="bind">' + lbl + '</span>'
+      : '<span>' + n.note + '<br><span class="bind">' + lbl + '</span></span>';
+
+    var key = n.note + n.oct;
+
+    el.addEventListener('pointerdown', function(ev) {
+      ev.preventDefault();
+      initAudio().then(function() {
+        el.classList.add('active');
+        noteOn(key, n.note, n.oct);
+      });
+    });
+    el.addEventListener('pointerup', function() {
+      el.classList.remove('active');
+      noteOff(key);
+    });
+    el.addEventListener('pointerleave', function() {
+      el.classList.remove('active');
+      noteOff(key);
+    });
+
+    kb.appendChild(el);
+    keyEls.push({ el: el, key: key, note: n.note, oct: n.oct, black: n.black });
+  });
+}
+
+/* ═══ Computer keyboard ═══ */
+var pressedKeys = new Set();
+
+document.addEventListener('keydown', function(e) {
+  if (e.repeat) return;
+  var k = e.key.toLowerCase();
+  if (!(k in KEY_BIND)) return;
+  e.preventDefault();
+  if (pressedKeys.has(k)) return;
+  pressedKeys.add(k);
+  initAudio().then(function() {
+    var i = KEY_BIND[k];
+    var n = NOTES_LAYOUT[i];
+    var key = n.note + n.oct;
+    keyEls[i].el.classList.add('active');
+    noteOn(key, n.note, n.oct);
+  });
+});
+
+document.addEventListener('keyup', function(e) {
+  var k = e.key.toLowerCase();
+  if (!(k in KEY_BIND)) return;
+  pressedKeys.delete(k);
+  var i = KEY_BIND[k];
+  var n = NOTES_LAYOUT[i];
+  keyEls[i].el.classList.remove('active');
+  noteOff(n.note + n.oct);
+});
+
+/* ════════════════════════════════════════════
+   CONTROLS
+   ════════════════════════════════════════════ */
+
+/* Reverb wet */
+document.getElementById('slReverb').addEventListener('input', function() {
+  S.reverbWet = this.value / 100;
+  document.getElementById('lblReverb').textContent = this.value + '%';
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.setReverbMix(i, S.reverbWet);
+});
+
+/* Room size */
+document.getElementById('slRoom').addEventListener('input', function() {
+  S.roomSize = this.value / 100;
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.setReverbDecay(i, S.roomSize);
+});
+
+/* Vibrato rate */
+document.getElementById('slVibRate').addEventListener('input', function() {
+  S.vibRate = this.value / 10;
+  updateVibLabel();
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) {
+    synth.updateVibrato(i, { rate: S.vibRate });
+    synth.updateLiveNotes(i);
+  }
+});
+
+/* Vibrato depth */
+document.getElementById('slVibDepth').addEventListener('input', function() {
+  S.vibDepth = +this.value;
+  updateVibLabel();
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) {
+    synth.updateVibrato(i, { depth: S.vibDepth });
+    synth.updateLiveNotes(i);
+  }
+});
+
+function updateVibLabel() {
+  document.getElementById('lblVib').textContent =
+    S.vibRate.toFixed(1) + ' Hz \u00b7 ' + S.vibDepth.toFixed(1);
+}
+
+/* Voices */
+document.getElementById('slVoices').addEventListener('input', function() {
+  S.voices = +this.value;
+  document.getElementById('lblVoices').textContent = S.voices + (S.voices === 1 ? ' voice' : ' voices');
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.updateTrack(i, { unisonVoices: S.voices });
+});
+
+/* Detune spread */
+document.getElementById('slDetune').addEventListener('input', function() {
+  S.detune = +this.value;
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.updateTrack(i, { unisonDetune: S.detune });
+});
+
+/* Attack */
+document.getElementById('slAttack').addEventListener('input', function() {
+  S.attack = this.value / 1000;
+  updateBowLabel();
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.updateEnvelope(i, { attack: S.attack });
+});
+
+/* Release */
+document.getElementById('slRelease').addEventListener('input', function() {
+  S.release = this.value / 100;
+  updateBowLabel();
+  if (!ready) return;
+  for (var i = 0; i < NT; i++) synth.updateEnvelope(i, { release: S.release });
+});
+
+function updateBowLabel() {
+  var att = (S.attack * 1000).toFixed(0) + 'ms';
+  var rel = (S.release * 1000).toFixed(0) + 'ms';
+  var style = S.attack < 0.03 ? 'Spiccato' : S.attack < 0.06 ? 'D\u00e9tach\u00e9' : 'Legato';
+  document.getElementById('lblBow').textContent = style + ' \u00b7 A:' + att + ' R:' + rel;
+}
+updateBowLabel();
+
+/* Instrument buttons */
+document.querySelectorAll('.inst-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.inst-btn').forEach(function(b) { b.classList.remove('active'); });
+    btn.classList.add('active');
+    if (ready) applyInstrument(btn.dataset.inst);
+    else S.inst = btn.dataset.inst;
+  });
+});
+
+/* Overlay */
+document.getElementById('overlay').addEventListener('click', function() {
+  initAudio().catch(function(e) { console.error('initAudio failed:', e); });
+});
+
+/* ════════════════════════════════════════════
+   VISUALIZATION
+   ════════════════════════════════════════════ */
+
+var cvWave = document.getElementById('cvWave');
+var cvFreq = document.getElementById('cvFreq');
+var ctxW = cvWave.getContext('2d');
+var ctxF = cvFreq.getContext('2d');
+
+function resizeCanvases() {
+  [cvWave, cvFreq].forEach(function(cv) {
+    var r = cv.parentElement.getBoundingClientRect();
+    cv.width = Math.floor(r.width - 8);
+    cv.height = 60;
+  });
+}
+resizeCanvases();
+window.addEventListener('resize', resizeCanvases);
+
+/* Smooth level history for spectrum bars */
+var smoothLevels = new Float32Array(NT);
+/* Phase for waveform animation */
+var wavePhase = 0;
+
+(function draw() {
+  requestAnimationFrame(draw);
+
+  var w = cvWave.width, h = cvWave.height;
+  var fw = cvFreq.width, fh = cvFreq.height;
+
+  /* ── Waveform ── */
+  ctxW.fillStyle = '#060609';
+  ctxW.fillRect(0, 0, w, h);
+
+  /* Center guide */
+  ctxW.beginPath();
+  ctxW.strokeStyle = 'rgba(255,255,255,.04)';
+  ctxW.lineWidth = 1;
+  ctxW.moveTo(0, h / 2); ctxW.lineTo(w, h / 2);
+  ctxW.stroke();
+
+  if (ready) {
+    var master = synth.getMasterLevel();
+    wavePhase += 0.06 + master * 0.15;
+
+    var grad = ctxW.createLinearGradient(0, 0, w, 0);
+    grad.addColorStop(0,    '#00f0ff');
+    grad.addColorStop(0.33, '#818cf8');
+    grad.addColorStop(0.66, '#a855f7');
+    grad.addColorStop(1,    '#ff6eb4');
+
+    ctxW.beginPath();
+    ctxW.strokeStyle = grad;
+    ctxW.lineWidth = 1.5;
+    ctxW.shadowColor = '#00f0ff';
+    ctxW.shadowBlur = 6;
+
+    var amp = Math.min(master * 3.5, 1.0);
+    for (var x = 0; x < w; x++) {
+      var t = x / w;
+      /* Multi-frequency composite waveform */
+      var v = 0;
+      v += Math.sin(wavePhase + t * Math.PI * 6)  * 0.50;
+      v += Math.sin(wavePhase * 1.3 + t * Math.PI * 14) * 0.25;
+      v += Math.sin(wavePhase * 0.7 + t * Math.PI * 22) * 0.15;
+      v += Math.sin(wavePhase * 2.1 + t * Math.PI * 3)  * 0.10;
+      v *= amp;
+      var y = h / 2 + v * (h / 2 - 4);
+      x === 0 ? ctxW.moveTo(0, y) : ctxW.lineTo(x, y);
+    }
+    ctxW.stroke();
+    ctxW.shadowBlur = 0;
+  }
+
+  /* ── Spectrum ── */
+  ctxF.fillStyle = '#060609';
+  ctxF.fillRect(0, 0, fw, fh);
+
+  if (ready) {
+    /* Get per-track levels and distribute into spectrum-like bars */
+    var rawLevels = [];
+    for (var i = 0; i < NT; i++) {
+      var lv = synth.getTrackLevel(i);
+      smoothLevels[i] += (lv - smoothLevels[i]) * 0.25;
+      rawLevels.push(smoothLevels[i]);
+    }
+
+    /* Expand 8 tracks into ~64 bars by interpolation */
+    var numBars = 64;
+    var barW = fw / numBars;
+    for (var b = 0; b < numBars; b++) {
+      /* Map bar to track (with interpolation) */
+      var trackF = (b / numBars) * (NT - 1);
+      var tLo = Math.floor(trackF);
+      var tHi = Math.min(tLo + 1, NT - 1);
+      var frac = trackF - tLo;
+      var val = rawLevels[tLo] * (1 - frac) + rawLevels[tHi] * frac;
+
+      /* Add some variation per bar */
+      val *= 0.6 + 0.4 * Math.sin(b * 0.8 + wavePhase * 0.3);
+      val = Math.max(0, Math.min(1, val * 4));
+
+      var bh = val * fh;
+      var hue = 180 + (b / numBars) * 200;
+      ctxF.fillStyle = 'hsla(' + hue + ', 100%, 65%, ' + (0.3 + val * 0.7) + ')';
+      ctxF.fillRect(b * barW, fh - bh, barW - 0.5, bh);
+    }
+  }
+})();
+
+/* ═══ Init ═══ */
+buildKeyboard();
+</script>
+</body>
+</html>

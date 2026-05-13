@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Echo of Aria — #cpc-strings</title>
+<style>
+/* ════════════════════════════════════════════════════
+   ÉCHO D'ARIA  ·  C418 Minecraft Ambient
+   ════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  width:100%;height:100%;
+  background:#000408;
+  overflow:hidden;
+  cursor:none;
+  font-family:'Georgia','Times New Roman',serif;
+}
+canvas{position:fixed;inset:0;width:100%;height:100%}
+#cv-bg {z-index:1}
+#cv-mid{z-index:2}
+#cv-fg {z-index:3}
+
+/* ── Start screen ──────────────────────────────────── */
+#start{
+  position:fixed;inset:0;z-index:10;
+  background:rgba(0,3,12,0.92);
+  backdrop-filter:blur(10px);
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity 1.0s ease;
+}
+#start.hide{opacity:0;pointer-events:none}
+.si{text-align:center;color:#e8dfc8;max-width:560px;padding:20px}
+.si-kanji{
+  font-size:clamp(64px,12vw,120px);
+  line-height:1;letter-spacing:.35em;
+  color:#f0e8cc;opacity:.18;margin-bottom:2px;
+}
+.si-title{
+  font-size:clamp(18px,3.2vw,32px);font-weight:300;
+  letter-spacing:.32em;text-transform:uppercase;
+  color:#f0e8cc;margin:10px 0 5px;
+}
+.si-hr{width:70px;height:1px;background:rgba(240,232,200,.32);margin:12px auto}
+.si-sub{
+  font-size:clamp(10px,1.5vw,13px);letter-spacing:.16em;
+  opacity:.45;line-height:1.9;color:#ccc8b8;margin-bottom:32px;
+}
+.si-btn{
+  background:transparent;
+  border:1px solid rgba(240,232,200,.38);
+  color:#e8dfc8;
+  font-family:inherit;font-size:clamp(10px,1.4vw,13px);
+  letter-spacing:.30em;text-transform:uppercase;
+  padding:13px 38px;cursor:none;
+  transition:all .35s;
+}
+.si-btn:hover{background:rgba(240,232,200,.07);border-color:rgba(240,232,200,.68);color:#fff}
+
+/* ── Custom cursor ─────────────────────────────────── */
+#cursor{
+  position:fixed;left:0;top:0;width:20px;height:20px;
+  border:1px solid rgba(240,232,200,.55);border-radius:50%;
+  transform:translate(var(--cx,-999px),var(--cy,-999px)) translate(-50%,-50%);
+  will-change:transform;
+  pointer-events:none;z-index:100;
+  transition:border-color .2s;
+}
+#cursor::after{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:3px;height:3px;
+  background:rgba(240,232,200,.80);border-radius:50%;
+}
+#cursor.pressing{transform:translate(var(--cx,-999px),var(--cy,-999px)) translate(-50%,-50%) scale(.62);border-color:rgba(240,232,200,.9)}
+#cursor.ready   {border-color:rgba(180,230,200,.80)}
+
+/* ── Note label ────────────────────────────────────── */
+#nlabel{
+  position:fixed;bottom:18px;left:50%;transform:translateX(-50%);
+  color:rgba(240,232,200,0);font-size:10px;
+  letter-spacing:.40em;text-transform:uppercase;
+  z-index:20;pointer-events:none;
+  transition:color .12s,opacity .5s;
+}
+#nlabel.show{color:rgba(240,232,200,.50)}
+
+/* ── Chord pads (bottom keyboard) ──────────────────── */
+#chord-pads{
+  position:fixed;
+  bottom:42px;left:50%;transform:translateX(-50%);
+  display:flex;gap:14px;
+  padding:18px 22px;
+  background:rgba(0,6,16,.38);
+  backdrop-filter:blur(14px);
+  border:1px solid rgba(240,232,200,.12);
+  border-radius:2px;
+  z-index:15;
+  opacity:0;pointer-events:none;
+  transition:opacity 1.4s ease 0.4s,transform 1.4s ease 0.4s;
+  transform:translateX(-50%) translateY(20px);
+}
+#chord-pads.show{
+  opacity:1;pointer-events:auto;
+  transform:translateX(-50%) translateY(0);
+}
+.pad{
+  position:relative;
+  width:72px;height:78px;
+  background:rgba(8,14,32,.42);
+  border:1px solid rgba(240,232,200,.22);
+  color:#e8dfc8;
+  cursor:none;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  user-select:none;overflow:hidden;
+  transition:transform .25s ease,background .35s,border-color .35s,box-shadow .35s;
+}
+.pad::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 60%,rgba(255,230,180,0),rgba(255,230,180,0) 70%);
+  transition:background .5s ease;
+  pointer-events:none;
+}
+.pad:hover{
+  background:rgba(18,26,50,.55);
+  border-color:rgba(240,232,200,.48);
+}
+.pad:hover::before{
+  background:radial-gradient(circle at 50% 60%,rgba(255,230,180,.12),rgba(255,230,180,0) 70%);
+}
+.pad.active{
+  background:rgba(255,240,200,.18);
+  border-color:rgba(255,240,200,.72);
+  transform:scale(.94);
+  box-shadow:0 0 24px rgba(255,230,180,.35),inset 0 0 12px rgba(255,230,180,.20);
+}
+.pad-k{
+  font-size:30px;line-height:1;font-weight:300;
+  margin-bottom:6px;color:#f0e8cc;opacity:.92;
+}
+.pad-n{
+  font-size:8px;letter-spacing:.22em;
+  text-transform:uppercase;opacity:.42;
+  font-weight:300;
+}
+.pad-key{
+  position:absolute;top:5px;right:6px;
+  font-size:8px;opacity:.30;
+  font-family:monospace;
+}
+</style>
+</head>
+<body>
+
+<canvas id="cv-bg"></canvas>
+<canvas id="cv-mid"></canvas>
+<canvas id="cv-fg"></canvas>
+
+<div id="start">
+  <div class="si">
+    <div class="si-kanji">洞窟</div>
+    <div class="si-title">Echo of Aria</div>
+    <div class="si-hr"></div>
+    <p class="si-sub">
+      Move the mouse to play the piano<br>
+      Click to resonate the strings<br>
+      Let the echo carry you away
+    </p>
+    <button class="si-btn" id="btn-enter">Enter · 入</button>
+  </div>
+</div>
+
+<div id="chord-pads">
+  <button class="pad" data-idx="0"><span class="pad-key" data-qw="A" data-az="Q">Q</span><span class="pad-k">静</span><span class="pad-n">Am</span></button>
+  <button class="pad" data-idx="1"><span class="pad-key" data-qw="S" data-az="S">S</span><span class="pad-k">夢</span><span class="pad-n">Em</span></button>
+  <button class="pad" data-idx="2"><span class="pad-key" data-qw="D" data-az="D">D</span><span class="pad-k">花</span><span class="pad-n">Fmaj7</span></button>
+  <button class="pad" data-idx="3"><span class="pad-key" data-qw="F" data-az="F">F</span><span class="pad-k">雪</span><span class="pad-n">Cmaj</span></button>
+  <button class="pad" data-idx="4"><span class="pad-key" data-qw="G" data-az="G">G</span><span class="pad-k">月</span><span class="pad-n">Dm</span></button>
+  <button class="pad" data-idx="5"><span class="pad-key" data-qw="H" data-az="H">H</span><span class="pad-k">風</span><span class="pad-n">G</span></button>
+</div>
+
+<div id="cursor"></div>
+<div id="nlabel"></div>
+
+<script src="../dist/3.1.0/chiptune-synth.min.js"></script>
+<script>
+'use strict';
+/* ╔══════════════════════════════════════════════════════════════╗
+   ║  ÉCHO D'ARIA — C418 Minecraft Ambient Style                 ║
+   ║  ChiptuneSynth 3.1.0  ·  A minor pentatonic                 ║
+   ║  4 tracks: piano · violin pad · contrabass · chord            ║
+   ╚══════════════════════════════════════════════════════════════╝ */
+
+var synth    = new ChiptuneSynth();
+var audioReady = false, audioInitPending = false;
+
+var TK_PIANO  = 0;   // piano (triangle) — C418 melody (center-right)
+var TK_VPAD   = 1;   // violinNatural   — background pad (wide left)
+var TK_DRONE  = 2;   // contrabass      — deep drone (center-left)
+var TK_CHORD  = 3;   // piano (triangle) — chord pads LOUD (center)
+
+/* ── A minor pentatonic: A  C  D  E  G ──────────────────────── */
+var SCALE = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5]
+];
+var DEG_COLOR = [
+  '#b8c8ff','#a0d4ff','#c4b0ff','#aaffdc','#ffd6a0',
+  '#b8c8ff','#a0d4ff','#c4b0ff','#aaffdc','#ffd6a0'
+];
+var DRONE_PROG = [
+  ['A',2],['E',2],['A',2],['D',2],['G',2],['E',2]
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   AUDIO INIT
+   ═══════════════════════════════════════════════════════════════ */
+async function initAudio(){
+  if(audioReady || audioInitPending) return;
+  audioInitPending = true;
+  await synth.init();
+  synth.setMasterVolume(0.38);
+
+  /* ── TK_PIANO : piano (triangle) — C418 deep & soft ───────── */
+  synth.loadInstrument('piano', TK_PIANO);
+  synth.updateTrack(TK_PIANO,{
+    unisonVoices:2, unisonDetune:5, unisonSpread:30,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:2200, filterQ:0.35
+  });
+  synth.updateEnvelope(TK_PIANO,{ attack:.02, decay:.60, sustain:.35, release:2.8 });
+  synth.updateVibrato(TK_PIANO, { rate:3.8, depth:5 });
+  synth.loadFxPreset(TK_PIANO,'space');
+  synth.setReverbMix(TK_PIANO,     .78);
+  synth.setReverbDecay(TK_PIANO,   .94);
+  synth.setChorusRate(TK_PIANO,    .30);
+  synth.setChorusDepth(TK_PIANO,   .20);
+  synth.setChorusMix(TK_PIANO,     .14);
+  synth.setDelayTime(TK_PIANO,     .55);
+  synth.setDelayFeedback(TK_PIANO, .35);
+  synth.setDelayMix(TK_PIANO,      .22);
+  synth.setTrackFaderVolume(TK_PIANO, .52);
+  synth.setTrackPan(TK_PIANO,  .15);
+
+  /* ── TK_VPAD : violinNatural — deep background pad ──────────── */
+  synth.loadInstrument('violinNatural', TK_VPAD);
+  synth.updateTrack(TK_VPAD,{
+    bowNoise:false, bowNoiseLevel:0,
+    unisonVoices:3, unisonDetune:6, unisonSpread:36,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:1800, filterQ:0.40
+  });
+  synth.updateEnvelope(TK_VPAD,{ attack:2.4, decay:1.2, sustain:.72, release:4.5 });
+  synth.updateVibrato(TK_VPAD, { rate:4.2, depth:7 });
+  synth.loadFxPreset(TK_VPAD,'space');
+  synth.setReverbMix(TK_VPAD,     .82);
+  synth.setReverbDecay(TK_VPAD,   .96);
+  synth.setChorusRate(TK_VPAD,    .18);
+  synth.setChorusDepth(TK_VPAD,   .32);
+  synth.setChorusMix(TK_VPAD,     .24);
+  synth.setDelayTime(TK_VPAD,     .62);
+  synth.setDelayFeedback(TK_VPAD, .28);
+  synth.setDelayMix(TK_VPAD,      .18);
+  synth.setTrackFaderVolume(TK_VPAD, .24);
+  synth.setTrackPan(TK_VPAD, -.35);
+
+  /* ── TK_DRONE : contrabass — cave pedal profond ────────────── */
+  synth.loadInstrument('contrabass', TK_DRONE);
+  synth.updateTrack(TK_DRONE,{
+    bowNoise:false, bowNoiseLevel:0,
+    unisonVoices:2, unisonDetune:3, unisonSpread:26,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:580, filterQ:0.50
+  });
+  synth.updateEnvelope(TK_DRONE,{ attack:2.8, decay:1.0, sustain:.80, release:5.0 });
+  synth.updateVibrato(TK_DRONE, { rate:2.8, depth:3 });
+  synth.loadFxPreset(TK_DRONE,'space');
+  synth.setReverbMix(TK_DRONE,     .85);
+  synth.setReverbDecay(TK_DRONE,   .96);
+  synth.setChorusRate(TK_DRONE,    .15);
+  synth.setChorusDepth(TK_DRONE,   .22);
+  synth.setChorusMix(TK_DRONE,     .18);
+  synth.setTrackFaderVolume(TK_DRONE, .36);
+  synth.setTrackPan(TK_DRONE, -.12);
+
+  /* ── TK_CHORD : piano (triangle) — chord pads LOUD & present ── */
+  synth.loadInstrument('piano', TK_CHORD);
+  synth.updateTrack(TK_CHORD,{
+    unisonVoices:3, unisonDetune:6, unisonSpread:34,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:3200, filterQ:0.38
+  });
+  synth.updateEnvelope(TK_CHORD,{ attack:.01, decay:.55, sustain:.42, release:3.2 });
+  synth.updateVibrato(TK_CHORD, { rate:3.5, depth:4 });
+  synth.loadFxPreset(TK_CHORD,'space');
+  synth.setReverbMix(TK_CHORD,     .72);
+  synth.setReverbDecay(TK_CHORD,   .92);
+  synth.setChorusRate(TK_CHORD,    .28);
+  synth.setChorusDepth(TK_CHORD,   .22);
+  synth.setChorusMix(TK_CHORD,     .16);
+  synth.setDelayTime(TK_CHORD,     .48);
+  synth.setDelayFeedback(TK_CHORD, .30);
+  synth.setDelayMix(TK_CHORD,      .20);
+  synth.setTrackFaderVolume(TK_CHORD, .88);
+  synth.setTrackPan(TK_CHORD, 0);
+
+  /* ── Per-track compressors — anti-saturation ─────────────────── */
+  [TK_PIANO, TK_VPAD, TK_DRONE, TK_CHORD].forEach(function(tk){
+    synth.setTrackCompressorEnabled(tk, true);
+    synth.setTrackCompressorThreshold(tk, -18);
+    synth.setTrackCompressorRatio(tk, 6);
+    synth.setTrackCompressorAttack(tk, 0.003);
+    synth.setTrackCompressorRelease(tk, 0.15);
+  });
+  /* Chord track even tighter */
+  synth.setTrackCompressorThreshold(TK_CHORD, -14);
+  synth.setTrackCompressorRatio(TK_CHORD, 8);
+
+  audioReady       = true;
+  audioInitPending = false;
+  droneLoop();
+  violinPadLoop();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NOTE TRACKING + PLAYBACK  (smooth crossfade pool)
+   ═══════════════════════════════════════════════════════════════ */
+var lastNoteTime=0, lastNoteIdx=-1, lastPlayPosIdx=-1;
+var pianoPool=[], MAX_PIANO=1;
+var currentClickNotes=[], MAX_CLICK=2, lastClickTime=0;
+var moveAccum=0;
+var mouseX=0, mouseY=0;
+var lastChordTime=0, CHORD_COOLDOWN=280;
+
+/* Smoothed filter values (lerp) */
+var smoothCutoff=1800, targetCutoff=1800;
+var smoothVib=5, targetVib=5;
+
+/* ── killNote : fade 40ms + stop oscillateurs immédiatement ──── */
+/* stopNote() seul utilise la release complète (jusqu'à 1.4s) :  */
+/* les oscillateurs tournent encore longtemps. killNote() force   */
+/* une extinction en 40ms pour ne pas saturer l'AudioContext.     */
+function killNote(id){
+  try{
+    var nd = synth.activeNotes && synth.activeNotes.get(id);
+    if(nd){
+      var AC = synth.audioContext;
+      var now = AC.currentTime;
+      var stopT = now + 0.05;
+      if(nd.gainNode){
+        nd.gainNode.gain.cancelScheduledValues(now);
+        nd.gainNode.gain.setValueAtTime(nd.gainNode.gain.value, now);
+        nd.gainNode.gain.linearRampToValueAtTime(0, now + 0.04);
+      }
+      if(nd.oscillators) nd.oscillators.forEach(function(v){ try{v.stop(stopT);}catch(e){} });
+      if(nd.lfo)         try{nd.lfo.stop(stopT);}catch(e){}
+      if(nd.extraLfos)   nd.extraLfos.forEach(function(l){ try{l.stop(stopT);}catch(e){} });
+    }
+  }catch(e){}
+  try{ synth.stopNote(id); }catch(e){}
+}
+
+/* ── Global polyphony guard — hard limit, kill oldest en 40ms ── */
+var allNoteIds=[];
+var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+var MAX_GLOBAL_NOTES = isSafari ? 6 : 8;
+function trackNote(id){ allNoteIds.push(id); pruneGlobal(); }
+function pruneGlobal(){
+  while(allNoteIds.length > MAX_GLOBAL_NOTES){
+    killNote(allNoteIds.shift());
+  }
+}
+
+function playNote(degIdx, velocity, duration){
+  if(!audioReady) return;
+  var now = performance.now();
+  if(now - lastNoteTime < 160) return;
+  if(degIdx === lastNoteIdx && now - lastNoteTime < 380) return;
+  lastNoteTime = now;
+  degIdx = Math.max(0, Math.min(SCALE.length-1, degIdx|0));
+  var nn = SCALE[degIdx];
+  lastNoteIdx = degIdx;
+
+  targetCutoff = 1200 + velocity*2200;
+  targetVib    = 3 + velocity*6;
+
+  var noteId = synth.playNoteByName(nn[0], nn[1], TK_PIANO, duration||3.5);
+  pianoPool.push(noteId); trackNote(noteId);
+  while(pianoPool.length > MAX_PIANO){
+    killNote(pianoPool.shift());
+  }
+
+  /* sparse violin shimmer on some notes */
+  if(now - lastClickTime > 800 && Math.random() < .18){
+    lastClickTime = now;
+    var vd  = Math.min(SCALE.length-1, degIdx + 2 + Math.floor(Math.random()*2));
+    var vn  = SCALE[vd];
+    var vId = synth.playNoteByName(vn[0], vn[1], TK_VPAD, 5.0);
+    currentClickNotes.push(vId); trackNote(vId);
+    if(currentClickNotes.length > MAX_CLICK){
+      killNote(currentClickNotes.shift());
+    }
+  }
+
+  spawnInkSplash(mouseX, mouseY, velocity);
+  spawnRipple(mouseX, mouseY, velocity, DEG_COLOR[degIdx]);
+  showNoteLabel(nn[0] + nn[1]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHORD PADS — A minor voicings (C418 style)
+   ═══════════════════════════════════════════════════════════════ */
+var CHORD_PADS = [
+  { kanji:'静', name:'Am',    chord:[['A',3],['C',4],['E',4],['A',4]], color:'#b8c8ff', pan:-.25 },
+  { kanji:'夢', name:'Em',    chord:[['E',3],['G',4],['B',4],['E',5]], color:'#a0d4ff', pan:-.12 },
+  { kanji:'花', name:'Fmaj7', chord:[['F',3],['A',4],['C',5],['E',5]], color:'#c4b0ff', pan: .0  },
+  { kanji:'雪', name:'Cmaj',  chord:[['C',4],['E',4],['G',4],['C',5]], color:'#aaffdc', pan: .0  },
+  { kanji:'月', name:'Dm',    chord:[['D',3],['F',4],['A',4],['D',5]], color:'#ffd6a0', pan: .12 },
+  { kanji:'風', name:'G',     chord:[['G',3],['B',3],['D',4],['G',4]], color:'#ffecb3', pan: .25 }
+];
+
+var chordPianoPool = [], MAX_CHORD_POOL=4;
+function playChordPad(padIdx){
+  if(!audioReady) return;
+  var now = performance.now();
+  /* Cooldown — prevent spam */
+  if(now - lastChordTime < CHORD_COOLDOWN) return;
+  lastChordTime = now;
+  var pad = CHORD_PADS[padIdx];
+  if(!pad) return;
+
+  /* Kill ALL old chord notes immediately before playing new ones */
+  while(chordPianoPool.length > 0){
+    killNote(chordPianoPool.shift());
+  }
+
+  /* Pan stereo per chord — left to right */
+  synth.setTrackPan(TK_CHORD, pad.pan);
+
+  /* Loud arpeggio via TK_CHORD — 90ms stagger */
+  pad.chord.forEach(function(n, i){
+    setTimeout(function(){
+      var id = synth.playNoteByName(n[0], n[1], TK_CHORD, 5.5);
+      chordPianoPool.push(id); trackNote(id);
+      if(chordPianoPool.length > MAX_CHORD_POOL){
+        killNote(chordPianoPool.shift());
+      }
+    }, i*90);
+  });
+
+  /* Violin pad on root — opposite stereo for depth */
+  setTimeout(function(){
+    var root = pad.chord[0];
+    synth.setTrackPan(TK_VPAD, -pad.pan * 1.2 || -.30);
+    var rId = synth.playNoteByName(root[0], root[1], TK_VPAD, 7.0);
+    currentClickNotes.push(rId); trackNote(rId);
+    while(currentClickNotes.length > MAX_CLICK+1){
+      killNote(currentClickNotes.shift());
+    }
+  }, 40);
+
+  /* Visual feedback */
+  var el = document.querySelector('.pad[data-idx="'+padIdx+'"]');
+  if(el){
+    el.classList.add('active');
+    setTimeout(function(){ el.classList.remove('active'); }, 380);
+    var rect = el.getBoundingClientRect();
+    var cx = rect.left + rect.width/2;
+    var cy = rect.top  + rect.height/2;
+    spawnRipple(cx, cy, 1.1, pad.color);
+    spawnRipple(cx, cy, .85, pad.color);
+    spawnRipple(cx, cy, .6,  'rgba(255,240,200,.35)');
+    for(var k=0;k<12;k++){
+      spawnInkSplash(cx+(Math.random()-.5)*40, cy+(Math.random()-.5)*40, .85);
+    }
+    for(var p=0;p<10;p++){
+      petals.push({
+        x:cx+(Math.random()-.5)*50, y:cy+(Math.random()-.5)*20,
+        vx:(Math.random()-.5)*3.2, vy:-1.5-Math.random()*1.5,
+        r:2.5+Math.random()*2.8,
+        angle:Math.random()*Math.PI*2,
+        spin:(Math.random()-.5)*.08,
+        wb:Math.random()*Math.PI*2, wbAmp:.4+Math.random()*.5, wbSpd:.02+Math.random()*.02,
+        a:.7+Math.random()*.3,
+        h:340+Math.random()*20, s:70+Math.random()*20, l:82+Math.random()*12
+      });
+    }
+  }
+
+  showNoteLabel(pad.kanji + ' · ' + pad.name);
+}
+
+var lastClickChordTime=0;
+function playClickChord(degIdx){
+  if(!audioReady) return;
+  var now = performance.now();
+  if(now - lastClickChordTime < 220) return;
+  lastClickChordTime = now;
+  /* Piano arpeggio on click — 3 notes C418 style */
+  [0,2,4].forEach(function(off, i){
+    setTimeout(function(){
+      var d  = Math.max(0, Math.min(SCALE.length-1, degIdx + off));
+      var nn = SCALE[d];
+      var kId= synth.playNoteByName(nn[0], nn[1], TK_PIANO, 4.0);
+      currentClickNotes.push(kId); trackNote(kId);
+      if(currentClickNotes.length > MAX_CLICK + 2){
+        killNote(currentClickNotes.shift());
+      }
+    }, i*110);
+  });
+}
+
+/* ── Drone cycle ──────────────────────────────────────────────── */
+var droneStep=0, currentDroneNote=null;
+function droneLoop(){
+  if(!audioReady) return;
+  if(currentDroneNote){ killNote(currentDroneNote); currentDroneNote=null; }
+  var n = DRONE_PROG[droneStep % DRONE_PROG.length];
+  currentDroneNote = synth.playNoteByName(n[0], n[1], TK_DRONE, 14); trackNote(currentDroneNote);
+  droneStep++;
+  setTimeout(droneLoop, 13000);
+}
+
+/* ── Violin pad ambient loop (fond continu comme Sweden) ─────── */
+var vpadStep=0, currentVpadNotes=[];
+var VPAD_PROG = [
+  [['A',3],['E',4]],
+  [['C',4],['G',4]],
+  [['D',4],['A',4]],
+  [['E',4],['A',4]],
+  [['C',4],['E',4]],
+  [['A',3],['D',4]]
+];
+function violinPadLoop(){
+  if(!audioReady) return;
+  /* release anciennes notes doucement */
+  while(currentVpadNotes.length > 2){
+    killNote(currentVpadNotes.shift());
+  }
+  var chord = VPAD_PROG[vpadStep % VPAD_PROG.length];
+  chord.forEach(function(n, i){
+    setTimeout(function(){
+      var id = synth.playNoteByName(n[0], n[1], TK_VPAD, 12);
+      currentVpadNotes.push(id); trackNote(id);
+    }, i*200);
+  });
+  vpadStep++;
+  setTimeout(violinPadLoop, 10000);
+}
+
+/* ── Idle melody (piano auto-phrases C418 contemplatives) ────── */
+var lastMoveTime=performance.now(), idleMelodyTimer=null;
+function scheduleIdleMelody(){
+  if(idleMelodyTimer) clearTimeout(idleMelodyTimer);
+  idleMelodyTimer = setTimeout(function tick(){
+    var now = performance.now();
+    if(now - lastMoveTime > 1200 && audioReady){
+      var base   = Math.max(0, Math.min(SCALE.length-1, lastNoteIdx>=0 ? lastNoteIdx : Math.floor(SCALE.length/2)));
+      var offset = [-3,-2,-1,0,1,2,3][Math.floor(Math.random()*7)];
+      var deg    = Math.max(0, Math.min(SCALE.length-1, base + offset));
+      playNote(deg, .22 + Math.random()*.22, 4.0);
+    }
+    idleMelodyTimer = setTimeout(tick, 1200 + Math.random()*900);
+  }, 2000);
+}
+
+/* ── Note label HUD ───────────────────────────────────────────── */
+var nlabel = document.getElementById('nlabel');
+function showNoteLabel(txt){
+  nlabel.textContent = txt;
+  nlabel.classList.add('show');
+  clearTimeout(nlabel._t);
+  nlabel._t = setTimeout(function(){ nlabel.classList.remove('show'); }, 900);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CANVAS SETUP
+   ═══════════════════════════════════════════════════════════════ */
+var cvBg  = document.getElementById('cv-bg');
+var cvMid = document.getElementById('cv-mid');
+var cvFg  = document.getElementById('cv-fg');
+var ctxBg  = cvBg.getContext('2d');
+var ctxMid = cvMid.getContext('2d');
+var ctxFg  = cvFg.getContext('2d');
+var W=0, H=0, DPR=1, t=0;
+
+function resize(){
+  /* Cap DPR at 1.5 — Retina/HiDPI at 2.0 = 4× pixels, kills Mac/Linux */
+  DPR = Math.min(window.devicePixelRatio||1, 1.5);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  /* Invalidate cached gradients on resize */
+  _cacheWaterG = null; _cacheWaterRG = null; _cacheVigG = null;
+  mists.forEach(function(m){ m._g = null; });
+  [cvBg,cvMid,cvFg].forEach(function(c){
+    c.width  = W*DPR; c.height = H*DPR;
+    c.getContext('2d').setTransform(DPR,0,0,DPR,0,0);
+  });
+  paintStaticBg();
+  initBamboos();
+  initMists();
+  initPetals();
+}
+window.addEventListener('resize', resize);
+
+/* ═══════════════════════════════════════════════════════════════
+   STATIC BACKGROUND  (painted once)
+   ═══════════════════════════════════════════════════════════════ */
+function paintStaticBg(){
+  var g = ctxBg.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,   '#00080f');
+  g.addColorStop(.38, '#010d1e');
+  g.addColorStop(.74, '#020b17');
+  g.addColorStop(1,   '#000408');
+  ctxBg.fillStyle = g;
+  ctxBg.fillRect(0,0,W,H);
+  paintStars();
+  paintMoon();
+  paintMountains();
+}
+
+function paintStars(){
+  var s=42;
+  function r(){ s=(s*1664525+1013904223)&0xffffffff; return (s>>>0)/0xffffffff; }
+  for(var i=0;i<220;i++){
+    var sx=r()*W, sy=r()*H*.70;
+    ctxBg.fillStyle = 'rgba(210,225,255,'+(r()*.55+.08)+')';
+    ctxBg.beginPath();
+    ctxBg.arc(sx, sy, r()*1.1+.2, 0, Math.PI*2);
+    ctxBg.fill();
+  }
+}
+
+function paintMoon(){
+  var mx=W*.80, my=H*.11, mr=Math.min(W,H)*.068;
+  [4,3,2,1].forEach(function(i){
+    var hg=ctxBg.createRadialGradient(mx,my,mr*.5,mx,my,mr*(1+i*.9));
+    hg.addColorStop(0,'rgba(255,252,218,'+(0.058/i)+')');
+    hg.addColorStop(1,'rgba(255,252,200,0)');
+    ctxBg.fillStyle=hg;
+    ctxBg.beginPath(); ctxBg.arc(mx,my,mr*(1+i*.9),0,Math.PI*2); ctxBg.fill();
+  });
+  var mg=ctxBg.createRadialGradient(mx-mr*.22,my-mr*.22,0,mx,my,mr);
+  mg.addColorStop(0,   'rgba(255,255,245,.95)');
+  mg.addColorStop(.65, 'rgba(252,250,218,.92)');
+  mg.addColorStop(1,   'rgba(240,238,200,.82)');
+  ctxBg.fillStyle=mg;
+  ctxBg.beginPath(); ctxBg.arc(mx,my,mr,0,Math.PI*2); ctxBg.fill();
+}
+
+function paintMountains(){
+  var layers=[
+    {yb:.58,amp:.22,pk:6,col:'rgba(5,15,35,.90)'},
+    {yb:.66,amp:.15,pk:5,col:'rgba(3,10,26,.95)'},
+    {yb:.72,amp:.09,pk:4,col:'rgba(2,7,18,.98)'}
+  ];
+  var sd=77;
+  function rr(){ sd=(sd*1664525+1013904223)&0xffffffff; return (sd>>>0)/0xffffffff; }
+  layers.forEach(function(l){
+    var pts=[[0, H*(l.yb+l.amp*.4)]];
+    var n=l.pk*2+2;
+    for(var p=1;p<=n;p++){
+      var px=(p/(n+1))*W;
+      var py=p%2===1
+        ? H*(l.yb - l.amp*(.5+rr()*.5))
+        : H*(l.yb + l.amp*(.1+rr()*.3));
+      pts.push([px,py]);
+    }
+    pts.push([W,H*(l.yb+l.amp*.4)],[W,H],[0,H]);
+    ctxBg.fillStyle=l.col;
+    ctxBg.beginPath();
+    ctxBg.moveTo(pts[0][0],pts[0][1]);
+    for(var i=1;i<pts.length-2;i++){
+      var cx=(pts[i][0]+pts[i+1][0])/2, cy=(pts[i][1]+pts[i+1][1])/2;
+      ctxBg.quadraticCurveTo(pts[i][0],pts[i][1],cx,cy);
+    }
+    ctxBg.lineTo(pts[pts.length-2][0],pts[pts.length-2][1]);
+    ctxBg.lineTo(pts[pts.length-1][0],pts[pts.length-1][1]);
+    ctxBg.closePath(); ctxBg.fill();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BAMBOO
+   ═══════════════════════════════════════════════════════════════ */
+var bamboos=[];
+function initBamboos(){
+  bamboos=[];
+  [.04,.10,.16,.82,.88,.94,.97].forEach(function(xN,i){
+    bamboos.push({
+      x: W*xN,
+      totalH: H*(.52+(i%3)*.14),
+      segments: 7+(i%3),
+      baseW: 6+(i%3)*3,
+      phase: i*1.1,
+      speed: .38+(i%3)*.14,
+      flip: xN>.5 ? -1 : 1
+    });
+  });
+}
+
+function drawBamboos(ctx){
+  bamboos.forEach(function(b){
+    var sway = Math.sin(t*.00040*b.speed + b.phase)*9;
+    ctx.save(); ctx.translate(b.x, H);
+    var segH = b.totalH / b.segments;
+    /* one gradient per bamboo per frame — not per segment */
+    var sw0 = b.baseW;
+    var gr = ctx.createLinearGradient(-sw0, 0, sw0, 0);
+    gr.addColorStop(0,   'rgba(8,38,8,.92)');
+    gr.addColorStop(.35, 'rgba(22,72,16,.96)');
+    gr.addColorStop(.65, 'rgba(38,100,24,.92)');
+    gr.addColorStop(1,   'rgba(12,50,8,.88)');
+    for(var s=0;s<b.segments;s++){
+      var sw  = b.baseW * Math.max(.25, 1 - s/(b.segments*1.5));
+      var ey  = -(s+1)*segH;
+      var sy  = -s*segH;
+      var sf  = s/b.segments;
+      var ox  = sway * sf * sf;
+      ctx.fillStyle=gr;
+      ctx.fillRect(ox-sw/2, ey, sw, segH-1.5);
+      ctx.strokeStyle='rgba(4,22,4,.9)'; ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.moveTo(ox-sw/2-1,sy-1); ctx.lineTo(ox+sw/2+1,sy-1); ctx.stroke();
+      if(s>0 && s%2===1){
+        var ld = b.flip * (s%4<2 ? 1 : -1);
+        drawLeaf(ctx, ox, sy-segH*.22, ld, sw, sway*sf*.4);
+      }
+    }
+    ctx.restore();
+  });
+}
+
+function drawLeaf(ctx, x, y, dir, bw, sway){
+  var len=28+bw*2;
+  ctx.save(); ctx.translate(x,y);
+  ctx.rotate(dir*(.55+sway*.015)+(dir>0?-.10:.10));
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(dir*len*.55,-7, dir*len,0);
+  ctx.quadraticCurveTo(dir*len*.55, 7, 0,0);
+  ctx.fillStyle='rgba(24,72,16,.62)'; ctx.fill();
+  ctx.strokeStyle='rgba(35,90,20,.30)'; ctx.lineWidth=.5;
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(dir*len*.82,0); ctx.stroke();
+  ctx.restore();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHERRY BLOSSOM PETALS
+   ═══════════════════════════════════════════════════════════════ */
+var petals=[];
+function initPetals(){
+  petals=[];
+  for(var i=0;i<72;i++) petals.push(mkPetal(true));
+}
+function mkPetal(scatter){
+  return{
+    x:Math.random()*W,
+    y:scatter ? Math.random()*H : -14-Math.random()*H*.15,
+    vx:(Math.random()-.5)*.5,
+    vy:.32+Math.random()*.60,
+    r:2.5+Math.random()*2.8,
+    angle:Math.random()*Math.PI*2,
+    spin:(Math.random()-.5)*.033,
+    wb:Math.random()*Math.PI*2,
+    wbAmp:.30+Math.random()*.50,
+    wbSpd:.017+Math.random()*.016,
+    a:.40+Math.random()*.45,
+    h:340+Math.random()*18,
+    s:62+Math.random()*22,
+    l:80+Math.random()*14
+  };
+}
+function updatePetals(){
+  var wind=Math.sin(t*.0005)*.38;
+  for(var i=petals.length-1;i>=0;i--){
+    var p=petals[i];
+    p.wb+=p.wbSpd; p.x+=p.vx+wind+Math.sin(p.wb)*p.wbAmp;
+    p.y+=p.vy; p.angle+=p.spin;
+    if(p.y>H+22||p.x<-32||p.x>W+32) petals.splice(i,1);
+  }
+  while(petals.length<60) petals.push(mkPetal(false));
+}
+function drawPetals(ctx){
+  petals.forEach(function(p){
+    ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle);
+    ctx.globalAlpha=p.a*.72;
+    ctx.fillStyle='hsl('+p.h+','+p.s+'%,'+p.l+'%)';
+    /* arc() instead of ellipse() — much faster on Safari */
+    ctx.save(); ctx.scale(1, 0.52);
+    ctx.beginPath(); ctx.arc(0,0,p.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RIPPLES
+   ═══════════════════════════════════════════════════════════════ */
+var ripples=[];
+function spawnRipple(x, y, vel, color){
+  ripples.push({x,y,r:4,  maxR:105+vel*95,  life:1, lw:1.4, color:color||'rgba(200,215,255,.7)'});
+  ripples.push({x,y,r:2,  maxR:165+vel*75,  life:1, lw:.65,  color:color||'rgba(200,215,255,.4)'});
+}
+function updateRipples(){
+  for(var i=ripples.length-1;i>=0;i--){
+    var r=ripples[i];
+    r.r+=(r.maxR-r.r)*.045; r.life-=.009;
+    if(r.life<=0) ripples.splice(i,1);
+  }
+}
+function drawRipples(ctx){
+  ripples.forEach(function(r){
+    ctx.save(); ctx.globalAlpha=r.life*.58;
+    ctx.strokeStyle=r.color; ctx.lineWidth=r.lw;
+    ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,Math.PI*2); ctx.stroke();
+    ctx.restore();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INK SPLASH PARTICLES
+   ═══════════════════════════════════════════════════════════════ */
+var inkParts=[];
+function spawnInkSplash(x,y,vel){
+  var n=2+Math.floor(vel*4);
+  for(var i=0;i<n;i++){
+    inkParts.push({
+      x:x+(Math.random()-.5)*14, y:y+(Math.random()-.5)*14,
+      vx:(Math.random()-.5)*.9,  vy:(Math.random()-.5)*.9-.38,
+      r:1+Math.random()*2.2+vel*1.8,
+      life:1, decay:.013+Math.random()*.010
+    });
+  }
+  if(inkParts.length>160) inkParts.splice(0,inkParts.length-160);
+}
+function updateInk(){
+  for(var i=inkParts.length-1;i>=0;i--){
+    var p=inkParts[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.016; p.life-=p.decay;
+    if(p.life<=0) inkParts.splice(i,1);
+  }
+}
+function drawInk(ctx){
+  /* batch all ink in one globalAlpha pass — no save/restore per particle */
+  ctx.fillStyle='rgba(218,228,255,.82)';
+  inkParts.forEach(function(p){
+    ctx.globalAlpha=p.life*.68;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MIST LAYERS
+   ═══════════════════════════════════════════════════════════════ */
+var mists=[];
+function initMists(){
+  mists=[];
+  for(var i=0;i<5;i++){
+    mists.push({
+      x:Math.random()*W, y:H*(.33+Math.random()*.36),
+      rx:155+Math.random()*235, ry:32+Math.random()*48,
+      al:.022+Math.random()*.028,
+      vx:(Math.random()-.5)*.11,
+      ph:Math.random()*Math.PI*2
+    });
+  }
+}
+function updateMists(){
+  mists.forEach(function(m){
+    m.x+=m.vx; m.ph+=.0014; m.y+=Math.sin(m.ph)*.08;
+    if(m.x>W+m.rx) m.x=-m.rx;
+    if(m.x<-m.rx)  m.x=W+m.rx;
+  });
+}
+function drawMists(ctx){
+  mists.forEach(function(m){
+    /* recreate gradient only when x moved >4px — saves ~5 gradient/frame */
+    var px = m._px|0;
+    if(!m._g || Math.abs(m.x - px) > 4){
+      m._px = m.x;
+      m._g = ctx.createRadialGradient(m.x,m.y,0,m.x,m.y,m.rx);
+      m._g.addColorStop(0,'rgba(188,210,240,'+(m.al*2)+')');
+      m._g.addColorStop(.5,'rgba(188,210,240,'+m.al+')');
+      m._g.addColorStop(1,'rgba(188,210,240,0)');
+    }
+    ctx.fillStyle=m._g;
+    ctx.save(); ctx.scale(1, m.ry/m.rx);
+    ctx.beginPath(); ctx.arc(m.x, m.y*(m.rx/m.ry), m.rx, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   WATER REFLECTION (bottom 24% of screen)
+   ═══════════════════════════════════════════════════════════════ */
+var _cacheWaterG=null, _cacheWaterRG=null, _cacheVigG=null;
+
+function drawWater(ctx){
+  var wY=H*.76, wH=H-wY;
+  if(!_cacheWaterG){
+    _cacheWaterG=ctx.createLinearGradient(0,wY,0,H);
+    _cacheWaterG.addColorStop(0,'rgba(3,8,24,.80)');
+    _cacheWaterG.addColorStop(1,'rgba(0,3,12,.96)');
+  }
+  ctx.fillStyle=_cacheWaterG; ctx.fillRect(0,wY,W,wH);
+
+  ctx.save(); ctx.beginPath(); ctx.rect(0,wY,W,wH); ctx.clip();
+  for(var rl=0;rl<9;rl++){
+    var ly=wY+8+rl*(wH/9.5);
+    var wv=Math.sin(t*.0009+rl*.8)*11;
+    var al=.072-rl*.006; if(al<=0) continue;
+    ctx.strokeStyle='rgba(200,220,255,'+al+')'; ctx.lineWidth=.7;
+    ctx.beginPath();
+    ctx.moveTo(W*.78-88+wv, ly);
+    ctx.lineTo(W*.78+88-wv, ly);
+    ctx.stroke();
+  }
+  /* surface wave — step 16px instead of 4px (4x fewer points) */
+  var mxR=W*.80, myR=wY+H*.11*.18+14;
+  if(!_cacheWaterRG){
+    _cacheWaterRG=ctx.createRadialGradient(mxR,myR,0,mxR,myR,70);
+    _cacheWaterRG.addColorStop(0,'rgba(255,255,218,.20)');
+    _cacheWaterRG.addColorStop(1,'rgba(255,255,218,0)');
+  }
+  ctx.fillStyle=_cacheWaterRG;
+  ctx.save(); ctx.scale(1,.286); /* 20/70 */
+  ctx.beginPath(); ctx.arc(mxR,myR*(1/.286),70,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+
+  ctx.save(); ctx.globalAlpha=.10;
+  ctx.strokeStyle='rgba(140,180,255,.55)'; ctx.lineWidth=.7;
+  ctx.beginPath();
+  for(var wx=0;wx<=W;wx+=16){
+    var wy2=wY+Math.sin(wx*.018+t*.0007)*1.5;
+    wx===0 ? ctx.moveTo(wx,wy2) : ctx.lineTo(wx,wy2);
+  }
+  ctx.stroke(); ctx.restore();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VIGNETTE
+   ═══════════════════════════════════════════════════════════════ */
+function drawVignette(ctx){
+  if(!_cacheVigG){
+    _cacheVigG=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.24,W/2,H/2,Math.max(W,H)*.82);
+    _cacheVigG.addColorStop(0,'rgba(0,0,0,0)');
+    _cacheVigG.addColorStop(1,'rgba(0,2,8,.68)');
+  }
+  ctx.fillStyle=_cacheVigG; ctx.fillRect(0,0,W,H);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER LOOP — capped 60fps (ProMotion / 120Hz fix)
+   ═══════════════════════════════════════════════════════════════ */
+var _lastFrame=0;
+function render(now){
+  requestAnimationFrame(render);
+  if(now - _lastFrame < 15.5) return;  /* ~64fps cap */
+  _lastFrame = now;
+  t++;
+
+  /* ── Smooth filter/vibrato lerp ────────────────── */
+  if(audioReady){
+    var d1 = targetCutoff - smoothCutoff;
+    var d2 = targetVib    - smoothVib;
+    if(Math.abs(d1) > 1 || Math.abs(d2) > .05){
+      smoothCutoff += d1 * .07;
+      smoothVib    += d2 * .07;
+      synth.updateTrack(TK_PIANO,  { filterCutoff: smoothCutoff });
+      synth.updateVibrato(TK_PIANO,{ rate:3.8, depth: smoothVib });
+    }
+  }
+
+  /* ── Mid canvas ─────────────────────────────────── */
+  ctxMid.clearRect(0,0,W,H);
+  drawWater(ctxMid);
+  drawBamboos(ctxMid);
+  updateRipples(); drawRipples(ctxMid);
+  updateInk();     drawInk(ctxMid);
+  updatePetals();  drawPetals(ctxMid);
+
+  /* ── Fg canvas ──────────────────────────────────── */
+  ctxFg.clearRect(0,0,W,H);
+  updateMists();   drawMists(ctxFg);
+  drawVignette(ctxFg);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INPUT HANDLERS
+   ═══════════════════════════════════════════════════════════════ */
+var cursorEl = document.getElementById('cursor');
+var mouseDown = false;
+
+/* Cursor position — updated via rAF to avoid layout reflow */
+var _cursorPX=0, _cursorPY=0, _cursorRaf=false;
+function _flushCursor(){
+  _cursorRaf=false;
+  cursorEl.style.setProperty('--cx',_cursorPX+'px');
+  cursorEl.style.setProperty('--cy',_cursorPY+'px');
+}
+
+window.addEventListener('pointermove', function(e){
+  var x=e.clientX, y=e.clientY;
+  _cursorPX=x; _cursorPY=y;
+  if(!_cursorRaf){ _cursorRaf=true; requestAnimationFrame(_flushCursor); }
+  lastMoveTime = performance.now();
+  var dx=x-mouseX, dy=y-mouseY; mouseX=x; mouseY=y;
+  var d=Math.sqrt(dx*dx+dy*dy);
+
+  if(audioReady){
+    var yN  = 1-(y/H);
+    var baseVel = .20 + yN*.40;
+    targetCutoff = 1200 + baseVel*2200;
+    targetVib    = 3 + baseVel*7;
+  }
+
+  if(!audioReady) return;
+  moveAccum+=d;
+  if(moveAccum>26){
+    moveAccum=0;
+    var deg=Math.max(0,Math.min(SCALE.length-1, Math.floor((x/W)*SCALE.length)));
+    if(deg!==lastPlayPosIdx){
+      var yN2=1-(y/H);
+      var vel=Math.min(1, .20+d/60+yN2*.22);
+      playNote(deg, vel, 3.8);
+      lastPlayPosIdx=deg;
+    }
+    if(d>8) spawnInkSplash(x,y,Math.min(.55,d/42));
+  }
+});
+
+/* ── Click on chord pads ──────────────────────────── */
+document.querySelectorAll('.pad').forEach(function(el){
+  el.addEventListener('pointerdown', function(e){
+    e.stopPropagation();
+    var idx = parseInt(el.getAttribute('data-idx'),10);
+    if(!audioReady){
+      initAudio().then(function(){
+        document.getElementById('start').classList.add('hide');
+        document.getElementById('chord-pads').classList.add('show');
+        cursorEl.classList.add('ready');
+        scheduleIdleMelody();
+        setTimeout(function(){ playChordPad(idx); }, 300);
+      });
+      return;
+    }
+    playChordPad(idx);
+  });
+});
+
+/* ── Global pointerdown (zone libre) ──────────────── */
+window.addEventListener('pointerdown', function(e){
+  if(e.target && e.target.closest && e.target.closest('.pad, #chord-pads, #start')) return;
+  mouseDown=true; cursorEl.classList.add('pressing');
+  if(!audioReady) return;
+  var x=e.clientX, y=e.clientY; mouseX=x; mouseY=y;
+  var deg=Math.max(0,Math.min(SCALE.length-1, Math.floor((x/W)*SCALE.length)));
+  playClickChord(deg);
+  spawnRipple(x,y,.90, DEG_COLOR[deg]);
+  spawnRipple(x,y,.65,'rgba(255,240,195,.28)');
+  spawnInkSplash(x,y,.88);
+});
+
+window.addEventListener('pointerup', function(){
+  mouseDown=false; cursorEl.classList.remove('pressing');
+});
+
+/* ── Button Entrer + Enter key ────────────────────── */
+function enterExperience(){
+  initAudio().then(function(){
+    document.getElementById('start').classList.add('hide');
+    document.getElementById('chord-pads').classList.add('show');
+    cursorEl.classList.add('ready');
+    scheduleIdleMelody();
+  });
+}
+document.getElementById('btn-enter').addEventListener('click', enterExperience);
+
+/* ── Keyboard: Enter + QSDFGH(azerty) / ASDFGH(qwerty) + 1-6 ── */
+var KEY_MAP_AZ = { q:0, s:1, d:2, f:3, g:4, h:5 };
+var KEY_MAP_QW = { a:0, s:1, d:2, f:3, g:4, h:5 };
+/* Auto-detect layout: if user presses 'q' in azerty it maps to KeyA code */
+var detectedAzerty = false;
+/* Touches actuellement enfoncées — bloque le key-repeat système */
+var _keysHeld = {};
+document.addEventListener('keyup', function(e){ delete _keysHeld[e.code]; });
+
+document.addEventListener('keydown', function(e){
+  if(e.key==='Enter' && !audioReady){ enterExperience(); return; }
+  if(!audioReady) return;
+  /* Ignorer key-repeat (touche maintenue) — sinon 30 events/sec */
+  if(e.repeat || _keysHeld[e.code]) return;
+  _keysHeld[e.code] = true;
+  var k = e.key.toLowerCase();
+  /* Layout detection: code KeyQ + key 'a' = AZERTY */
+  if(e.code==='KeyQ' && k==='a') detectedAzerty = false;
+  if(e.code==='KeyA' && k==='q') detectedAzerty = true;
+  /* Try both maps — use e.code for reliable mapping */
+  var codeMap = { KeyQ:0, KeyA:0, KeyS:1, KeyD:2, KeyF:3, KeyG:4, KeyH:5 };
+  var idx = -1;
+  if(detectedAzerty){
+    /* AZERTY: Q=KeyA, S=KeyS, D=KeyD, F=KeyF, G=KeyG, H=KeyH */
+    var azMap = { KeyA:0, KeyS:1, KeyD:2, KeyF:3, KeyG:4, KeyH:5 };
+    if(e.code in azMap) idx = azMap[e.code];
+  } else {
+    /* QWERTY: A=KeyA, S=KeyS, D=KeyD, F=KeyF, G=KeyG, H=5 */
+    var qwMap = { KeyA:0, KeyS:1, KeyD:2, KeyF:3, KeyG:4, KeyH:5 };
+    if(e.code in qwMap) idx = qwMap[e.code];
+  }
+  /* Fallback 1-6 */
+  if(idx===-1 && k>='1' && k<='6') idx = parseInt(k,10) - 1;
+  if(idx>=0 && idx<=5){
+    playChordPad(idx);
+    e.preventDefault();
+    /* Update key labels to match detected layout */
+    var labels = detectedAzerty ? ['Q','S','D','F','G','H'] : ['A','S','D','F','G','H'];
+    document.querySelectorAll('.pad-key').forEach(function(el,i){ el.textContent = labels[i]; });
+  }
+});
+
+/* ── Boot ─────────────────────────────────────────────────────── */
+resize();
+render();
+</script>
+</body>
+</html>

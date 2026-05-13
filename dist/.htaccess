@@ -1,0 +1,25 @@
+# ── CDN dist — serve files directly + CORS ──────────────────────
+Options -Indexes
+
+# CORS: allow any origin (required for AudioWorklet, WebWorker, etc.)
+<IfModule mod_headers.c>
+  Header set Access-Control-Allow-Origin "*"
+  Header set Access-Control-Allow-Methods "GET, OPTIONS"
+  Header set Access-Control-Allow-Headers "Content-Type, Range"
+  Header set Cross-Origin-Resource-Policy "cross-origin"
+</IfModule>
+
+# Serve all files directly — no PHP front controller
+RewriteEngine On
+RewriteBase /
+
+# Existing files → serve as-is
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Existing directories → serve as-is
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Nothing else → 404
+RewriteRule ^ - [R=404,L]

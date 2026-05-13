@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>無限 — Infinite Loop</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#030200;overflow:hidden;font-family:'Georgia','Times New Roman',serif}
+canvas{display:block;position:fixed;inset:0;cursor:crosshair;touch-action:none}
+#vignette{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center,
+    transparent 18%,
+    rgba(3,2,0,.20) 42%,
+    rgba(2,1,0,.62) 68%,
+    rgba(0,0,0,.95) 100%);
+}
+#start{
+  position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+  background:rgba(2,1,0,.98);transition:opacity 1.3s ease;
+}
+#start.hide{opacity:0;pointer-events:none}
+.si{text-align:center;color:#e8b84b;max-width:520px;padding:24px}
+.si-kanji{font-size:clamp(52px,10vw,96px);letter-spacing:.06em;line-height:1;margin-bottom:.3em;opacity:.85}
+.si-title{font-size:clamp(18px,3vw,28px);letter-spacing:.35em;text-transform:uppercase;margin-bottom:.6em}
+.si-hr{width:60px;height:1px;background:rgba(232,184,75,.30);margin:0 auto .8em}
+.si-sub{font-size:clamp(10px,1.4vw,13px);letter-spacing:.22em;text-transform:uppercase;opacity:.48;line-height:1.9}
+.si-btn{
+  margin-top:2em;background:transparent;border:1px solid rgba(232,184,75,.28);color:#e8b84b;
+  font-family:inherit;font-size:clamp(10px,1.4vw,13px);letter-spacing:.30em;text-transform:uppercase;
+  padding:13px 38px;cursor:pointer;transition:all .35s;
+}
+.si-btn:hover{background:rgba(232,184,75,.07);border-color:rgba(232,184,75,.68);color:#fff}
+#hud{
+  position:fixed;top:1.4em;left:50%;transform:translateX(-50%);
+  z-index:10;pointer-events:none;opacity:0;transition:opacity 1s ease .5s;
+  display:flex;gap:2.4em;align-items:center;
+}
+#hud.show{opacity:1}
+.hud-item{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:rgba(232,184,75,.38);text-align:center}
+.hud-val{font-size:17px;letter-spacing:.08em;color:rgba(232,184,75,.76);display:block;margin-bottom:2px}
+#hint{
+  position:fixed;bottom:1.6em;left:50%;transform:translateX(-50%);
+  z-index:10;pointer-events:none;opacity:0;transition:opacity 1s ease .8s;
+  font-size:9px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(232,184,75,.26);white-space:nowrap;
+}
+#hint.show{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<div id="start">
+  <div class="si">
+    <div class="si-kanji">無限</div>
+    <div class="si-title">Infinite Loop</div>
+    <div class="si-hr"></div>
+    <div class="si-sub">
+      Spiraling through eternity<br>
+      Each circle devours the next<br>
+      You are inside the loop<br>
+      <br>
+      Click · Scroll · Listen
+    </div>
+    <button class="si-btn" id="btn-start">Fall In</button>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="hud-item"><span class="hud-val" id="hud-cycles">0</span>Cycles</div>
+  <div class="hud-item"><span class="hud-val" id="hud-bpm">—</span>BPM</div>
+  <div class="hud-item"><span class="hud-val" id="hud-note">—</span>Note</div>
+</div>
+<div id="hint">Click to resonate &nbsp;·&nbsp; Scroll to accelerate</div>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-sound-font.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   無限 — INFINITE LOOP
+   CodePen Challenge · April 2026 · Loop
+   ════════════════════════════════════════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W, H, CX, CY, HALF;
+
+function resize(){
+  W=canvas.width=innerWidth; H=canvas.height=innerHeight;
+  CX=W/2; CY=H/2; HALF=Math.min(W,H)*.5;
+}
+resize(); addEventListener('resize', resize);
+
+/* ── Perspective tunnel ──────────────────────────────────────── */
+const N_RINGS   = 10;
+const Z_NEAR    = 0.04;    // closest — ring extends well beyond screen
+const Z_FAR     = 4.20;    // farthest — ring is small at center
+const Z_RANGE   = Z_FAR - Z_NEAR;
+const PERSP     = 0.68;    // perspective focal length
+const R_WORLD   = 2.20;    // large world radius — at Z_NEAR ring is ~2× screen size
+
+/* Convert world Z to screen scale (0..1+) */
+function zScale(z){ return PERSP / (z + PERSP); }
+
+/* ── Tunnel motion ───────────────────────────────────────────── */
+let tunnelOfs    = 0;        // accumulated Z offset (always growing)
+let tunnelSpeed  = 0.46;     // units/s
+let tgtTunnel    = tunnelSpeed;
+
+/* Snake rotation — tied to music */
+let snakeSpeed   = Math.PI / 4; // rad/s → 60 BPM at 8 triggers/rev
+let tgtSnake     = snakeSpeed;
+
+/* ── Ring objects ────────────────────────────────────────────── */
+// Rings are evenly distributed along Z, looping via tunnelOfs
+const rings = Array.from({length:N_RINGS}, (_, i) => ({
+  id:         i,
+  zBase:      Z_NEAR + (i / N_RINGS) * Z_RANGE,   // fixed base depth
+  headAngle:  -Math.PI/2 + i*(Math.PI/N_RINGS),    // staggered starts
+  rotDir:     (i%2===0) ? 1 : -1,                   // alternating direction
+  speedMul:   0.88 + (i%4)*0.06,                    // slight speed variation
+  prevZ:      0,
+}));
+
+/* Current Z of ring i: shift zBase by tunnelOfs, wrap into [Z_NEAR, Z_FAR] */
+function ringZ(ring){
+  return Z_NEAR + ((ring.zBase - Z_NEAR + tunnelOfs) % Z_RANGE);
+}
+
+/* ── Snake geometry ──────────────────────────────────────────── */
+const BODY_ARC = Math.PI * 1.88;  // ~338° body, ~22° gap
+const N_SEGS   = 64;
+
+/* ── Musical grid ────────────────────────────────────────────── */
+const TRIG_STEP = Math.PI / 4;
+const PENTA = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5]
+];
+const MELODY  = [0,2,4,6,1,5,2,7];
+let melodyStep = 0, cycleCount = 0;
+// Watch ring 0 (the "lead" ring) for musical triggers
+let prevTrig = Math.floor(rings[0].headAngle / TRIG_STEP);
+let prevRev  = Math.floor(rings[0].headAngle / (Math.PI*2));
+
+/* ── Camera drift — sinusoidal offset for immersion ─────────── */
+const DRIFT_AMP = 0.022;   // fraction of HALF
+let driftT = 0;
+
+/* ── Particles ───────────────────────────────────────────────── */
+const particles = [];
+function spawnParticles(x,y,col,n=10,force=1){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, v=(1+Math.random()*2.5)*force;
+    particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,
+      life:1,decay:.015+Math.random()*.020,r:1.5+Math.random()*2.5,col});
+  }
+}
+
+/* Depth particles — dots that expand outward simulating forward travel */
+const depthDots = Array.from({length:40},()=>newDepthDot());
+function newDepthDot(){
+  const a=Math.random()*Math.PI*2;
+  const r=Math.random()*.04; // start near center (fraction of HALF)
+  return { a, r, dr:0.003+Math.random()*.006, alpha:Math.random()*.5+.1, size:1 };
+}
+
+/* ── Color ───────────────────────────────────────────────────── */
+// scale: 1=near(bright gold), 0=far(dark bronze)
+// bodyT: 0=tail, 1=head
+function bodyColor(scale, bodyT, alpha){
+  const bright = Math.pow(scale, .55); // gamma-soften
+  const r = Math.min(255, Math.floor((50  + bodyT*215) * bright));
+  const g = Math.floor((38  + bodyT*148) * bright);
+  const b = Math.floor((6   + bodyT*14 ) * bright);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/* ── Flash overlay ───────────────────────────────────────────── */
+let flashA = 0, flashCol = '#e8b84b';
+
+/* ── Ring flash pulses (when ring passes through camera) ─────── */
+const ringPulses = [];   // {r, maxR, alpha}
+function spawnRingPulse(){
+  ringPulses.push({ r:0, maxR:HALF*1.8, alpha:0.45 });
+}
+
+/* ── Input ───────────────────────────────────────────────────── */
+canvas.addEventListener('click', e=>onTap(e.clientX, e.clientY));
+canvas.addEventListener('touchstart', e=>{
+  e.preventDefault(); onTap(e.touches[0].clientX,e.touches[0].clientY);
+},{passive:false});
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  tgtTunnel = Math.max(0.08, Math.min(2.2, tgtTunnel - e.deltaY*.00055));
+},{passive:false});
+addEventListener('keydown', e=>{
+  if(e.code==='ArrowUp')   tgtTunnel=Math.min(2.2, tgtTunnel+.10);
+  if(e.code==='ArrowDown') tgtTunnel=Math.max(0.08,tgtTunnel-.10);
+  if(e.code==='Space'){ e.preventDefault(); tgtTunnel=tunnelSpeed>.05?0:.46; }
+});
+
+function onTap(x,y){
+  if(!audioReady) return;
+  const dx=x-CX, dy=y-CY, d=Math.hypot(dx,dy);
+  if(d < HALF*1.1){
+    const angle=Math.atan2(dy,dx);
+    playTapChord(angle);
+    spawnParticles(x,y,'#e8b84b',20,1.4);
+    flashA=0.08;
+  }
+}
+
+/* ── Audio ───────────────────────────────────────────────────── */
+const TK_LEAD=0, TK_BASS=1, TK_PAD=2;
+const synth = new ChiptuneSynth();
+let audioReady=false, audioInitPending=false;
+const pool=[];
+
+function queueId(id){
+  pool.push(id);
+  if(pool.length>16){ try{synth.stopNote(pool.shift());}catch(_){} }
+}
+
+async function initAudio(){
+  if(audioReady||audioInitPending) return;
+  audioInitPending=true;
+  await synth.init();
+  synth.setMasterVolume(0.34);
+
+  /* TK_LEAD — crystalline piano with long delay */
+  synth.loadInstrument('piano',TK_LEAD);
+  synth.updateTrack(TK_LEAD,{unisonVoices:2,unisonDetune:4,unisonSpread:20});
+  synth.updateEnvelope(TK_LEAD,{attack:.006,decay:.70,sustain:.20,release:3.5});
+  synth.loadFxPreset(TK_LEAD,'space');
+  synth.setReverbMix(TK_LEAD,.84); synth.setReverbDecay(TK_LEAD,.92);
+  synth.setDelayTime(TK_LEAD,.50); synth.setDelayFeedback(TK_LEAD,.32); synth.setDelayMix(TK_LEAD,.24);
+  synth.setChorusMix(TK_LEAD,.07);
+  synth.setTrackFaderVolume(TK_LEAD,.54);
+
+  /* TK_BASS — deep contrabass */
+  synth.loadInstrument('contrabass',TK_BASS);
+  synth.updateTrack(TK_BASS,{filterEnabled:true,filterType:'lowpass',filterCutoff:380,filterQ:.5});
+  synth.updateEnvelope(TK_BASS,{attack:.4,decay:1.2,sustain:.52,release:7.0});
+  synth.loadFxPreset(TK_BASS,'space');
+  synth.setReverbMix(TK_BASS,.88); synth.setReverbDecay(TK_BASS,.96);
+  synth.setTrackFaderVolume(TK_BASS,.36);
+
+  /* TK_PAD — warm violin swell */
+  synth.loadInstrument('violinNatural',TK_PAD);
+  synth.updateTrack(TK_PAD,{unisonVoices:2,unisonDetune:5,unisonSpread:28,
+    filterEnabled:true,filterType:'lowpass',filterCutoff:1400,filterQ:.32});
+  synth.updateEnvelope(TK_PAD,{attack:3.0,decay:1.5,sustain:.45,release:6.0});
+  synth.loadFxPreset(TK_PAD,'space');
+  synth.setReverbMix(TK_PAD,.92); synth.setReverbDecay(TK_PAD,.97);
+  synth.setChorusMix(TK_PAD,.28); synth.setDelayMix(TK_PAD,.14);
+  synth.setTrackFaderVolume(TK_PAD,.20);
+
+  audioReady=true;
+  droneCycle(); padCycle();
+}
+
+function playMelodyNote(){
+  const n=PENTA[MELODY[melodyStep++%MELODY.length]];
+  queueId(synth.playNoteByName(n[0],n[1],TK_LEAD,1.6));
+  document.getElementById('hud-note').textContent=n[0]+n[1];
+}
+
+function playPassThrough(){
+  // Ring just passed through — arpeggio burst
+  const chord=[['A',3],['C',4],['E',4],['A',4],['C',5]];
+  chord.forEach((n,i)=>setTimeout(()=>queueId(synth.playNoteByName(n[0],n[1],TK_LEAD,3.2)),i*65));
+}
+
+function playTapChord(angle){
+  const t=((angle+Math.PI)/(Math.PI*2));
+  const ni=Math.floor(t*PENTA.length)%PENTA.length;
+  const n1=PENTA[ni], n2=PENTA[(ni+3)%PENTA.length];
+  queueId(synth.playNoteByName(n1[0],n1[1],TK_LEAD,2.2));
+  setTimeout(()=>queueId(synth.playNoteByName(n2[0],n2[1],TK_LEAD,2.2)),80);
+}
+
+const DRONE=[['A',1],['E',2],['D',2],['G',1]];
+let droneStep=0;
+function droneCycle(){
+  queueId(synth.playNoteByName(...DRONE[droneStep++%DRONE.length],TK_BASS,18));
+  setTimeout(droneCycle,15000);
+}
+const PADS=[[['A',3],['E',4]],[['C',4],['G',4]],[['D',4],['A',4]],[['E',3],['B',4]]];
+let padStep=0;
+function padCycle(){
+  PADS[padStep++%PADS.length].forEach((n,i)=>
+    setTimeout(()=>queueId(synth.playNoteByName(n[0],n[1],TK_PAD,13)),i*350));
+  setTimeout(padCycle,11500);
+}
+
+/* ── UI ──────────────────────────────────────────────────────── */
+document.getElementById('btn-start').addEventListener('click',async()=>{
+  const el=document.getElementById('start');
+  el.classList.add('hide'); setTimeout(()=>el.remove(),1500);
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('hint').classList.add('show');
+  await initAudio();
+});
+
+/* ── Draw one Ouroboros ring ─────────────────────────────────── */
+function drawRing(ring, z, ox, oy){
+  const sc    = zScale(z);
+  const r     = HALF * R_WORLD * sc;
+  const alpha = Math.pow(sc, .60);  // near=bright, far=dim
+  if(r < 4) return;
+
+  /* ── 3 glow passes + 1 core ── */
+  const passes=[{w:24,a:.07},{w:12,a:.15},{w:6,a:.28},{w:2.8,a:1.0}];
+  for(const {w,a} of passes){
+    ctx.save();
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    let px,py;
+    for(let i=0;i<=N_SEGS;i++){
+      const t   = i/N_SEGS;
+      const ag  = ring.headAngle - BODY_ARC*(1-t);
+      const x   = ox + Math.cos(ag)*r;
+      const y   = oy + Math.sin(ag)*r;
+      if(i>0){
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(x,y);
+        const mt=(i-.5)/N_SEGS;
+        ctx.strokeStyle = bodyColor(sc, mt, a*alpha*(0.15+mt*0.85));
+        ctx.lineWidth   = w*sc*(0.25+mt*0.75);
+        ctx.stroke();
+      }
+      px=x; py=y;
+    }
+    ctx.restore();
+  }
+
+  /* ── Scale marks ── */
+  ctx.save();
+  for(let i=3;i<N_SEGS;i+=5){
+    const t  = i/N_SEGS;
+    if(t<.05) continue;
+    const ag = ring.headAngle - BODY_ARC*(1-t);
+    const nx = -Math.sin(ag), ny = Math.cos(ag);
+    const sx  = ox+Math.cos(ag)*r, sy = oy+Math.sin(ag)*r;
+    const sw  = (2+t*3)*sc;
+    ctx.beginPath();
+    ctx.moveTo(sx+nx*sw,sy+ny*sw); ctx.lineTo(sx-nx*sw,sy-ny*sw);
+    ctx.strokeStyle = bodyColor(sc, t*.45, .22*alpha);
+    ctx.lineWidth=.7; ctx.stroke();
+  }
+  ctx.restore();
+
+  /* ── Head ── */
+  const hx = ox+Math.cos(ring.headAngle)*r;
+  const hy = oy+Math.sin(ring.headAngle)*r;
+
+  // Aura
+  const auraR = r*.14;
+  const aura  = ctx.createRadialGradient(hx,hy,0,hx,hy,auraR);
+  aura.addColorStop(0,`rgba(255,200,55,${.55*alpha})`);
+  aura.addColorStop(.45,`rgba(240,130,15,${.18*alpha})`);
+  aura.addColorStop(1,'rgba(255,100,5,0)');
+  ctx.fillStyle=aura;
+  ctx.beginPath(); ctx.arc(hx,hy,auraR,0,Math.PI*2); ctx.fill();
+
+  // Head dot
+  const hRadius = 6*sc;
+  if(hRadius > 1){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(hx,hy,hRadius,0,Math.PI*2);
+    ctx.fillStyle = bodyColor(sc,1,alpha);
+    ctx.shadowColor='#ff9918'; ctx.shadowBlur=14*sc;
+    ctx.fill(); ctx.restore();
+
+    // Eye
+    const ed=ring.headAngle-Math.PI/2;
+    ctx.beginPath();
+    ctx.arc(hx+Math.cos(ed)*hRadius*.4, hy+Math.sin(ed)*hRadius*.4, hRadius*.28, 0, Math.PI*2);
+    ctx.fillStyle='#1a0600'; ctx.fill();
+  }
+
+  /* ── Mouth glow (gap between head and tail) ── */
+  const tailA = ring.headAngle - BODY_ARC;
+  const tx = ox+Math.cos(tailA)*r, ty = oy+Math.sin(tailA)*r;
+  const gapD = Math.hypot(hx-tx,hy-ty);
+  const prox = Math.max(0,1-gapD/(r*.5));
+  if(prox>0){
+    const mg = ctx.createRadialGradient(tx,ty,0,tx,ty,10*sc+prox*8*sc);
+    mg.addColorStop(0,`rgba(255,170,20,${.5*prox*alpha})`);
+    mg.addColorStop(1,'rgba(255,100,0,0)');
+    ctx.fillStyle=mg;
+    ctx.beginPath(); ctx.arc(tx,ty,10*sc+prox*8*sc,0,Math.PI*2); ctx.fill();
+  }
+}
+
+/* ── Draw radial tunnel walls (subtle lines connecting rings) ── */
+function drawTunnelLines(sorted, ox, oy){
+  if(sorted.length < 2) return;
+  const SPOKES = 12;
+  ctx.save();
+  for(let s=0;s<SPOKES;s++){
+    const a = (s/SPOKES)*Math.PI*2;
+    ctx.beginPath();
+    for(let i=0;i<sorted.length;i++){
+      const {z}=sorted[i];
+      const sc = zScale(z);
+      const r  = HALF*R_WORLD*sc;
+      const x  = ox+Math.cos(a)*r, y=oy+Math.sin(a)*r;
+      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.strokeStyle='rgba(200,140,40,.05)';
+    ctx.lineWidth=.6; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ── Draw ────────────────────────────────────────────────────── */
+function drawTunnelDepth(ox, oy){
+  // Dark abyss at center
+  const g=ctx.createRadialGradient(ox,oy,0,ox,oy,HALF*.9);
+  g.addColorStop(0,  'rgba(0,0,0,.92)');
+  g.addColorStop(.15,'rgba(3,1,0,.82)');
+  g.addColorStop(.35,'rgba(8,4,1,.55)');
+  g.addColorStop(.58,'rgba(20,10,2,.28)');
+  g.addColorStop(1,  'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // Warm ambient halo from the tunnel mouth
+  const h=ctx.createRadialGradient(ox,oy,HALF*.05,ox,oy,HALF*.55);
+  h.addColorStop(0,  'rgba(80,40,5,.18)');
+  h.addColorStop(.5, 'rgba(40,18,2,.08)');
+  h.addColorStop(1,  'rgba(0,0,0,0)');
+  ctx.fillStyle=h; ctx.fillRect(0,0,W,H);
+}
+
+function drawDepthDots(ox, oy, dt){
+  ctx.save();
+  for(const d of depthDots){
+    d.r += d.dr * (tunnelSpeed/0.46);
+    if(d.r > 0.95){ Object.assign(d, newDepthDot()); continue; }
+    const x=ox+Math.cos(d.a)*d.r*HALF, y=oy+Math.sin(d.a)*d.r*HALF;
+    const sz = d.size*(0.5+d.r*1.5);
+    ctx.globalAlpha = d.alpha*(1-d.r*.7);
+    ctx.beginPath(); ctx.arc(x,y,sz,0,Math.PI*2);
+    ctx.fillStyle='rgba(200,140,50,1)'; ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawRingPulses(ox, oy){
+  ctx.save();
+  for(let i=ringPulses.length-1;i>=0;i--){
+    const p=ringPulses[i];
+    p.r   += (p.maxR-p.r)*0.06;
+    p.alpha *= .93;
+    if(p.alpha<.005){ ringPulses.splice(i,1); continue; }
+    ctx.beginPath(); ctx.arc(ox,oy,p.r,0,Math.PI*2);
+    ctx.strokeStyle=`rgba(255,200,60,${p.alpha})`;
+    ctx.lineWidth=2; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawParticles(){
+  ctx.save();
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vx*=.94; p.vy*=.94; p.life-=p.decay;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    ctx.globalAlpha=p.life*.8;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);
+    ctx.fillStyle=p.col; ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFlash(){
+  if(flashA<=0) return;
+  ctx.save(); ctx.globalAlpha=flashA;
+  ctx.fillStyle=flashCol; ctx.fillRect(0,0,W,H);
+  ctx.restore();
+  flashA=Math.max(0,flashA-.004);
+}
+
+/* ── Main loop ───────────────────────────────────────────────── */
+let lastTs = 0;
+
+function animate(ts){
+  requestAnimationFrame(animate);
+  const dt = Math.min((ts-lastTs)/1000,.05);
+  lastTs = ts;
+
+  /* Smooth speed controls */
+  tunnelSpeed  += (tgtTunnel-tunnelSpeed)  * .03;
+  snakeSpeed   += (tgtSnake-snakeSpeed)    * .03;
+  driftT       += dt;
+
+  /* Advance tunnel */
+  tunnelOfs += tunnelSpeed * dt;
+
+  /* Camera drift — gentle sway */
+  const ox = CX + Math.sin(driftT*.17)*DRIFT_AMP*HALF;
+  const oy = CY + Math.sin(driftT*.11)*DRIFT_AMP*HALF;
+
+  /* Update rings + detect pass-through */
+  for(const ring of rings){
+    const z = ringZ(ring);
+
+    // Rotate snake head
+    ring.headAngle += snakeSpeed * dt * ring.rotDir * ring.speedMul;
+
+    // Detect pass-through (ring just looped from near back to far)
+    if(ring.prevZ > 0 && ring.prevZ < Z_NEAR*2.5 && z > Z_RANGE*.5){
+      // Ring just passed through the camera
+      spawnRingPulse();
+      spawnParticles(ox,oy,'#ffe080',30,2.0);
+      flashA=0.14; flashCol='rgba(240,180,50,1)';
+      if(audioReady){ playPassThrough(); cycleCount++; document.getElementById('hud-cycles').textContent=cycleCount; }
+    }
+    ring.prevZ = z;
+  }
+
+  /* Musical triggers — track ring 0's head */
+  const lead    = rings[0];
+  const currTrig = Math.floor(lead.headAngle / TRIG_STEP);
+  if(audioReady && currTrig !== prevTrig){
+    prevTrig = currTrig;
+    playMelodyNote();
+    const lz = ringZ(lead), lsc = zScale(lz), lr = HALF*R_WORLD*lsc;
+    spawnParticles(ox+Math.cos(lead.headAngle)*lr, oy+Math.sin(lead.headAngle)*lr,'#e8b84b',5,.65);
+  }
+
+  if(audioReady) document.getElementById('hud-bpm').textContent = Math.round(snakeSpeed*(240/Math.PI));
+
+  /* ── Sort rings far→near for correct painter order ── */
+  const sorted = rings
+    .map(r => ({ ring:r, z:ringZ(r) }))
+    .sort((a,b) => b.z - a.z);
+
+  /* ── Render ── */
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#030200'; ctx.fillRect(0,0,W,H);
+
+  drawTunnelDepth(ox, oy);
+  drawDepthDots(ox, oy, dt);
+  drawTunnelLines(sorted, ox, oy);
+
+  for(const {ring,z} of sorted) drawRing(ring, z, ox, oy);
+
+  drawRingPulses(ox, oy);
+  drawParticles();
+  drawFlash();
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Harp Stage</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#020409;overflow:hidden;font-family:'Georgia','Times New Roman',serif}
+canvas{display:block;position:fixed;inset:0;cursor:crosshair;touch-action:none}
+/* Vignette spatiale — renforce la sensation d'être dans une sphère */
+#vignette{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center,
+    transparent 38%,
+    rgba(1,2,8,.30) 62%,
+    rgba(1,2,8,.72) 82%,
+    rgba(0,1,5,.92) 100%);
+}
+
+/* ── Intro modal ───────────────────────────────────────────── */
+#start{
+  position:fixed;inset:0;z-index:50;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(1,2,6,.92);
+  transition:opacity 1.2s ease;
+}
+#start.hide{opacity:0;pointer-events:none}
+.si{text-align:center;color:#e8dfc8;max-width:520px;padding:24px}
+.si-kanji{font-size:clamp(52px,10vw,96px);letter-spacing:.06em;line-height:1;margin-bottom:.3em;opacity:.85}
+.si-title{font-size:clamp(18px,3vw,28px);letter-spacing:.35em;text-transform:uppercase;margin-bottom:.6em}
+.si-hr{width:60px;height:1px;background:rgba(240,232,200,.30);margin:0 auto .8em}
+.si-sub{font-size:clamp(10px,1.4vw,13px);letter-spacing:.22em;text-transform:uppercase;opacity:.48;line-height:1.9}
+.si-btn{
+  margin-top:2em;background:transparent;
+  border:1px solid rgba(240,232,200,.28);color:#e8dfc8;
+  font-family:inherit;font-size:clamp(10px,1.4vw,13px);
+  letter-spacing:.30em;text-transform:uppercase;
+  padding:13px 38px;cursor:pointer;
+  transition:all .35s;
+}
+.si-btn:hover{background:rgba(240,232,200,.07);border-color:rgba(240,232,200,.68);color:#fff}
+
+/* ── Chord keys overlay — 2 rangées de 6 ──────────────────── */
+#keys{
+  position:fixed;bottom:1.6em;left:50%;transform:translateX(-50%);
+  display:flex;flex-direction:column;align-items:center;
+  gap:.40em;z-index:20;pointer-events:none;
+  opacity:0;transition:opacity 1.2s ease .4s;
+}
+#keys.show{opacity:1}
+.keys-row{ display:flex; gap:.45em; }
+.key{
+  width:40px;height:52px;
+  border:1px solid rgba(255,240,200,.22);
+  border-radius:4px;
+  background:rgba(10,14,30,.42);
+  backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:3px;
+}
+.key-letter{
+  font-family:'Georgia',serif;
+  font-size:12px;color:rgba(255,240,200,.80);
+  letter-spacing:.05em;
+}
+.key-chord{
+  font-size:8px;color:rgba(255,240,200,.38);
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.key.active{
+  background:rgba(255,220,120,.18);
+  border-color:rgba(255,220,120,.55);
+}
+.key.active .key-letter{color:#fff}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- Intro modal -->
+<div id="vignette"></div>
+<div id="start">
+  <div class="si">
+    <div class="si-kanji">絃</div>
+    <div class="si-title">Harp Stage</div>
+    <div class="si-hr"></div>
+    <p class="si-sub">
+      Move the mouse to bow the strings<br>
+      Click to resonate the chords<br>
+      A &nbsp;S &nbsp;D &nbsp;F &nbsp;G &nbsp;H &nbsp;for keyboard chords
+    </p>
+    <button class="si-btn" id="startBtn">Enter</button>
+  </div>
+</div>
+
+<!-- Chord keys overlay -->
+<div id="keys"></div>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-sound-font.min.js"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://unpkg.com/three@0.183.0/build/three.webgpu.js",
+    "three/webgpu":  "https://unpkg.com/three@0.183.0/build/three.webgpu.js",
+    "three/tsl":     "https://unpkg.com/three@0.183.0/build/three.tsl.js",
+    "three/addons/": "https://unpkg.com/three@0.183.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three/webgpu";
+import {
+  Fn, uniform, storage, instanceIndex,
+  vec3, vec4, cos, sin, min, max, select,
+  float, floor, positionLocal,
+  pass, output, Loop, exp, pow, sqrt
+} from "three/tsl";
+import { bloom } from "three/addons/tsl/display/BloomNode.js";
+
+/* ── WebGPU guard ─────────────────────────────────────────────── */
+if(!navigator.gpu){
+  document.body.innerHTML=`<div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#020409;color:#fff;font-family:sans-serif;text-align:center"><div><h2>WebGPU required</h2><p style="opacity:.5;margin-top:.5em">Chrome 113+ / Edge 113+</p></div></div>`;
+  throw new Error("WebGPU unavailable");
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════════════════════ */
+const ROWS       = 4;
+const PER_ROW    = 22;
+const N          = ROWS * PER_ROW;          // 88 strings — like a piano
+const STRING_LEN = 24;                      // world units, along -Z axis
+
+/* Per-row layout (Y, X spread, Z offset for depth stagger, base thickness) */
+const ROW_CFG = [
+  { y:0.28, xSpan:16.0, zOff:-7.5, thickBase:0.022, thickEnd:0.016, label:'bass'    },
+  { y:1.42, xSpan:14.5, zOff:-6.5, thickBase:0.016, thickEnd:0.010, label:'mid-bass' },
+  { y:2.70, xSpan:13.0, zOff:-5.5, thickBase:0.010, thickEnd:0.007, label:'mid-treble' },
+  { y:4.10, xSpan:11.5, zOff:-4.5, thickBase:0.007, thickEnd:0.004, label:'treble'  }
+];
+
+/* Colour palette per string — bass=warm copper, treble=cold silver */
+function stringColor(i){
+  const t = i / (N-1);
+  // copper [0.72, 0.45, 0.20] → silver-blue [0.75, 0.85, 0.95]
+  return [
+    0.72 + (0.75-0.72)*t,
+    0.45 + (0.85-0.45)*t,
+    0.20 + (0.95-0.20)*t
+  ];
+}
+
+/* A-minor pentatonic, 2 octaves, one note per string (88 total, repeat) */
+const PEN = ['A','C','D','E','G'];
+function pitchForIndex(i){
+  const idx = i % (PEN.length*2);
+  const oct = 2 + Math.floor(idx/PEN.length);
+  return [PEN[idx % PEN.length], oct];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SCENE
+   ═══════════════════════════════════════════════════════════════ */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x010205);
+/* Fog léger uniquement sur les éléments proches (cordes, sol) — pas les étoiles */
+scene.fog = new THREE.FogExp2(0x010205, 0.018);
+
+/* Camera: inside the strings, slightly above, looking down their length */
+const camera = new THREE.PerspectiveCamera(82, innerWidth/innerHeight, 0.05, 200);
+camera.position.set(0, 3.8, 3.5);
+camera.lookAt(0, 1.8, -18);
+
+const renderer = new THREE.WebGPURenderer({canvas:document.querySelector('#c'), antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setAnimationLoop(animate);
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* Camera locked — no user control */
+/* Lerp target: follows the most excited string zone */
+const CAM_BASE      = new THREE.Vector3(0, 3.8, 3.5);
+const CAM_LOOK_BASE = new THREE.Vector3(0, 1.8, -18);
+const _camCurrent   = new THREE.Vector3().copy(CAM_BASE);
+const _lookCurrent  = new THREE.Vector3().copy(CAM_LOOK_BASE);
+/* Where the camera wants to drift — updated when strings get excited */
+const _camTarget    = new THREE.Vector3().copy(CAM_BASE);
+const _lookTarget   = new THREE.Vector3().copy(CAM_LOOK_BASE);
+camera.position.copy(CAM_BASE);
+camera.lookAt(CAM_LOOK_BASE);
+
+/* Last excited world-X — camera drifts gently toward it */
+let _exciteX = 0;
+
+/* ── Flottement arrière au silence ──────────────────────────────
+   Quand aucune note n'est jouée, la caméra recule doucement.
+   Quand un accord est déclenché, elle revient vers les cordes.
+   ─────────────────────────────────────────────────────────────
+   driftMaxZ   : recul max en unités 3D (positif = s'éloigne)
+   driftSpeed  : vitesse de recul (unités/s)
+   returnSpeed : vitesse de retour vers les cordes (unités/s)
+   idleDelay   : délai avant que le recul commence (ms)
+   ──────────────────────────────────────────────────────────── */
+const DRIFT_CFG = {
+  driftMaxZ:   9.0,
+  driftSpeed:  0.55,
+  returnSpeed: 3.2,
+  idleDelay:   2200,
+};
+
+/* ── Flottement spatial permanent ───────────────────────────────
+   Plusieurs sinusoïdes à fréquences irrationnelles superposées
+   sur chaque axe → mouvement organique qui ne se répète jamais.
+
+   amp    : amplitude de dérive en position (unités 3D)
+   rot    : amplitude de rotation (radians)
+   Chaque axe a 3 harmoniques avec phases aléatoires au démarrage.
+   ──────────────────────────────────────────────────────────── */
+const FLOAT_CFG = {
+  posAmpX:  0.65,   // dérive latérale
+  posAmpY:  0.40,   // dérive verticale
+  posAmpZ:  0.50,   // dérive profondeur
+  rollAmp:  0.055,  // roulis  (Z) — balancement bateau, principal
+  pitchAmp: 0.035,  // tangage (X) — haut/bas
+  yawAmp:   0.025,  // lacet   (Y) oscillant
+  spinSpeed: 0.0055, // rad/s rotation continue Y (+ = antihoraire)
+};
+
+/* Fréquences irrationnelles — φ et π garantissent l'apériodicité */
+const φ = 1.6180339887, π = Math.PI;
+const _floatOsc = {
+  px: [ {f:0.00031*φ,   p:Math.random()*π*2},
+        {f:0.00019*π,   p:Math.random()*π*2},
+        {f:0.00011*φ*π, p:Math.random()*π*2} ],
+  py: [ {f:0.00023*φ,   p:Math.random()*π*2},
+        {f:0.00017*π,   p:Math.random()*π*2},
+        {f:0.00009*φ*π, p:Math.random()*π*2} ],
+  pz: [ {f:0.00027*φ,   p:Math.random()*π*2},
+        {f:0.00013*π,   p:Math.random()*π*2},
+        {f:0.00007*φ*π, p:Math.random()*π*2} ],
+  rx: [ {f:0.00019*φ,   p:Math.random()*π*2},
+        {f:0.00011*π,   p:Math.random()*π*2},
+        {f:0.00007*φ*π, p:Math.random()*π*2} ],
+  ry: [ {f:0.00013*φ,   p:Math.random()*π*2},
+        {f:0.00009*π,   p:Math.random()*π*2},
+        {f:0.00005*φ*π, p:Math.random()*π*2} ],
+  rz: [ {f:0.00017*φ,   p:Math.random()*π*2},
+        {f:0.00008*π,   p:Math.random()*π*2},
+        {f:0.00004*φ*π, p:Math.random()*π*2} ],
+};
+function floatVal(oscs, t){ return oscs.reduce((s,o)=>s+Math.sin(t*o.f+o.p), 0)/oscs.length; }
+
+/* Quaternion réutilisable pour la rotation flottante */
+const _floatQuat  = new THREE.Quaternion();
+const _floatEuler = new THREE.Euler();
+const _spinQuat   = new THREE.Quaternion();
+const _spinAxis   = new THREE.Vector3(0, 1, 0);
+let   _spinAngle    = 0;
+let   _recenter     = 0;    // 0=libre  1=recentrage actif, décroît vers 0
+const RECENTER_DECAY = 0.0008; // vitesse de retour au flottement libre (par ms)
+let _driftZ      = 0;   // décalage Z courant
+let _lastChordMs = -Infinity; // timestamp dernier accord
+
+/* ═══════════════════════════════════════════════════════════════
+   UNIFORMS
+   ═══════════════════════════════════════════════════════════════ */
+const dtU    = uniform(0);
+const mxU    = uniform(0);    // mouse world X
+const myU    = uniform(0);    // mouse world Y
+const mzU    = uniform(0);    // mouse world Z
+const mAmpU  = uniform(0);    // mouse excitation strength
+const wxU    = uniform(-999); // wind X sweep
+const wAmpU  = uniform(0);
+const cxU    = uniform(-999); // chord excitation world X
+const cAmpU  = uniform(0);    // chord excitation strength
+
+/* ═══════════════════════════════════════════════════════════════
+   STRING DATA — CPU initialisation
+   ═══════════════════════════════════════════════════════════════ */
+/* Storage buffers:
+   ampBuf[N]   — oscillation amplitude (float)
+   phaseBuf[N] — oscillation phase (float)
+   harmBuf[N]  — harmonic mode 1-3 (float, stored as float)
+   dataBuf[N]  — vec4: rgb = base colour, w = string thickness  */
+let ampBuf, phaseBuf, harmBuf, dataBuf;
+let ampSt, phaseSt, harmSt, dataSt;
+let computeNode = null, stMesh = null;
+
+/* Geometry: unit box subdivided 32× along Z for smooth wave */
+const GEO = new THREE.BoxGeometry(1, 1, STRING_LEN, 1, 1, 32);
+
+function initBuffers(){
+  ampBuf   = new THREE.StorageBufferAttribute(N, 1);
+  phaseBuf = new THREE.StorageBufferAttribute(N, 1);
+  harmBuf  = new THREE.StorageBufferAttribute(N, 1);
+  dataBuf  = new THREE.StorageBufferAttribute(N, 4);
+
+  for(let i=0; i<N; i++){
+    const row = Math.floor(i/PER_ROW);
+    const col = i % PER_ROW;
+    const tC  = col/(PER_ROW-1);        // 0 = leftmost, 1 = rightmost
+    const cfg = ROW_CFG[row];
+    const [r,g,b] = stringColor(i);
+    const thick = cfg.thickBase + (cfg.thickEnd - cfg.thickBase)*tC;
+
+    ampBuf.array[i]   = 0;
+    phaseBuf.array[i] = Math.random()*Math.PI*2;
+    harmBuf.array[i]  = 1 + Math.floor(Math.random()*3); // 1, 2, or 3
+
+    dataBuf.array[i*4+0] = r * 0.55;   // visible at rest, bloom explodes on excitation
+    dataBuf.array[i*4+1] = g * 0.55;
+    dataBuf.array[i*4+2] = b * 0.55;
+    dataBuf.array[i*4+3] = thick;
+  }
+
+  ampSt   = storage(ampBuf,   'float', N);
+  phaseSt = storage(phaseBuf, 'float', N);
+  harmSt  = storage(harmBuf,  'float', N);
+  dataSt  = storage(dataBuf,  'vec4',  N);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   COMPUTE — string physics (GPU per-string per-frame)
+   ─────────────────────────────────────────────────────────────
+   Standing wave physics:
+   • Phase advances at frequency proportional to harmonic (higher = faster)
+   • Amplitude decays with time constant ~0.8s
+   • Mouse and wind inject energy via gaussian proximity
+   • 4-neighbour diffusion propagates excitation across the field
+   ═══════════════════════════════════════════════════════════════ */
+function buildCompute(){
+  return Fn(()=>{
+    const idx   = instanceIndex;
+    const idxF  = float(idx);
+    const rowF  = floor(idxF.div(float(PER_ROW)));
+    const colF  = idxF.mod(float(PER_ROW));
+
+    /* World position of this string's midpoint */
+    /* Must mirror JS layout exactly — computed from row cfg baked as constants */
+    /* We use a simplified linear interpolation baked per row index */
+    const tC = colF.div(float(PER_ROW-1));  // 0..1 within row
+
+    /* Y and Z: use row index to select from baked arrays */
+    /* TSL doesn't support dynamic array indexing from JS, so we use select chains */
+    const yW = float(ROW_CFG[0].y)
+      .add(select(rowF.greaterThanEqual(float(1)), float(ROW_CFG[1].y - ROW_CFG[0].y), float(0)))
+      .add(select(rowF.greaterThanEqual(float(2)), float(ROW_CFG[2].y - ROW_CFG[1].y), float(0)))
+      .add(select(rowF.greaterThanEqual(float(3)), float(ROW_CFG[3].y - ROW_CFG[2].y), float(0)));
+
+    const zCenterW = float(ROW_CFG[0].zOff)
+      .add(select(rowF.greaterThanEqual(float(1)), float(ROW_CFG[1].zOff - ROW_CFG[0].zOff), float(0)))
+      .add(select(rowF.greaterThanEqual(float(2)), float(ROW_CFG[2].zOff - ROW_CFG[1].zOff), float(0)))
+      .add(select(rowF.greaterThanEqual(float(3)), float(ROW_CFG[3].zOff - ROW_CFG[2].zOff), float(0)));
+
+    const xSpanW = float(ROW_CFG[0].xSpan)
+      .add(select(rowF.greaterThanEqual(float(1)), float(ROW_CFG[1].xSpan - ROW_CFG[0].xSpan), float(0)))
+      .add(select(rowF.greaterThanEqual(float(2)), float(ROW_CFG[2].xSpan - ROW_CFG[1].xSpan), float(0)))
+      .add(select(rowF.greaterThanEqual(float(3)), float(ROW_CFG[3].xSpan - ROW_CFG[2].xSpan), float(0)));
+
+    const xW = tC.mul(xSpanW).sub(xSpanW.mul(0.5));
+
+    /* Oscillation: higher string index = higher harmonic freq base */
+    const harm  = harmSt.element(idx);
+    const omega = float(WAVE_CONFIG.omegaBase).add(harm.mul(WAVE_CONFIG.omegaHarm)).add(tC.mul(WAVE_CONFIG.omegaPos));
+
+    /* Advance phase */
+    const ph = phaseSt.element(idx).toVar();
+    ph.addAssign(omega.mul(dtU));
+    phaseSt.element(idx).assign(ph);
+
+    /* Decay */
+    const amp = ampSt.element(idx).toVar();
+    amp.mulAssign(pow(float(WAVE_CONFIG.decay), dtU));
+
+    /* Mouse proximity excitation — gaussian around mouse world pos */
+    const mdx = xW.sub(mxU), mdy = yW.sub(myU);
+    const md2 = mdx.mul(mdx).add(mdy.mul(mdy));
+    amp.addAssign(mAmpU.mul(exp(md2.negate().mul(float(WAVE_CONFIG.mouseRadius)))).mul(dtU).mul(float(WAVE_CONFIG.mouseForce)));
+
+    /* Chord excitation — wide gaussian burst when chord is triggered */
+    const cdx = xW.sub(cxU);
+    amp.addAssign(cAmpU.mul(exp(cdx.mul(cdx).negate().mul(float(WAVE_CONFIG.chordRadius)))).mul(dtU).mul(float(WAVE_CONFIG.chordForce)));
+
+    /* Wind sweep excitation */
+    const wdx = xW.sub(wxU);
+    amp.addAssign(wAmpU.mul(exp(wdx.mul(wdx).negate().mul(float(WAVE_CONFIG.windRadius)))).mul(dtU).mul(float(WAVE_CONFIG.windForce)));
+
+    /* 4-neighbour diffusion along rows */
+    const N1   = float(N-1);
+    const lIdx = max(idxF.sub(1), float(0));
+    const rIdx = min(idxF.add(1), N1);
+    const uIdx = max(idxF.sub(float(PER_ROW)), float(0));
+    const dIdx = min(idxF.add(float(PER_ROW)), N1);
+    const nbA  = ampSt.element(lIdx).add(ampSt.element(rIdx))
+                      .add(ampSt.element(uIdx)).add(ampSt.element(dIdx))
+                      .mul(float(0.25));
+    amp.addAssign(nbA.sub(amp).mul(dtU).mul(float(WAVE_CONFIG.diffusion)));
+
+    /* Clamp — allow HDR for bloom blowout */
+    amp.assign(min(max(amp, float(0)), float(WAVE_CONFIG.ampMax)));
+    ampSt.element(idx).assign(amp);
+  })().compute(N);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MATERIAL
+   ─────────────────────────────────────────────────────────────
+   positionNode:
+     • X and Y scaled to per-string thickness (stored in dataSt.w)
+     • Y additionally displaced by standing wave:
+         sin(zNorm·π·harmonic) · cos(phase) · amplitude
+       where zNorm=0 at far end (z=-SL/2 local), 1 at near end
+     • Slight inward taper toward far end (instrument soundboard feel)
+
+   colorNode:
+     • Base spectral color (dim at rest)
+     • Warm incandescent glow when vibrating (yellow→white, HDR)
+     • Bloom takes over and creates the glowing thread effect
+   ═══════════════════════════════════════════════════════════════ */
+function buildMaterial(){
+  const mat = new THREE.MeshBasicMaterial();
+
+  mat.positionNode = Fn(()=>{
+    const idx   = instanceIndex;
+    const data  = dataSt.element(idx);
+    const amp   = ampSt.element(idx);
+    const ph    = phaseSt.element(idx);
+    const harm  = harmSt.element(idx);
+    const pos   = positionLocal.toVar();
+    const thick = data.w;
+
+    /* zNorm: 0 = far end (world Z deepest), 1 = near end (camera side) */
+    const zNorm   = pos.z.add(float(STRING_LEN*0.5)).div(float(STRING_LEN));
+
+    /* Standing wave — fixed nodes at both ends */
+    const spatial = sin(zNorm.mul(float(Math.PI)).mul(harm));
+    const wave    = spatial.mul(cos(ph)).mul(amp).mul(float(WAVE_CONFIG.waveAmp));
+
+    /* Slight perspective taper: string appears to converge at far end */
+    const taper = float(1).sub(zNorm.mul(float(WAVE_CONFIG.taper)));
+
+    pos.x.assign(pos.x.mul(thick).mul(taper));
+    pos.y.assign(pos.y.mul(thick).add(wave));
+    /* Z: keep as-is (string runs along Z) */
+
+    return pos;
+  })();
+
+  mat.colorNode = Fn(()=>{
+    const idx  = instanceIndex;
+    const amp  = ampSt.element(idx);
+    const base = dataSt.element(idx).rgb;
+    /* Incandescent: deep amber → bright white as energy rises */
+    const glow = vec3(float(WAVE_CONFIG.glowR), float(WAVE_CONFIG.glowG), float(WAVE_CONFIG.glowB)).mul(amp.mul(float(WAVE_CONFIG.glowForce)));
+    return vec4(base.add(glow), float(1));
+  })();
+
+
+  return mat;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BUILD / REBUILD
+   ═══════════════════════════════════════════════════════════════ */
+const _mat4 = new THREE.Matrix4();
+const _qId  = new THREE.Quaternion();
+
+function rebuild(){
+  initBuffers();
+  computeNode = buildCompute();
+
+  if(stMesh){ scene.remove(stMesh); stMesh.material.dispose(); }
+  stMesh = new THREE.InstancedMesh(GEO, buildMaterial(), N);
+  stMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(stMesh);
+
+  for(let i=0; i<N; i++){
+    const row = Math.floor(i/PER_ROW);
+    const col = i % PER_ROW;
+    const cfg = ROW_CFG[row];
+    const tC  = col/(PER_ROW-1);
+    const x   = (tC - 0.5)*cfg.xSpan;
+    const y   = cfg.y;
+    const z   = cfg.zOff;        // center of string in Z
+    _mat4.compose(new THREE.Vector3(x, y, z), _qId, new THREE.Vector3(1,1,1));
+    stMesh.setMatrixAt(i, _mat4);
+  }
+  stMesh.instanceMatrix.needsUpdate = true;
+}
+
+rebuild();
+
+/* ═══════════════════════════════════════════════════════════════
+   STARS — points scattered across the upper sky
+   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   ENVIRONMENT — sensorial deep space
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   ★  STARS CONFIG — sphère céleste immersive multi-couches
+   ─────────────────────────────────────────────────────────────
+   Les couches sont attachées à la caméra → elles entourent toujours
+   le spectateur à 360° peu importe ses déplacements.
+
+   Chaque couche :
+     count    : nombre d'étoiles
+     radius   : rayon de la coquille sphérique (unités 3D)
+     radVar   : épaisseur de la coquille (+/-)
+     size     : taille des points
+     opacity  : opacité
+     color    : [r,g,b] teinte de base
+     colorVar : dispersion de teinte (0=uni, 0.5=spectre large)
+     parallax : dérive relative à la caméra lors des mouvements
+                0 = solidaire cam (aucun mouvement apparent)
+                1 = reste dans la scène (plein mouvement de parallaxe)
+     mode     : 'sphere'  → distribution sphérique uniforme
+                'galaxy'  → concentré sur l'équateur (bande galactique)
+                'cluster' → petits amas aléatoires
+   ═══════════════════════════════════════════════════════════════ */
+const STARS_CONFIG = [
+  /* Couche 0 — voûte galactique lointaine : innombrables, bleu froid */
+  { count:4500, radius:180, radVar:40,
+    size:.06,  opacity:.65, color:[0.72,0.84,1.00], colorVar:0.28, parallax:0.05, mode:'sphere' },
+
+  /* Couche 1 — bande galactique : concentrée sur l'équateur, blanc-jaune */
+  { count:1800, radius:140, radVar:25,
+    size:.09,  opacity:.55, color:[1.00,0.95,0.80], colorVar:0.22, parallax:0.08, mode:'galaxy' },
+
+  /* Couche 2 — étoiles moyennes : réparties 360°, spectre chaud */
+  { count:900,  radius:90,  radVar:20,
+    size:.15,  opacity:.75, color:[1.00,0.92,0.70], colorVar:0.35, parallax:0.14, mode:'sphere' },
+
+  /* Couche 3 — nébuleuse violette : grande, diffuse, peu opaque */
+  { count:320,  radius:70,  radVar:18,
+    size:.35,  opacity:.18, color:[0.60,0.38,1.00], colorVar:0.18, parallax:0.18, mode:'galaxy' },
+
+  /* Couche 4 — amas stellaires : regroupés en clusters */
+  { count:420,  radius:55,  radVar:12,
+    size:.12,  opacity:.70, color:[0.90,0.98,1.00], colorVar:0.30, parallax:0.25, mode:'cluster'},
+
+  /* Couche 5 — poussière ambrée proche : chaude, au premier plan */
+  { count:260,  radius:28,  radVar:8,
+    size:.22,  opacity:.45, color:[1.00,0.68,0.28], colorVar:0.20, parallax:0.55, mode:'sphere' },
+
+  /* Couche 6 — étincelles très proches : rares, grandes, brillantes */
+  { count:40,   radius:14,  radVar:5,
+    size:.50,  opacity:.88, color:[1.00,1.00,1.00], colorVar:0.45, parallax:0.88, mode:'sphere' },
+];
+
+/* ─── construction automatique — ne pas modifier ─── */
+const _starLayers = [];
+
+(function buildStars(){
+  /* Seed de clusters pour le mode 'cluster' */
+  const CLUSTERS = Array.from({length:12}, ()=>({
+    th: Math.random()*Math.PI*2, ph: Math.random()*Math.PI, spread: 0.18+Math.random()*0.22
+  }));
+
+  STARS_CONFIG.forEach(cfg=>{
+    const n   = cfg.count;
+    const pos = new Float32Array(n*3);
+    const col = new Float32Array(n*3);
+
+    for(let i=0;i<n;i++){
+      let x,y,z;
+      const r = cfg.radius + (Math.random()-.5)*cfg.radVar*2;
+
+      if(cfg.mode === 'galaxy'){
+        /* Bande galactique : cos(ph) ≈ 0 → équateur, gaussienne étroite */
+        const th  = Math.random()*Math.PI*2;
+        const lat = (Math.random()-.5) * 0.55;   // latitude ±0.55 rad ≈ ±30°
+        x = r * Math.cos(lat) * Math.cos(th);
+        y = r * Math.sin(lat);
+        z = r * Math.cos(lat) * Math.sin(th);
+      } else if(cfg.mode === 'cluster'){
+        /* Amas : choisir un cluster seed, disperser autour */
+        const cl = CLUSTERS[Math.floor(Math.random()*CLUSTERS.length)];
+        const th = cl.th + (Math.random()-.5)*cl.spread;
+        const ph = cl.ph + (Math.random()-.5)*cl.spread;
+        x = r * Math.sin(ph) * Math.cos(th);
+        y = r * Math.cos(ph);
+        z = r * Math.sin(ph) * Math.sin(th);
+      } else {
+        /* Sphère uniforme */
+        const th = Math.random()*Math.PI*2;
+        const ph = Math.acos(2*Math.random()-1); // distribution uniforme sur sphère
+        x = r * Math.sin(ph) * Math.cos(th);
+        y = r * Math.cos(ph);
+        z = r * Math.sin(ph) * Math.sin(th);
+      }
+
+      pos[i*3]=x; pos[i*3+1]=y; pos[i*3+2]=z;
+
+      const lum = 0.30 + Math.random()*0.70;
+      const vr  = (Math.random()-.5)*cfg.colorVar;
+      const vg  = (Math.random()-.5)*cfg.colorVar;
+      const vb  = (Math.random()-.5)*cfg.colorVar;
+      col[i*3]   = Math.min(1,Math.max(0,(cfg.color[0]+vr)*lum));
+      col[i*3+1] = Math.min(1,Math.max(0,(cfg.color[1]+vg)*lum));
+      col[i*3+2] = Math.min(1,Math.max(0,(cfg.color[2]+vb)*lum));
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+    geo.setAttribute('color',    new THREE.Float32BufferAttribute(col,3));
+    const mat = new THREE.PointsMaterial({
+      size:cfg.size, vertexColors:true,
+      sizeAttenuation:true, transparent:true, opacity:cfg.opacity,
+      depthWrite:false
+    });
+    const pts = new THREE.Points(geo, mat);
+    /* Attacher à la caméra → toujours centré sur le spectateur */
+    camera.add(pts);
+    _starLayers.push({ pts, parallax: cfg.parallax });
+  });
+  /* La caméra doit être dans la scène pour que ses enfants soient rendus */
+  scene.add(camera);
+})();
+
+/* Sol et horizon supprimés — vide céleste */
+
+/* Voiles latéraux supprimés — vide céleste */
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHTING
+   ═══════════════════════════════════════════════════════════════ */
+/* Très basse ambiance — quasi noir, les cordes créent leur propre lumière */
+/* Cordes auto-éclairées via bloom — pas de lumières externes */
+scene.add(new THREE.AmbientLight(0x020408, 0.4));
+
+/* ═══════════════════════════════════════════════════════════════
+   POST — heavy bloom: strings glow like heated metal wires
+   ═══════════════════════════════════════════════════════════════ */
+const scenePass  = pass(scene, camera);
+const sceneColor = scenePass.getTextureNode('output');
+const bloomEff   = bloom(sceneColor, 2.4, 0.80, 0.08);
+const pipe       = new THREE.RenderPipeline(renderer, sceneColor.add(bloomEff));
+
+/* ═══════════════════════════════════════════════════════════════
+   AUDIO — piano + contrabass layered, heavy reverb
+   ─────────────────────────────────────────────────────────────
+   TK_PIANO : Piano — bright attack, long sustain, cathedral reverb
+   TK_BASS  : Contrabass — same note 1 octave down, deep body
+   TK_DRONE : Contrabass — slow ambient drone pad
+   TK_VPAD  : ViolinNatural — upper register shimmer
+   ═══════════════════════════════════════════════════════════════ */
+const TK_PIANO=0, TK_BASS=1, TK_DRONE=2, TK_VPAD=3;
+const synth = new ChiptuneSynth();
+let audioReady = false, audioInitPending = false;
+
+/* ═══════════════════════════════════════════════════════════════
+   ★  CHORD CONFIG — seul endroit à modifier pour changer les accords
+   ─────────────────────────────────────────────────────────────
+   Chaque entrée :
+     name  : label affiché sur la touche  (ex: 'Am', 'Cmaj7'…)
+     key   : touche clavier QWERTY        (ex: 'A','S','D','F','G','H')
+     notes : 2 à 5 notes ['NOTE', octave] (notes: C D E F G A B + # dièse)
+     pan   : panoramique stéréo  -1=gauche  0=centre  +1=droite
+   ═══════════════════════════════════════════════════════════════ */
+const CHORD_CONFIG = [
+  /* ── Rangée 1 : Q W E R T Y ── */
+  { name:'Am',    key:'Q', notes:[['A',3],['C',4],['E',4],['A',4]],         pan:-.50 },
+  { name:'Em',    key:'W', notes:[['E',3],['G',3],['B',3],['E',4]],         pan:-.35 },
+  { name:'Dm',    key:'E', notes:[['D',3],['F',3],['A',3],['D',4]],         pan:-.18 },
+  { name:'Cmaj',  key:'R', notes:[['C',3],['E',3],['G',3],['C',4]],         pan:  0  },
+  { name:'Fmaj',  key:'T', notes:[['F',3],['A',3],['C',4],['F',4]],         pan: .18 },
+  { name:'G',     key:'Y', notes:[['G',3],['B',3],['D',4],['G',4]],         pan: .35 },
+  /* ── Rangée 2 : A S D F G H ── */
+  { name:'Am7',   key:'A', notes:[['A',3],['C',4],['E',4],['G',4]],         pan:-.50 },
+  { name:'E7',    key:'S', notes:[['E',3],['G',3],['B',3],['D',4]],         pan:-.30 },
+  { name:'Dm7',   key:'D', notes:[['D',3],['F',3],['A',3],['C',4]],         pan:-.12 },
+  { name:'Cmaj7', key:'F', notes:[['C',3],['E',3],['G',3],['B',3]],         pan:  .12},
+  { name:'Fmaj7', key:'G', notes:[['F',3],['A',3],['C',4],['E',4]],         pan: .30 },
+  { name:'Gsus4', key:'H', notes:[['G',3],['C',4],['D',4],['G',4]],         pan: .50 },
+];
+
+/* ═══════════════════════════════════════════════════════════════
+   ★  WAVE CONFIG — paramètres d'ondulation des cordes
+   ─────────────────────────────────────────────────────────────
+   PHYSIQUE GPU (compute shader)
+     omegaBase   : vitesse de vibration de base (rad/s)   — +grand = plus rapide
+     omegaHarm   : accélération par mode harmonique       — différencie les cordes
+     omegaPos    : accélération selon position (tC)       — gradient basse→haute
+     decay       : décroissance amplitude (0→1, proche 0 = très court)
+                   ex: 0.02 = ~0.5s  |  0.10 = ~1s  |  0.30 = ~2s
+     mouseRadius : rayon d'excitation souris (> = plus large)
+     mouseForce  : force d'excitation souris
+     windRadius  : rayon du souffle vent
+     windForce   : force du souffle vent
+     diffusion   : propagation entre cordes voisines (0 = isolées, 10 = très liées)
+     ampMax      : amplitude max (> 1 = HDR pour bloom)
+
+   DÉPLACEMENT VISUEL (vertex shader)
+     waveAmp     : amplitude de déplacement des vertices (écart en unités 3D)
+     taper       : convergence perspective extrémité lointaine (0 = droit, 1 = fort)
+
+   GLOW (colorNode)
+     glowR/G/B   : couleur incandescente au pic d'énergie (valeurs > 1 = HDR bloom)
+     glowForce   : multiplicateur énergie → luminosité
+
+   CAMÉRA
+     breathSpeedY / breathSpeedX : fréquence respiration (rad/ms, très petite valeur)
+     breathAmpY  / breathAmpX    : amplitude respiration (unités 3D)
+     camExciteH  : amplitude déplacement horizontal camera sur accord (facteur _exciteX)
+     lookExciteH : amplitude déplacement lookat  horizontal sur accord
+     camLerp     : vitesse lerp caméra (0.002 = très lent, 0.1 = rapide)
+   ═══════════════════════════════════════════════════════════════ */
+const WAVE_CONFIG = {
+  /* physique */
+  omegaBase:   3.2,
+  omegaHarm:   2.6,
+  omegaPos:    1.8,
+  decay:       0.02,
+  mouseRadius: 0.7,
+  mouseForce:  7.0,
+  chordRadius: 0.12,   // rayon excitation accord (petit = large zone gaussienne)
+  chordForce:  18.0,   // force d'excitation accord
+  windRadius:  0.5,
+  windForce:   3.5,
+  diffusion:   5.5,
+  ampMax:      1.6,
+  /* déplacement visuel */
+  waveAmp:     0.22,
+  taper:       0.35,
+  /* glow HDR */
+  glowR: 2.8, glowG: 1.9, glowB: 0.70,
+  glowForce:   3.5,
+  /* caméra */
+  /* respiration remplacée par FLOAT_CFG */
+  camExciteH:   1.2,
+  lookExciteH:  2.8,
+  camLerp:      0.012,
+  /* interactions */
+  mouseEnabled: false,  // false = désactive les clics et le survol souris sur les cordes
+};
+
+/* ─── dérivés automatiques — ne pas modifier ─── */
+const SCALE = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5]
+];
+const CHORDS = CHORD_CONFIG.map(c => ({ notes: c.notes, pan: c.pan }));
+
+async function initAudio(){
+  if(audioReady || audioInitPending) return;
+  audioInitPending = true;
+  await synth.init();
+  synth.setMasterVolume(0.34);
+
+  /* TK_PIANO */
+  synth.loadInstrument('piano', TK_PIANO);
+  synth.updateTrack(TK_PIANO,{
+    unisonVoices:2, unisonDetune:4, unisonSpread:28,   // 3→2 voix : -33% d'oscillateurs
+    filterEnabled:true, filterType:'lowpass', filterCutoff:2400, filterQ:0.28
+  });
+  synth.updateEnvelope(TK_PIANO,{attack:.010, decay:.75, sustain:.32, release:4.0});
+  synth.updateVibrato(TK_PIANO,{rate:3.2, depth:3});
+  synth.loadFxPreset(TK_PIANO,'space');
+  synth.setReverbMix(TK_PIANO,.88); synth.setReverbDecay(TK_PIANO,.96);
+  synth.setChorusRate(TK_PIANO,.22); synth.setChorusDepth(TK_PIANO,.15); synth.setChorusMix(TK_PIANO,.10);
+  synth.setDelayTime(TK_PIANO,.62); synth.setDelayFeedback(TK_PIANO,.24); synth.setDelayMix(TK_PIANO,.14);
+  synth.setTrackFaderVolume(TK_PIANO,.48); synth.setTrackPan(TK_PIANO,.08);
+
+  /* TK_BASS */
+  synth.loadInstrument('contrabass', TK_BASS);
+  synth.updateTrack(TK_BASS,{
+    bowNoise:false, bowNoiseLevel:0,
+    unisonVoices:1, unisonDetune:4, unisonSpread:18,   // 2→1 voix sur la basse
+    filterEnabled:true, filterType:'lowpass', filterCutoff:600, filterQ:0.45
+  });
+  synth.updateEnvelope(TK_BASS,{attack:.20, decay:.85, sustain:.65, release:5.0});
+  synth.updateVibrato(TK_BASS,{rate:2.5, depth:3});
+  synth.loadFxPreset(TK_BASS,'space');
+  synth.setReverbMix(TK_BASS,.90); synth.setReverbDecay(TK_BASS,.97);
+  synth.setChorusMix(TK_BASS,.14); synth.setDelayMix(TK_BASS,.12);
+  synth.setTrackFaderVolume(TK_BASS,.36); synth.setTrackPan(TK_BASS,-.10);
+
+  /* TK_DRONE */
+  synth.loadInstrument('contrabass', TK_DRONE);
+  synth.updateTrack(TK_DRONE,{
+    bowNoise:false, unisonVoices:1, unisonDetune:3, unisonSpread:16,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:450, filterQ:0.45
+  });
+  synth.updateEnvelope(TK_DRONE,{attack:4.0, decay:1.0, sustain:.70, release:6.0});
+  synth.loadFxPreset(TK_DRONE,'space');
+  synth.setReverbMix(TK_DRONE,.92); synth.setReverbDecay(TK_DRONE,.97);
+  synth.setTrackFaderVolume(TK_DRONE,.24); synth.setTrackPan(TK_DRONE,-.18);
+
+  /* TK_VPAD */
+  synth.loadInstrument('violinNatural', TK_VPAD);
+  synth.updateTrack(TK_VPAD,{
+    unisonVoices:2, unisonDetune:5, unisonSpread:35,   // 3→2 voix
+    filterEnabled:true, filterType:'lowpass', filterCutoff:2000, filterQ:0.32
+  });
+  synth.updateEnvelope(TK_VPAD,{attack:3.2, decay:1.5, sustain:.55, release:5.0});
+  synth.loadFxPreset(TK_VPAD,'space');
+  synth.setReverbMix(TK_VPAD,.86); synth.setReverbDecay(TK_VPAD,.96);
+  synth.setChorusMix(TK_VPAD,.22); synth.setDelayMix(TK_VPAD,.16);
+  synth.setTrackFaderVolume(TK_VPAD,.14); synth.setTrackPan(TK_VPAD,.28);
+
+  /* Compresseurs serrés sur tous les tracks */
+  [TK_PIANO,TK_BASS,TK_DRONE,TK_VPAD].forEach(tk=>{
+    synth.setTrackCompressorEnabled(tk,true);
+    synth.setTrackCompressorThreshold(tk,-14);  // seuil plus haut → attrape plus tôt
+    synth.setTrackCompressorRatio(tk,8);         // ratio plus fort → moins de peaks
+    synth.setTrackCompressorAttack(tk,0.001);    // très rapide → transitoires maîtrisées
+    synth.setTrackCompressorRelease(tk,0.14);
+  });
+
+  audioReady = true;
+  droneLoop(); violinLoop(); scheduleWind();
+}
+
+/* ── Polyphony guard ──────────────────────────────────────── */
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+const MAX_POLY = isSafari ? 6 : 10;
+let allIds=[];
+function killNote(id){
+  try{
+    const nd=synth.activeNotes&&synth.activeNotes.get(id);
+    if(nd){
+      const now=synth.audioContext.currentTime;
+      if(nd.gainNode){nd.gainNode.gain.cancelScheduledValues(now);nd.gainNode.gain.setValueAtTime(nd.gainNode.gain.value,now);nd.gainNode.gain.linearRampToValueAtTime(0,now+0.05);}
+      const t=now+0.06;
+      if(nd.oscillators)nd.oscillators.forEach(v=>{try{v.stop(t);}catch(e){}});
+      if(nd.lfo)try{nd.lfo.stop(t);}catch(e){}
+    }
+  }catch(e){}
+  try{synth.stopNote(id);}catch(e){}
+}
+function track(id){allIds.push(id); while(allIds.length>MAX_POLY) killNote(allIds.shift());}
+
+let pianoBuf=[], bassBuf=[], chordBuf=[], vpadBuf=[], droneNote=null;
+
+/* Play piano + contrabass simultaneously = the "string instrument" sound */
+function pluckString(deg, vel=0.6){
+  if(!audioReady) return;
+  deg = Math.max(0, Math.min(SCALE.length-1, deg|0));
+  const nn   = SCALE[deg];
+  const bass = [nn[0], Math.max(1, nn[1]-1)]; // 1 octave below piano
+
+  /* Piano */
+  const pid = synth.playNoteByName(nn[0], nn[1], TK_PIANO, 2.5);
+  pianoBuf.push(pid); track(pid);
+  while(pianoBuf.length > 2) killNote(pianoBuf.shift());
+
+  /* Contrabass layered same moment */
+  const bid = synth.playNoteByName(bass[0], Math.max(2,bass[1]), TK_BASS, 3.0);
+  bassBuf.push(bid); track(bid);
+  while(bassBuf.length > 2) killNote(bassBuf.shift());
+}
+
+/* Timeouts en cours du stagger — annulés si accord rejoué avant la fin */
+let _chordTimers = [];
+
+function playChord(ci){
+  if(!audioReady) return;
+  const c = CHORDS[ci % CHORDS.length];
+
+  /* Annuler les notes en attente du stagger précédent */
+  _chordTimers.forEach(clearTimeout);
+  _chordTimers = [];
+  _lastChordMs = performance.now();
+  _recenter = 1.0; // déclenche le recentrage spatial
+
+  /* Tuer toutes les notes actives du buffer */
+  while(chordBuf.length) killNote(chordBuf.shift());
+
+  /* Camera */
+  _exciteX = (ci / (CHORDS.length - 1)) * 14 - 7;
+  _camCurrent.lerp(_camTarget, 0.12);
+  _lookCurrent.lerp(_lookTarget, 0.12);
+
+  /* Excitation cordes */
+  cxU.value   = _exciteX;
+  cAmpU.value = 1.0;
+  _chordTimers.push(setTimeout(()=>{ cAmpU.value = 0.3; }, 200));
+  _chordTimers.push(setTimeout(()=>{ cAmpU.value = 0;   }, 500));
+
+  /* Stagger des notes */
+  synth.setTrackPan(TK_PIANO, c.pan);
+  synth.setTrackPan(TK_BASS,  -c.pan * 0.6);
+  c.notes.forEach((n,i)=>{
+    _chordTimers.push(setTimeout(()=>{
+      const bassN = [n[0], Math.max(2, n[1]-1)];  // plancher oct 2 — évite distorsion sub
+      const pid = synth.playNoteByName(n[0], n[1], TK_PIANO, 2.8);
+      const bid = synth.playNoteByName(bassN[0], bassN[1], TK_BASS, 3.2);
+      chordBuf.push(pid, bid); track(pid); track(bid);
+      /* Plafond strict : jamais plus de 8 notes chord actives */
+      while(chordBuf.length > 8) killNote(chordBuf.shift());
+    }, i * 90));
+  });
+}
+
+let droneStep=0;
+function droneLoop(){
+  if(!audioReady) return;
+  if(droneNote){killNote(droneNote); droneNote=null;}
+  const ns=[['A',1],['E',2],['D',2],['C',2],['G',1]];
+  const n=ns[droneStep++%ns.length];
+  droneNote=synth.playNoteByName(n[0],n[1],TK_DRONE,16);
+  track(droneNote);
+  setTimeout(droneLoop, 14000);
+}
+
+let vStep=0;
+function violinLoop(){
+  if(!audioReady) return;
+  while(vpadBuf.length>2) killNote(vpadBuf.shift());
+  const ps=[[['A',4],['E',5]],[['C',5],['G',5]],[['D',5],['A',5]],[['E',4],['B',4]]];
+  ps[vStep++%ps.length].forEach((n,i)=>setTimeout(()=>{
+    const id=synth.playNoteByName(n[0],n[1],TK_VPAD,12);
+    vpadBuf.push(id); track(id);
+  },i*240));
+  setTimeout(violinLoop, 10500);
+}
+
+/* ── Wind ────────────────────────────────────────────────── */
+let windX=-12, windActive=false;
+function triggerWind(){
+  windX=-12; wAmpU.value=0.35; wxU.value=windX; windActive=true;
+}
+function scheduleWind(){
+  triggerWind();
+  setTimeout(scheduleWind, 5000+Math.random()*6000);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RAYCAST — screen → world (using Y-plane at string height)
+   ═══════════════════════════════════════════════════════════════ */
+const _ray   = new THREE.Raycaster();
+const _plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+const _hit   = new THREE.Vector3();
+
+function s2w(cx, cy, planeY=1.5){
+  _plane.constant = -planeY;
+  _ray.setFromCamera(
+    new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1),
+    camera
+  );
+  return _ray.ray.intersectPlane(_plane, _hit) ? _hit.clone() : null;
+}
+
+/* Map world X → scale degree based on string layout */
+function xToDeg(wx){
+  const t = (wx + 8) / 16;
+  return Math.max(0, Math.min(SCALE.length-1, Math.floor(t*(SCALE.length-1))));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CHORD KEYS UI — build translucent keyboard overlay
+   ═══════════════════════════════════════════════════════════════ */
+const CHORD_NAMES   = CHORD_CONFIG.map(c => c.name);
+const KEY_LABELS_QW = CHORD_CONFIG.map(c => c.key);
+/* AZERTY : Q↔A swap sur les deux rangées */
+const KEY_LABELS_AZ = KEY_LABELS_QW.map(k => k==='Q'?'A': k==='A'?'Q': k);
+let detectedAzerty = false;
+const keysEl = document.getElementById('keys');
+const PER_ROW_UI = 6; // 12 accords en 2 rangées de 6
+
+function buildKeysUI(){
+  keysEl.innerHTML='';
+  const labels = detectedAzerty ? KEY_LABELS_AZ : KEY_LABELS_QW;
+  [0,1].forEach(row=>{
+    const rowEl = document.createElement('div');
+    rowEl.className='keys-row';
+    for(let c=0;c<PER_ROW_UI;c++){
+      const i = row*PER_ROW_UI + c;
+      const k = document.createElement('div');
+      k.className='key'; k.dataset.idx=i;
+      k.innerHTML=`<span class="key-letter">${labels[i]}</span><span class="key-chord">${CHORD_NAMES[i]}</span>`;
+      rowEl.appendChild(k);
+    }
+    keysEl.appendChild(rowEl);
+  });
+}
+buildKeysUI();
+
+/* Clic sur les touches de l'overlay */
+keysEl.addEventListener('pointerdown', e=>{
+  const el = e.target.closest('.key');
+  if(!el) return;
+  if(!experienceStarted) return;
+  if(!audioReady){ initAudio(); return; }
+  const idx = +el.dataset.idx;
+  const now = performance.now();
+  if(now - lastChordT < 380) return;
+  lastChordT = now;
+  playChord(idx);
+  flashKey(idx);
+  e.stopPropagation();
+});
+
+function flashKey(idx){
+  const el = keysEl.children[idx];
+  if(!el) return;
+  el.classList.add('active');
+  setTimeout(()=>el.classList.remove('active'), 420);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INTRO MODAL → start experience
+   ═══════════════════════════════════════════════════════════════ */
+let experienceStarted = false;
+
+document.getElementById('startBtn').addEventListener('click', ()=>{
+  experienceStarted = true;
+  document.getElementById('start').classList.add('hide');
+  keysEl.classList.add('show');
+  initAudio();
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   CAMERA LERP — no user control, drifts toward active strings
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   INPUT
+   ═══════════════════════════════════════════════════════════════ */
+let ptDownX=0, ptDownY=0, lastNoteT=0, lastDeg=-1, lastChordT=0;
+
+window.addEventListener('pointerdown', e=>{
+  if(!experienceStarted) return;
+  if(!WAVE_CONFIG.mouseEnabled) return;
+  ptDownX=e.clientX; ptDownY=e.clientY;
+  const w=s2w(e.clientX, e.clientY, 1.5);
+  if(w){ mxU.value=w.x; myU.value=1.5; mzU.value=w.z; mAmpU.value=1.6; }
+  if(!audioReady){ initAudio(); return; }
+});
+
+window.addEventListener('pointerup', e=>{
+  if(!WAVE_CONFIG.mouseEnabled){ mAmpU.value=0; return; }
+  const dx=e.clientX-ptDownX, dy=e.clientY-ptDownY;
+  mAmpU.value=0.16;
+  if(!audioReady) return;
+  if(Math.sqrt(dx*dx+dy*dy) < 12){
+    const now=performance.now();
+    if(now-lastChordT < 380) return;
+    lastChordT=now;
+    const w=s2w(e.clientX, e.clientY, 1.5);
+    if(w){
+      const angle=(Math.atan2(w.z, w.x)+Math.PI)/(Math.PI*2);
+      playChord(Math.floor(angle*CHORDS.length) % CHORDS.length);
+    }
+  }
+});
+
+window.addEventListener('pointermove', e=>{
+  if(!experienceStarted) return;
+  if(!WAVE_CONFIG.mouseEnabled) return;
+  const w=s2w(e.clientX, e.clientY, 1.5);
+  if(w){ mxU.value=w.x; myU.value=1.5; mzU.value=w.z; mAmpU.value=0.16; }
+
+  if(!audioReady||!w) return;
+  const now=performance.now();
+  if(now-lastNoteT < 155) return;
+  const deg = xToDeg(w.x);
+  if(deg===lastDeg && now-lastNoteT < 340) return;
+  lastNoteT=now; lastDeg=deg;
+  pluckString(deg, 0.4);
+});
+
+window.addEventListener('pointerleave', ()=>{ mAmpU.value=0; });
+
+/* Keyboard ASDFGH / QSDFGH */
+const _held={};
+addEventListener('keyup',  e=>delete _held[e.code]);
+addEventListener('keydown', e=>{
+  if(e.repeat||_held[e.code]) return;
+  if(!experienceStarted) return;
+  if(!audioReady){ initAudio(); return; }
+  _held[e.code]=true;
+  const k=e.key.toLowerCase();
+  if(e.code==='KeyA'&&k==='q'){ detectedAzerty=true; buildKeysUI(); }
+  if(e.code==='KeyQ'&&k==='a'){ detectedAzerty=false; buildKeysUI(); }
+  /* Rangée 1 : Q W E R T Y → 0-5  |  Rangée 2 : A S D F G H → 6-11 */
+  const map={
+    KeyQ:0, KeyW:1, KeyE:2, KeyR:3, KeyT:4, KeyY:5,
+    KeyA:6, KeyS:7, KeyD:8, KeyF:9, KeyG:10,KeyH:11
+  };
+  let idx=map[e.code]??-1;
+  if(idx===-1&&k>='1'&&k<='9') idx=+k-1;
+  if(idx>=0){
+    const now=performance.now();
+    if(now-lastChordT<380) return;
+    lastChordT=now;
+    playChord(idx);
+    flashKey(idx);
+    const wx=-8+idx*(16/5);
+    mxU.value=wx; myU.value=1.5; mAmpU.value=1.5;
+    setTimeout(()=>{ mAmpU.value=0.16; }, 120);
+    e.preventDefault();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATE
+   ═══════════════════════════════════════════════════════════════ */
+let lastT=performance.now();
+const WIND_SPD = 5.5;
+
+async function animate(){
+  const now=performance.now();
+  const dt=Math.min((now-lastT)/1000, 0.05);
+  lastT=now;
+  dtU.value=dt;
+
+  if(windActive){
+    windX += dt*WIND_SPD;
+    wxU.value = windX;
+    if(windX > 12){ windActive=false; wAmpU.value=0; }
+  }
+
+  /* Camera drifts slowly toward the last excited string zone.
+     _exciteX is updated by pluckString / playChord.
+     Horizontal: camera and lookAt shift gently toward that X.
+     Vertical: slow sinusoidal breath up/down (no mouse influence). */
+  /* Flottement arrière au silence */
+  const silenceMs = now - _lastChordMs;
+  if(silenceMs > DRIFT_CFG.idleDelay){
+    /* Recul progressif vers driftMaxZ */
+    _driftZ = Math.min(_driftZ + DRIFT_CFG.driftSpeed * dt, DRIFT_CFG.driftMaxZ);
+  } else {
+    /* Retour rapide vers les cordes dès qu'un accord est joué */
+    _driftZ = Math.max(_driftZ - DRIFT_CFG.returnSpeed * dt, 0);
+  }
+
+  /* Flottement spatial — dérive organique position + rotation */
+  const fx    = floatVal(_floatOsc.px, now) * FLOAT_CFG.posAmpX;
+  const fy    = floatVal(_floatOsc.py, now) * FLOAT_CFG.posAmpY;
+  const fz    = floatVal(_floatOsc.pz, now) * FLOAT_CFG.posAmpZ;
+  const roll  = floatVal(_floatOsc.rz, now) * FLOAT_CFG.rollAmp;
+  const pitch = floatVal(_floatOsc.rx, now) * FLOAT_CFG.pitchAmp;
+  const yaw   = floatVal(_floatOsc.ry, now) * FLOAT_CFG.yawAmp;
+
+  _camTarget.set(
+    CAM_BASE.x + _exciteX * WAVE_CONFIG.camExciteH + fx,
+    CAM_BASE.y + fy,
+    CAM_BASE.z + _driftZ + fz
+  );
+  _lookTarget.set(
+    CAM_LOOK_BASE.x + _exciteX * WAVE_CONFIG.lookExciteH + fx * 1.6,
+    CAM_LOOK_BASE.y + fy * 0.5,
+    CAM_LOOK_BASE.z + _driftZ * 0.3 + fz * 0.4
+  );
+  /* Lerp adaptatif : rapide si loin de la cible, très lent si proche */
+  const dist  = _camCurrent.distanceTo(_camTarget);
+  const speed = WAVE_CONFIG.camLerp + Math.min(dist * 0.18, 0.25);
+  const LERP  = 1 - Math.pow(speed, dt);
+  _camCurrent.lerp(_camTarget, LERP);
+  _lookCurrent.lerp(_lookTarget, LERP);
+  camera.position.copy(_camCurrent);
+  camera.lookAt(_lookCurrent);
+
+  /* Recentrage spatial sur accord — ramène spin et float vers 0 */
+  if(_recenter > 0){
+    _recenter = Math.max(0, _recenter - RECENTER_DECAY * (dt * 1000));
+    /* Spin ramené vers 0 proportionnellement à la force de recentrage */
+    _spinAngle *= (1 - _recenter * 0.08);
+  }
+
+  /* Flottement atténué pendant le recentrage */
+  const floatScale = 1 - _recenter * 0.85;
+  camera.rotateZ(roll  * floatScale);
+  camera.rotateX(pitch * floatScale);
+  camera.rotateY(yaw   * floatScale);
+
+  /* Spin continu Y — dérive lente d'apesanteur */
+  _spinAngle += FLOAT_CFG.spinSpeed * dt;
+  camera.rotateY(_spinAngle);
+
+  /* Parallaxe étoiles — couches attachées à la caméra.
+     parallax=0 → solidaire (pas de mouvement relatif)
+     parallax=1 → reste en place dans la scène (parallaxe maximal)
+     On décale la couche à l'opposé du mouvement cam, scalé par (1-parallax) */
+  const camDX = _camCurrent.x - CAM_BASE.x;
+  const camDY = _camCurrent.y - CAM_BASE.y;
+  _starLayers.forEach(layer=>{
+    const inv = 1 - layer.parallax;
+    layer.pts.position.x = -camDX * inv;
+    layer.pts.position.y = -camDY * inv;
+  });
+
+  if(computeNode) await renderer.computeAsync(computeNode);
+  pipe.render();
+}
+</script>
+</body>
+</html>

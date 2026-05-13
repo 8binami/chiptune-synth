@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Galaxie des Cordes — #cpc-strings</title>
+<meta name="codepen-tags" content="cpc-strings, codepenchallenge, strings, generative, ambient, violin, synthesis">
+<!--
+  ╔════════════════════════════════════════════════════════════════╗
+  ║  Galaxie des Cordes — Galaxy of Strings                        ║
+  ║  CodePen Challenge: Strings                                    ║
+  ║  ChiptuneSynth 3.1.0 — Natural wavetable violin synthesis      ║
+  ║                                                                ║
+  ║  A cosmic instrument. Your mouse is the bow.                   ║
+  ║                                                                ║
+  ║  AUDIO                                                         ║
+  ║  · violinClassic   : wavetable harmonics, 6 unison voices      ║
+  ║  · harpCeltic      : karplus-strong plucked shimmer            ║
+  ║  · celloNatural    : sustained bass drone (wavetable)          ║
+  ║  · Cathedral reverb + chorus width + tape delay                ║
+  ║                                                                ║
+  ║  INTERACTION                                                   ║
+  ║  · Mouse X         → A-minor pentatonic, 3 octaves             ║
+  ║  · Mouse Y         → octave & filter brightness                ║
+  ║  · Mouse velocity  → note velocity                             ║
+  ║  · Mouse idle      → auto-generative melody                    ║
+  ║  · Click           → triad chord burst                         ║
+  ║                                                                ║
+  ║  VISUAL                                                        ║
+  ║  · Volumetric nebula (radial gradient morph)                   ║
+  ║  · 3-layer parallax star field                                 ║
+  ║  · Note orbs with chromatic glow & bloom                       ║
+  ║  · Mouse trail with depth-fade                                 ║
+  ║  · Light rays, grid horizon, central resonance ring            ║
+  ║                                                                ║
+  ║  Tags: cpc-strings  codepenchallenge                           ║
+  ╚════════════════════════════════════════════════════════════════╝
+-->
+<script src="../dist/3.1.0/chiptune-synth.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#04040a;color:#d8d8f0;font-family:'Inter','Helvetica Neue',Arial,sans-serif;cursor:none;user-select:none}
+
+/* ══ Canvas layers ══ */
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block}
+#cv-bg  { z-index:1; filter:blur(1px) }
+#cv-mid { z-index:2 }
+#cv-fg  { z-index:3; mix-blend-mode:screen; pointer-events:none }
+
+/* ══ UI overlay ══ */
+.ui{position:fixed;inset:0;z-index:10;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:34px 40px;font-weight:300}
+
+.brand{display:flex;align-items:flex-start;gap:14px}
+.brand-mark{
+  width:34px;height:34px;position:relative;flex-shrink:0;
+  background:radial-gradient(circle at 35% 35%,#ffecd1,#ff9cd5 30%,#a855f7 60%,transparent 75%);
+  border-radius:50%;
+  box-shadow:0 0 28px rgba(255,140,220,.6),0 0 60px rgba(168,85,247,.4),inset 0 0 14px rgba(255,255,255,.4);
+  animation:breathe 4s ease-in-out infinite;
+}
+@keyframes breathe { 0%,100%{transform:scale(1);filter:hue-rotate(0deg)} 50%{transform:scale(1.08);filter:hue-rotate(35deg)} }
+.brand h1{
+  font-size:14px;letter-spacing:6px;text-transform:uppercase;font-weight:200;
+  color:#f8f0ff;text-shadow:0 0 18px rgba(255,200,240,.45);
+}
+.brand p{
+  font-size:9.5px;letter-spacing:3.5px;text-transform:uppercase;
+  color:#7a7aaa;margin-top:4px;
+}
+
+.note-panel{
+  position:absolute;top:38px;right:40px;text-align:right;
+  font-family:'SF Mono','Courier New',monospace;
+}
+.note-panel .lbl{font-size:8px;letter-spacing:3px;color:#5a5a80;text-transform:uppercase;margin-bottom:6px}
+.note-panel .current{
+  font-size:48px;font-weight:100;letter-spacing:2px;
+  background:linear-gradient(135deg,#ffecd1,#ff9cd5 40%,#a855f7 80%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-shadow:0 0 60px rgba(255,140,220,.3);
+  line-height:1;
+}
+.note-panel .scale{font-size:9px;letter-spacing:2px;color:#6a6a90;margin-top:8px}
+
+.footer{
+  display:flex;justify-content:space-between;align-items:flex-end;
+  font-size:9px;letter-spacing:2.5px;color:#4a4a70;text-transform:uppercase;
+}
+.footer .hint{
+  max-width:440px;line-height:1.8;
+}
+.footer .hint b{color:#b090ff;font-weight:400}
+.footer .credit{
+  text-align:right;font-size:8px;color:#404060;line-height:1.8;
+}
+.footer .credit a{color:#8a6aff;text-decoration:none}
+.footer .credit a:hover{color:#b090ff}
+
+/* ══ Custom cursor ══ */
+.cursor{
+  position:fixed;z-index:11;pointer-events:none;
+  width:48px;height:48px;margin:-24px 0 0 -24px;
+  border-radius:50%;
+  border:1px solid rgba(255,200,240,.35);
+  box-shadow:
+    0 0 18px rgba(255,140,220,.5),
+    0 0 40px rgba(168,85,247,.3),
+    inset 0 0 12px rgba(255,200,240,.12);
+  transition:transform .08s ease-out,border-color .3s,opacity .4s;
+  opacity:0;
+}
+.cursor::after{
+  content:'';position:absolute;inset:18px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,236,209,.9),rgba(255,140,220,.4) 60%,transparent);
+}
+.cursor.ready{opacity:1}
+.cursor.pressing{transform:scale(1.6);border-color:rgba(255,236,209,.8)}
+
+/* ══ Start overlay ══ */
+.start{
+  position:fixed;inset:0;z-index:20;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:28px;
+  background:radial-gradient(ellipse at center,rgba(10,5,30,.6),rgba(4,4,10,.95));
+  backdrop-filter:blur(3px);
+  transition:opacity 1.2s ease-out,visibility 1.2s;cursor:pointer;
+}
+.start.hide{opacity:0;visibility:hidden;pointer-events:none}
+.start-ring{
+  width:120px;height:120px;border-radius:50%;position:relative;
+  background:radial-gradient(circle at 35% 35%,#ffecd1,#ff9cd5 25%,#a855f7 55%,transparent 72%);
+  box-shadow:
+    0 0 80px rgba(255,140,220,.5),
+    0 0 160px rgba(168,85,247,.4),
+    inset 0 0 30px rgba(255,255,255,.25);
+  animation:breathe 4s ease-in-out infinite;
+}
+.start-ring::before,.start-ring::after{
+  content:'';position:absolute;inset:-20px;border-radius:50%;
+  border:1px solid rgba(255,200,240,.2);
+  animation:expand 3.5s ease-out infinite;
+}
+.start-ring::after{animation-delay:1.7s}
+@keyframes expand {
+  0%{transform:scale(1);opacity:.6}
+  100%{transform:scale(2.2);opacity:0}
+}
+.start h2{
+  font-size:28px;font-weight:100;letter-spacing:8px;text-transform:uppercase;
+  background:linear-gradient(135deg,#ffecd1,#ff9cd5 40%,#a855f7 80%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-shadow:0 0 40px rgba(255,140,220,.3);
+  text-align:center;
+}
+.start .sub{
+  font-size:10px;letter-spacing:5px;color:#6a6a90;text-transform:uppercase;
+  text-align:center;margin-top:-18px;
+}
+.start .tap{
+  font-size:9px;letter-spacing:4px;color:#4a4a70;text-transform:uppercase;
+  margin-top:10px;animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
+
+@media (max-width:720px){
+  .ui{padding:22px 22px}
+  .brand h1{font-size:11px;letter-spacing:4px}
+  .brand p{font-size:8px;letter-spacing:2px}
+  .note-panel .current{font-size:32px}
+  .footer .hint{max-width:200px;font-size:8px}
+  .start h2{font-size:20px;letter-spacing:5px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="cv-bg"></canvas>
+<canvas id="cv-mid"></canvas>
+<canvas id="cv-fg"></canvas>
+
+<div class="cursor" id="cursor"></div>
+
+<div class="ui">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div>
+      <h1>Galaxie des Cordes</h1>
+      <p>A Cosmic Violin Instrument</p>
+    </div>
+  </div>
+
+  <div class="note-panel">
+    <div class="lbl">Now Playing</div>
+    <div class="current" id="noteDisplay">—</div>
+    <div class="scale">A minor pentatonic</div>
+  </div>
+
+  <div class="footer">
+    <div class="hint">
+      <b>Move</b> the bow · <b>Click</b> for a triad<br>
+      <b>Idle</b> to let the cosmos compose
+    </div>
+    <div class="credit">
+      Wavetable Violin · Karplus Harp · Cathedral Reverb<br>
+      <a href="https://chiptune-synth.8binami.com" target="_blank">ChiptuneSynth v3.1.0</a>
+    </div>
+  </div>
+</div>
+
+<div class="start" id="start">
+  <div class="start-ring"></div>
+  <h2>Galaxie des Cordes</h2>
+  <div class="sub">Your mouse is the bow</div>
+  <div class="tap">Click to enter the cosmos</div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   GALAXIE DES CORDES
+   A mouse-driven cosmic violin instrument
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Audio ─────────────────────────────────────────────────── */
+var synth = new ChiptuneSynth();
+var audioReady = false;
+
+// A-minor pentatonic across 2 safe octaves (10 notes, low → high)
+// Capped at C6 to avoid strident high frequencies
+var SCALE = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5],
+  ['A',5],['C',6]
+];
+var DEG_COLOR = [
+  '#ffecd1','#ff9cd5','#c08cff','#a855f7','#8cb4ff',
+  '#ffecd1','#ff9cd5','#c08cff','#a855f7','#8cb4ff',
+  '#ffecd1','#ff9cd5'
+];
+
+// Track indexes
+var TK_VIOLIN = 0;
+var TK_HARP   = 1;
+var TK_CELLO  = 2;
+
+async function initAudio(){
+  if(audioReady) return;
+  await synth.init();
+  synth.setMasterVolume(0.42);
+
+  // ── Track 0: Violin — wavetable, bow noise off, soft unison ──
+  synth.loadInstrument('violinClassic', TK_VIOLIN);
+  synth.updateTrack(TK_VIOLIN, { bowNoise:false, bowNoiseLevel:0, unisonVoices:3, unisonDetune:5, unisonSpread:40, filterEnabled:true, filterType:'lowpass', filterCutoff:3800, filterQ:0.5 });
+  synth.updateEnvelope(TK_VIOLIN, { attack:0.10, decay:0.22, sustain:0.78, release:0.9 });
+  synth.updateVibrato(TK_VIOLIN, { rate:5.2, depth:8 });
+  synth.loadFxPreset(TK_VIOLIN, 'space');
+  synth.setReverbMix(TK_VIOLIN, 0.50);
+  synth.setReverbDecay(TK_VIOLIN, 0.78);
+  synth.setChorusRate(TK_VIOLIN, 0.55);
+  synth.setChorusDepth(TK_VIOLIN, 0.30);
+  synth.setChorusMix(TK_VIOLIN, 0.25);
+  synth.setDelayTime(TK_VIOLIN, 0.375);
+  synth.setDelayFeedback(TK_VIOLIN, 0.22);
+  synth.setDelayMix(TK_VIOLIN, 0.15);
+  synth.setTrackFaderVolume(TK_VIOLIN, 0.70);
+  synth.setTrackPan(TK_VIOLIN, 0);
+
+  // ── Track 1: Viola shimmer (wavetable) — plucked-style accents ──
+  synth.loadInstrument('violaReal', TK_HARP);
+  synth.updateTrack(TK_HARP, { bowNoise:false, bowNoiseLevel:0, unisonVoices:2, unisonDetune:4, unisonSpread:30, filterEnabled:true, filterType:'lowpass', filterCutoff:3200, filterQ:0.5 });
+  synth.updateEnvelope(TK_HARP, { attack:0.004, decay:0.35, sustain:0.05, release:1.6 });
+  synth.loadFxPreset(TK_HARP, 'space');
+  synth.setReverbMix(TK_HARP, 0.55);
+  synth.setReverbDecay(TK_HARP, 0.80);
+  synth.setDelayTime(TK_HARP, 0.5);
+  synth.setDelayFeedback(TK_HARP, 0.18);
+  synth.setDelayMix(TK_HARP, 0.18);
+  synth.setTrackFaderVolume(TK_HARP, 0.32);
+  synth.setTrackPan(TK_HARP, 0.25);
+
+  // ── Track 2: Cello — wavetable, bow noise off, sustained drone ──
+  synth.loadInstrument('celloNatural', TK_CELLO);
+  synth.updateTrack(TK_CELLO, { bowNoise:false, bowNoiseLevel:0, unisonVoices:2, unisonDetune:3, unisonSpread:35, filterEnabled:true, filterType:'lowpass', filterCutoff:1600, filterQ:0.6 });
+  synth.updateEnvelope(TK_CELLO, { attack:1.5, decay:0.6, sustain:0.75, release:2.8 });
+  synth.updateVibrato(TK_CELLO, { rate:4.0, depth:5 });
+  synth.loadFxPreset(TK_CELLO, 'space');
+  synth.setReverbMix(TK_CELLO, 0.65);
+  synth.setReverbDecay(TK_CELLO, 0.85);
+  synth.setChorusRate(TK_CELLO, 0.35);
+  synth.setChorusDepth(TK_CELLO, 0.35);
+  synth.setChorusMix(TK_CELLO, 0.30);
+  synth.setTrackFaderVolume(TK_CELLO, 0.42);
+  synth.setTrackPan(TK_CELLO, -0.2);
+
+  audioReady = true;
+  droneLoop();
+}
+
+/* ── Note playback ─────────────────────────────────────────── */
+var lastNoteTime = 0;
+var lastNoteIdx = -1;
+var currentViolinNote = null;
+var currentHarpNotes = [];   // ring buffer of recent harp ids
+var MAX_HARP_NOTES = 3;
+var lastHarpTime = 0;
+
+function playNote(degIdx, velocity, duration){
+  if(!audioReady) return;
+  var now = performance.now();
+  if(now - lastNoteTime < 180) return;  // ≈5 notes/sec max
+  lastNoteTime = now;
+  degIdx = Math.max(0, Math.min(SCALE.length-1, degIdx|0));
+  var nn = SCALE[degIdx];
+
+  // Stop previous violin note (avoid buildup of overlapping wavetable voices)
+  if(currentViolinNote){
+    try{ synth.stopNote(currentViolinNote); }catch(e){}
+    currentViolinNote = null;
+  }
+
+  // Velocity-scaled filter cutoff (capped lower to avoid harshness)
+  var cutoff = 1800 + velocity * 3500;
+  synth.updateTrack(TK_VIOLIN, { filterCutoff: cutoff });
+  currentViolinNote = synth.playNoteByName(nn[0], nn[1], TK_VIOLIN, duration || 2.2);
+
+  // Harp shimmer — sparse, capped, never above C6
+  if(now - lastHarpTime > 320 && degIdx < SCALE.length - 3 && Math.random() < 0.40){
+    lastHarpTime = now;
+    var harpDeg = Math.min(SCALE.length-1, degIdx + 3);
+    var harpNote = SCALE[harpDeg];
+    var hId = synth.playNoteByName(harpNote[0], harpNote[1], TK_HARP, 2.5);
+    currentHarpNotes.push(hId);
+    // Cap concurrent harp tails
+    while(currentHarpNotes.length > MAX_HARP_NOTES){
+      var oldId = currentHarpNotes.shift();
+      try{ synth.stopNote(oldId); }catch(e){}
+    }
+  }
+
+  lastNoteIdx = degIdx;
+  // UI
+  var disp = document.getElementById('noteDisplay');
+  if(disp){ disp.textContent = nn[0] + nn[1]; disp.style.textShadow = '0 0 60px ' + DEG_COLOR[degIdx]; }
+
+  // Spawn visual orb
+  spawnOrb(mouseX, mouseY, DEG_COLOR[degIdx], velocity);
+}
+
+function playChord(degIdx){
+  if(!audioReady) return;
+  // Stop previous violin first
+  if(currentViolinNote){ try{ synth.stopNote(currentViolinNote); }catch(e){} currentViolinNote = null; }
+  // Triad root + 3rd + 5th pentatonic
+  var maxIdx = SCALE.length - 1;
+  var notes = [degIdx, Math.min(maxIdx,degIdx+2), Math.min(maxIdx,degIdx+4)];
+  // Lower cutoff for chord to avoid harshness
+  synth.updateTrack(TK_VIOLIN, { filterCutoff: 3200 });
+  for(var i=0;i<notes.length;i++){
+    (function(d,delay){
+      setTimeout(function(){
+        var nn = SCALE[d];
+        var vId = synth.playNoteByName(nn[0], nn[1], TK_VIOLIN, 2.8);
+        if(i === 2) currentViolinNote = vId;  // track top voice
+        // Single harp pluck on root only
+        if(d === notes[0]){
+          var hId = synth.playNoteByName(nn[0], nn[1], TK_HARP, 2.5);
+          currentHarpNotes.push(hId);
+          while(currentHarpNotes.length > MAX_HARP_NOTES){
+            var oldId = currentHarpNotes.shift();
+            try{ synth.stopNote(oldId); }catch(e){}
+          }
+        }
+        spawnOrb(mouseX + (Math.random()-0.5)*80, mouseY + (Math.random()-0.5)*80, DEG_COLOR[d], 1.0);
+      }, delay);
+    })(notes[i], i*55);
+  }
+  spawnShockwave(mouseX, mouseY);
+}
+
+/* ── Drone loop (cello bass) ──────────────────────────────── */
+var DRONE_PROGRESSION = [
+  ['A',2], ['F',2], ['C',3], ['G',2]
+];
+var droneStep = 0;
+var currentDroneNote = null;
+function droneLoop(){
+  if(!audioReady) return;
+  // Stop previous drone before starting new one (no cluster buildup)
+  if(currentDroneNote){
+    try{ synth.stopNote(currentDroneNote); }catch(e){}
+    currentDroneNote = null;
+  }
+  var n = DRONE_PROGRESSION[droneStep % DRONE_PROGRESSION.length];
+  // duration 10 = sustained (won't auto-stop), we manage manually
+  currentDroneNote = synth.playNoteByName(n[0], n[1], TK_CELLO, 10);
+  droneStep++;
+  setTimeout(droneLoop, 9200);
+}
+
+/* ── Auto-melody when idle ─────────────────────────────────── */
+var lastMoveTime = performance.now();
+var idleMelodyTimer = null;
+function scheduleIdleMelody(){
+  if(idleMelodyTimer) clearTimeout(idleMelodyTimer);
+  idleMelodyTimer = setTimeout(function tick(){
+    var now = performance.now();
+    if(now - lastMoveTime > 700 && audioReady){
+      // Generative melody near last mouse position
+      var base = Math.max(0, Math.min(SCALE.length-1, lastNoteIdx >= 0 ? lastNoteIdx : Math.floor(SCALE.length/2)));
+      // Pick a note ±2 pentatonic steps (smooth voice leading)
+      var offset = [-2,-1,0,1,2,3][Math.floor(Math.random()*6)];
+      var deg = Math.max(0, Math.min(SCALE.length-1, base + offset));
+      var vel = 0.4 + Math.random()*0.35;
+      playNote(deg, vel, 2.5);
+    }
+    idleMelodyTimer = setTimeout(tick, 620 + Math.random()*380);
+  }, 900);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   VISUALS
+   ═══════════════════════════════════════════════════════════════ */
+
+var cvBg = document.getElementById('cv-bg');
+var cvMid = document.getElementById('cv-mid');
+var cvFg = document.getElementById('cv-fg');
+var ctxBg = cvBg.getContext('2d');
+var ctxMid = cvMid.getContext('2d');
+var ctxFg = cvFg.getContext('2d');
+var W=0, H=0, DPR=1;
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth;
+  H = window.innerHeight;
+  [cvBg, cvMid, cvFg].forEach(function(c){
+    c.width = W*DPR;
+    c.height = H*DPR;
+    c.getContext('2d').setTransform(DPR,0,0,DPR,0,0);
+  });
+  initStars();
+}
+window.addEventListener('resize', resize);
+
+/* ── Stars (3-layer parallax) ─────────────────────────────── */
+var stars = [];
+function initStars(){
+  stars = [];
+  var count = Math.floor((W*H)/3500);
+  for(var i=0;i<count;i++){
+    stars.push({
+      x: Math.random()*W,
+      y: Math.random()*H,
+      z: Math.random(),              // 0 far, 1 near
+      r: Math.random()*1.6 + 0.2,
+      tw: Math.random()*Math.PI*2,   // twinkle phase
+      twS: 0.02 + Math.random()*0.04,
+      hue: Math.random()<0.2 ? 280 + Math.random()*60 : 200 + Math.random()*40
+    });
+  }
+}
+
+/* ── Nebula blobs (big soft radial gradients) ─────────────── */
+var nebulae = [];
+function initNebulae(){
+  nebulae = [
+    { x:0.25, y:0.35, r:0.55, hue:290, a:0.22 },
+    { x:0.72, y:0.55, r:0.48, hue:320, a:0.20 },
+    { x:0.55, y:0.20, r:0.38, hue:200, a:0.14 },
+    { x:0.40, y:0.80, r:0.50, hue:260, a:0.18 },
+    { x:0.85, y:0.15, r:0.32, hue:340, a:0.12 }
+  ];
+}
+initNebulae();
+
+/* ── Particles (mouse trail) ──────────────────────────────── */
+var particles = [];
+function spawnTrailParticle(x,y,vel){
+  var hue = 280 + Math.random()*80;
+  particles.push({
+    x:x+(Math.random()-0.5)*8,
+    y:y+(Math.random()-0.5)*8,
+    vx:(Math.random()-0.5)*0.4,
+    vy:(Math.random()-0.5)*0.4 - 0.15,
+    life:1,
+    decay:0.012 + Math.random()*0.015,
+    r: 1 + Math.random()*2.5 + vel*3,
+    hue: hue
+  });
+  if(particles.length > 500) particles.shift();
+}
+
+/* ── Note orbs ────────────────────────────────────────────── */
+var orbs = [];
+function spawnOrb(x,y,color,velocity){
+  orbs.push({
+    x:x, y:y,
+    r: 8,
+    maxR: 120 + velocity*120,
+    life:1,
+    color:color,
+    inner:true
+  });
+  // Secondary ring
+  orbs.push({
+    x:x, y:y,
+    r: 2,
+    maxR: 200 + velocity*100,
+    life:1,
+    color:color,
+    inner:false
+  });
+  if(orbs.length > 40) orbs.splice(0, orbs.length - 40);
+}
+
+/* ── Shockwaves (chord bursts) ────────────────────────────── */
+var shockwaves = [];
+function spawnShockwave(x,y){
+  shockwaves.push({ x:x, y:y, r:0, life:1 });
+}
+
+/* ── Central resonance ring ──────────────────────────────── */
+var resonance = 0;
+var resonanceTarget = 0;
+
+/* ── Mouse state ──────────────────────────────────────────── */
+var mouseX = 0, mouseY = 0;
+var prevMouseX = 0, prevMouseY = 0;
+var mouseV = 0;
+var mouseDown = false;
+var cursorEl = document.getElementById('cursor');
+var moveAccum = 0;
+var lastPlayPosIdx = -1;
+
+function onPointerMove(e){
+  var x = e.clientX, y = e.clientY;
+  var dx = x - prevMouseX, dy = y - prevMouseY;
+  var d = Math.sqrt(dx*dx + dy*dy);
+  mouseV = mouseV * 0.7 + d * 0.3;
+  prevMouseX = mouseX;
+  prevMouseY = mouseY;
+  mouseX = x; mouseY = y;
+  lastMoveTime = performance.now();
+
+  // Cursor follows
+  cursorEl.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+
+  // Spawn trail particles proportional to speed
+  var n = Math.min(4, Math.floor(d/6));
+  for(var i=0;i<n;i++) spawnTrailParticle(x, y, Math.min(1, d/30));
+
+  // Trigger notes on meaningful movement
+  moveAccum += d;
+  if(moveAccum > 35 && audioReady){
+    moveAccum = 0;
+    // Map X to degree across full scale
+    var xN = x / W;
+    var yN = 1 - (y / H); // 0 top → 1 bottom, invert so top = high
+    // Base degree by X, biased by Y
+    var baseDeg = Math.floor(xN * SCALE.length);
+    var octBoost = Math.floor(yN * 2.5) - 1; // -1, 0, +1
+    var deg = Math.max(0, Math.min(SCALE.length-1, baseDeg + octBoost*0));
+    // Only trigger if moved to new degree (avoid stuttering same note)
+    if(deg !== lastPlayPosIdx){
+      var vel = Math.min(1, 0.35 + (d/45));
+      playNote(deg, vel, 2.4);
+      lastPlayPosIdx = deg;
+    }
+  }
+}
+
+function onPointerDown(e){
+  mouseDown = true;
+  cursorEl.classList.add('pressing');
+  if(!audioReady){
+    initAudio().then(function(){
+      document.getElementById('start').classList.add('hide');
+      cursorEl.classList.add('ready');
+      scheduleIdleMelody();
+    });
+    return;
+  }
+  // Chord
+  var x = e.clientX, y = e.clientY;
+  mouseX = x; mouseY = y;
+  var deg = Math.floor((x/W) * SCALE.length);
+  deg = Math.max(0, Math.min(SCALE.length-1, deg));
+  playChord(deg);
+}
+function onPointerUp(){ mouseDown = false; cursorEl.classList.remove('pressing'); }
+
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointerleave', function(){ cursorEl.classList.remove('ready'); });
+window.addEventListener('pointerenter', function(){ if(audioReady) cursorEl.classList.add('ready'); });
+document.addEventListener('keydown', function(e){
+  if(e.key === ' ' && !audioReady){
+    initAudio().then(function(){
+      document.getElementById('start').classList.add('hide');
+      cursorEl.classList.add('ready');
+      scheduleIdleMelody();
+    });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER LOOP
+   ═══════════════════════════════════════════════════════════════ */
+var t = 0;
+function render(){
+  t += 0.012;
+
+  // ── Background: deep space + nebulae ─────────────────────
+  ctxBg.globalCompositeOperation = 'source-over';
+  var g = ctxBg.createRadialGradient(W*0.5, H*0.5, 0, W*0.5, H*0.5, Math.max(W,H)*0.7);
+  g.addColorStop(0, '#0a0620');
+  g.addColorStop(0.4, '#060418');
+  g.addColorStop(1, '#020108');
+  ctxBg.fillStyle = g;
+  ctxBg.fillRect(0,0,W,H);
+
+  // Nebula blobs - slow drifting radial gradients
+  ctxBg.globalCompositeOperation = 'screen';
+  for(var i=0;i<nebulae.length;i++){
+    var n = nebulae[i];
+    var cx = n.x*W + Math.sin(t*0.3 + i)*30;
+    var cy = n.y*H + Math.cos(t*0.23 + i*1.3)*25;
+    var rad = Math.max(W,H) * n.r;
+    var ng = ctxBg.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    var hue = n.hue + Math.sin(t*0.15 + i)*15;
+    ng.addColorStop(0, 'hsla('+hue+',85%,55%,'+(n.a*0.9)+')');
+    ng.addColorStop(0.4, 'hsla('+hue+',80%,45%,'+(n.a*0.5)+')');
+    ng.addColorStop(1, 'hsla('+hue+',70%,35%,0)');
+    ctxBg.fillStyle = ng;
+    ctxBg.fillRect(0,0,W,H);
+  }
+
+  // Stars — parallax shift based on mouse
+  var pX = (mouseX/W - 0.5);
+  var pY = (mouseY/H - 0.5);
+  ctxBg.globalCompositeOperation = 'lighter';
+  for(var i=0;i<stars.length;i++){
+    var s = stars[i];
+    var px = s.x + pX * s.z * 40;
+    var py = s.y + pY * s.z * 40;
+    s.tw += s.twS;
+    var alpha = 0.3 + Math.sin(s.tw)*0.35 + s.z*0.4;
+    alpha = Math.max(0, Math.min(1, alpha));
+    ctxBg.beginPath();
+    ctxBg.arc(px, py, s.r*(0.5+s.z), 0, Math.PI*2);
+    ctxBg.fillStyle = 'hsla('+s.hue+',90%,85%,'+alpha+')';
+    ctxBg.fill();
+    if(s.z > 0.7){
+      // Bright halo
+      ctxBg.beginPath();
+      ctxBg.arc(px, py, s.r*3, 0, Math.PI*2);
+      ctxBg.fillStyle = 'hsla('+s.hue+',90%,70%,'+(alpha*0.15)+')';
+      ctxBg.fill();
+    }
+  }
+
+  // Horizon grid (subtle Tron depth)
+  ctxBg.globalCompositeOperation = 'source-over';
+  ctxBg.strokeStyle = 'rgba(140,90,200,0.09)';
+  ctxBg.lineWidth = 1;
+  var horY = H*0.72;
+  // Horizontal lines (perspective)
+  for(var k=0;k<9;k++){
+    var prog = k/9;
+    var y = horY + Math.pow(prog,1.8) * (H - horY);
+    ctxBg.beginPath();
+    ctxBg.moveTo(0, y);
+    ctxBg.lineTo(W, y);
+    ctxBg.stroke();
+  }
+  // Vertical lines converging to center
+  var vCount = 17;
+  for(var k=0;k<vCount;k++){
+    var progX = (k/(vCount-1) - 0.5);
+    var topX = W*0.5 + progX * W*0.1;
+    var botX = W*0.5 + progX * W*1.6;
+    ctxBg.beginPath();
+    ctxBg.moveTo(topX, horY);
+    ctxBg.lineTo(botX, H);
+    ctxBg.stroke();
+  }
+
+  // ── MID layer: particles, orbs, resonance ──────────────
+  ctxMid.clearRect(0,0,W,H);
+  ctxMid.globalCompositeOperation = 'lighter';
+
+  // Central resonance ring
+  resonance += (resonanceTarget - resonance) * 0.08;
+  resonanceTarget *= 0.96;
+  var rcx = W*0.5, rcy = H*0.5;
+  for(var r=0;r<4;r++){
+    var baseR = 90 + r*55 + Math.sin(t*0.5 + r)*8;
+    var pulseR = baseR + resonance*40;
+    ctxMid.beginPath();
+    ctxMid.arc(rcx, rcy, pulseR, 0, Math.PI*2);
+    ctxMid.strokeStyle = 'hsla('+(280+r*15)+',80%,70%,'+(0.05 + resonance*0.15)+')';
+    ctxMid.lineWidth = 1 + resonance*2;
+    ctxMid.stroke();
+  }
+
+  // Trail particles
+  for(var i=particles.length-1;i>=0;i--){
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy -= 0.02;
+    p.life -= p.decay;
+    if(p.life <= 0){ particles.splice(i,1); continue; }
+    var alpha = p.life * 0.8;
+    ctxMid.beginPath();
+    ctxMid.arc(p.x, p.y, p.r * p.life, 0, Math.PI*2);
+    ctxMid.fillStyle = 'hsla('+p.hue+',90%,80%,'+alpha+')';
+    ctxMid.fill();
+    // Glow
+    ctxMid.beginPath();
+    ctxMid.arc(p.x, p.y, p.r*4*p.life, 0, Math.PI*2);
+    ctxMid.fillStyle = 'hsla('+p.hue+',90%,65%,'+(alpha*0.18)+')';
+    ctxMid.fill();
+  }
+
+  // Note orbs
+  for(var i=orbs.length-1;i>=0;i--){
+    var o = orbs[i];
+    o.r += (o.maxR - o.r) * 0.08;
+    o.life -= 0.015;
+    if(o.life <= 0){ orbs.splice(i,1); continue; }
+    var alpha = o.life * o.life;
+    ctxMid.beginPath();
+    ctxMid.arc(o.x, o.y, o.r, 0, Math.PI*2);
+    if(o.inner){
+      var og = ctxMid.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+      og.addColorStop(0, o.color);
+      og.addColorStop(0.3, o.color.length===7 ? o.color+'88' : o.color);
+      og.addColorStop(1, 'transparent');
+      ctxMid.fillStyle = og;
+      ctxMid.globalAlpha = alpha * 0.55;
+      ctxMid.fill();
+      ctxMid.globalAlpha = 1;
+    } else {
+      ctxMid.strokeStyle = o.color;
+      ctxMid.lineWidth = 1.5 * alpha;
+      ctxMid.globalAlpha = alpha * 0.7;
+      ctxMid.stroke();
+      ctxMid.globalAlpha = 1;
+    }
+  }
+
+  // Shockwaves
+  for(var i=shockwaves.length-1;i>=0;i--){
+    var sw = shockwaves[i];
+    sw.r += 18;
+    sw.life -= 0.02;
+    if(sw.life <= 0){ shockwaves.splice(i,1); continue; }
+    ctxMid.beginPath();
+    ctxMid.arc(sw.x, sw.y, sw.r, 0, Math.PI*2);
+    ctxMid.strokeStyle = 'rgba(255,200,240,'+(sw.life*0.5)+')';
+    ctxMid.lineWidth = 2*sw.life;
+    ctxMid.stroke();
+    ctxMid.beginPath();
+    ctxMid.arc(sw.x, sw.y, sw.r*0.7, 0, Math.PI*2);
+    ctxMid.strokeStyle = 'rgba(168,85,247,'+(sw.life*0.4)+')';
+    ctxMid.lineWidth = 1*sw.life;
+    ctxMid.stroke();
+  }
+
+  // ── FG layer: light rays, vignette ─────────────────────
+  ctxFg.clearRect(0,0,W,H);
+
+  // Diagonal light rays (subtle god-rays)
+  ctxFg.globalCompositeOperation = 'screen';
+  var rayOrigin = { x: W*0.35 + Math.sin(t*0.2)*50, y: -80 };
+  for(var k=0;k<5;k++){
+    var ang = -0.6 + k*0.28 + Math.sin(t*0.3 + k)*0.02;
+    ctxFg.save();
+    ctxFg.translate(rayOrigin.x, rayOrigin.y);
+    ctxFg.rotate(ang);
+    var rg = ctxFg.createLinearGradient(0,0,0,H*1.4);
+    rg.addColorStop(0, 'rgba(255,200,240,0.12)');
+    rg.addColorStop(0.5, 'rgba(168,85,247,0.05)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctxFg.fillStyle = rg;
+    ctxFg.fillRect(-30, 0, 60, H*1.4);
+    ctxFg.restore();
+  }
+
+  // Vignette
+  ctxFg.globalCompositeOperation = 'source-over';
+  var vg = ctxFg.createRadialGradient(W*0.5, H*0.5, H*0.3, W*0.5, H*0.5, H*0.85);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(0,0,0,0.65)');
+  ctxFg.fillStyle = vg;
+  ctxFg.fillRect(0,0,W,H);
+
+  // Mouse velocity decay
+  mouseV *= 0.88;
+  // Trigger resonance based on recent notes
+  if(lastNoteTime && (performance.now() - lastNoteTime < 60)) resonanceTarget = 1;
+
+  requestAnimationFrame(render);
+}
+
+resize();
+initStars();
+// Initial mouse center
+mouseX = W*0.5; mouseY = H*0.5;
+prevMouseX = mouseX; prevMouseY = mouseY;
+render();
+
+/* ─── Hover ready cursor on first move ─── */
+document.addEventListener('mousemove', function(){
+  if(audioReady) cursorEl.classList.add('ready');
+}, { once: false });
+</script>
+</body>
+</html>

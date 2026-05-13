@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>輪廻 — Ouroboros</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050300;overflow:hidden;font-family:'Georgia','Times New Roman',serif}
+canvas{display:block;position:fixed;inset:0;cursor:crosshair;touch-action:none}
+#vignette{
+  position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center,
+    transparent 30%,
+    rgba(5,3,0,.30) 54%,
+    rgba(3,2,0,.72) 76%,
+    rgba(1,0,0,.94) 100%);
+}
+#start{
+  position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+  background:rgba(3,1,0,.97);transition:opacity 1.2s ease;
+}
+#start.hide{opacity:0;pointer-events:none}
+.si{text-align:center;color:#e8b84b;max-width:520px;padding:24px}
+.si-kanji{font-size:clamp(52px,10vw,96px);letter-spacing:.06em;line-height:1;margin-bottom:.3em;opacity:.85}
+.si-title{font-size:clamp(18px,3vw,28px);letter-spacing:.35em;text-transform:uppercase;margin-bottom:.6em}
+.si-hr{width:60px;height:1px;background:rgba(232,184,75,.30);margin:0 auto .8em}
+.si-sub{font-size:clamp(10px,1.4vw,13px);letter-spacing:.22em;text-transform:uppercase;opacity:.48;line-height:1.9}
+.si-btn{
+  margin-top:2em;background:transparent;border:1px solid rgba(232,184,75,.28);color:#e8b84b;
+  font-family:inherit;font-size:clamp(10px,1.4vw,13px);letter-spacing:.30em;text-transform:uppercase;
+  padding:13px 38px;cursor:pointer;transition:all .35s;
+}
+.si-btn:hover{background:rgba(232,184,75,.07);border-color:rgba(232,184,75,.68);color:#fff}
+#hud{
+  position:fixed;top:1.4em;left:50%;transform:translateX(-50%);
+  z-index:10;pointer-events:none;opacity:0;transition:opacity 1s ease .5s;
+  display:flex;gap:2.4em;align-items:center;
+}
+#hud.show{opacity:1}
+.hud-item{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:rgba(232,184,75,.38);text-align:center}
+.hud-val{font-size:17px;letter-spacing:.08em;color:rgba(232,184,75,.76);display:block;margin-bottom:2px}
+#hint{
+  position:fixed;bottom:1.6em;left:50%;transform:translateX(-50%);
+  z-index:10;pointer-events:none;opacity:0;transition:opacity 1s ease .8s;
+  font-size:9px;letter-spacing:.24em;text-transform:uppercase;
+  color:rgba(232,184,75,.26);white-space:nowrap;
+}
+#hint.show{opacity:1}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div>
+
+<div id="start">
+  <div class="si">
+    <div class="si-kanji">輪廻</div>
+    <div class="si-title">Ouroboros</div>
+    <div class="si-hr"></div>
+    <div class="si-sub">
+      The serpent that devours its own tail<br>
+      Every end becomes a beginning<br>
+      An infinite loop<br>
+      <br>
+      Click · Scroll · Listen
+    </div>
+    <button class="si-btn" id="btn-start">Enter the Loop</button>
+  </div>
+</div>
+
+<div id="hud">
+  <div class="hud-item"><span class="hud-val" id="hud-cycles">0</span>Cycles</div>
+  <div class="hud-item"><span class="hud-val" id="hud-bpm">—</span>BPM</div>
+  <div class="hud-item"><span class="hud-val" id="hud-note">—</span>Note</div>
+</div>
+<div id="hint">Click the ring to resonate &nbsp;·&nbsp; Scroll to shift tempo</div>
+
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-sound-font.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════════
+   輪廻 — OUROBOROS
+   CodePen Challenge · April 2026 · Loop
+   ════════════════════════════════════════════════════════════════ */
+
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+let W, H, CX, CY, R;
+function resize(){
+  W = canvas.width  = innerWidth;
+  H = canvas.height = innerHeight;
+  CX = W/2; CY = H/2;
+  R  = Math.min(W,H) * 0.30;
+}
+resize();
+addEventListener('resize', resize);
+
+/* ── Snake geometry ─────────────────────────────────────────── */
+const BODY_ARC = Math.PI * 1.88;   // ~338° body, ~22° gap (the mouth)
+const N_SEGS   = 80;
+
+let headAngle  = -Math.PI / 2;     // start at 12 o'clock
+let speed      = Math.PI / 4;      // rad/s  →  default ≈ 60 BPM
+let targetSpeed = speed;
+
+/* ── Musical grid — 8 triggers per revolution ───────────────── */
+const TRIG_STEP = Math.PI / 4;
+const PENTA = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5]
+];
+const MELODY = [0,2,4,6,1,5,2,7];  // 8 pentatonic steps
+let melodyStep  = 0;
+let cycleCount  = 0;
+let prevTrig    = Math.floor(headAngle / TRIG_STEP);
+let prevRev     = Math.floor(headAngle / (Math.PI*2));
+
+/* ── Particles ──────────────────────────────────────────────── */
+const particles = [];
+function spawnParticles(x, y, col, n=10, force=1){
+  for(let i=0;i<n;i++){
+    const a = Math.random()*Math.PI*2, v = (1+Math.random()*2.5)*force;
+    particles.push({ x,y, vx:Math.cos(a)*v, vy:Math.sin(a)*v,
+      life:1, decay:.018+Math.random()*.02, r:1.5+Math.random()*2.5, col });
+  }
+}
+
+/* ── Color ──────────────────────────────────────────────────── */
+// t: 0=tail (dark olive) → 1=head (bright gold)
+function bodyRGBA(t, a){
+  const r = Math.min(255, Math.floor(50  + t*220));
+  const g = Math.floor(38  + t*150);
+  const b = Math.floor(6   + t*14);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/* ── Flash overlay ──────────────────────────────────────────── */
+let flashA = 0;
+
+/* ── Input ──────────────────────────────────────────────────── */
+canvas.addEventListener('click', e => onTap(e.clientX, e.clientY));
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  onTap(e.touches[0].clientX, e.touches[0].clientY);
+}, { passive:false });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  targetSpeed = Math.max(0.20, Math.min(2.50, targetSpeed - e.deltaY * 0.0008));
+}, { passive:false });
+addEventListener('keydown', e => {
+  if(e.code==='ArrowUp')   targetSpeed = Math.min(2.50, targetSpeed + 0.12);
+  if(e.code==='ArrowDown') targetSpeed = Math.max(0.20, targetSpeed - 0.12);
+  if(e.code==='Space'){ e.preventDefault(); targetSpeed = speed > 0.05 ? 0 : Math.PI/4; }
+});
+
+function onTap(x, y){
+  if(!audioReady) return;
+  const dx=x-CX, dy=y-CY, d=Math.hypot(dx,dy);
+  if(d > R*0.65 && d < R*1.35){
+    const angle = Math.atan2(dy, dx);
+    playTapChord(angle);
+    spawnParticles(x, y, '#e8b84b', 18, 1.3);
+    flashA = 0.10;
+  }
+}
+
+/* ── Audio ──────────────────────────────────────────────────── */
+const TK_LEAD=0, TK_BASS=1, TK_PAD=2;
+const synth = new ChiptuneSynth();
+let audioReady=false, audioInitPending=false;
+const pool = [];  // active note ids
+
+function queueId(id){
+  pool.push(id);
+  if(pool.length > 14){ try{ synth.stopNote(pool.shift()); }catch(_){} }
+}
+
+async function initAudio(){
+  if(audioReady || audioInitPending) return;
+  audioInitPending = true;
+  await synth.init();
+  synth.setMasterVolume(0.34);
+
+  /* TK_LEAD — crystalline piano */
+  synth.loadInstrument('piano', TK_LEAD);
+  synth.updateTrack(TK_LEAD, { unisonVoices:2, unisonDetune:4, unisonSpread:20 });
+  synth.updateEnvelope(TK_LEAD, { attack:.006, decay:.70, sustain:.20, release:3.5 });
+  synth.loadFxPreset(TK_LEAD, 'space');
+  synth.setReverbMix(TK_LEAD,.82);    synth.setReverbDecay(TK_LEAD,.90);
+  synth.setDelayTime(TK_LEAD,.50);    synth.setDelayFeedback(TK_LEAD,.30); synth.setDelayMix(TK_LEAD,.22);
+  synth.setChorusMix(TK_LEAD,.08);
+  synth.setTrackFaderVolume(TK_LEAD,.55);
+
+  /* TK_BASS — deep contrabass pedal */
+  synth.loadInstrument('contrabass', TK_BASS);
+  synth.updateTrack(TK_BASS, { filterEnabled:true, filterType:'lowpass', filterCutoff:380, filterQ:.5 });
+  synth.updateEnvelope(TK_BASS, { attack:.4, decay:1.2, sustain:.52, release:7.0 });
+  synth.loadFxPreset(TK_BASS, 'space');
+  synth.setReverbMix(TK_BASS,.88);    synth.setReverbDecay(TK_BASS,.96);
+  synth.setTrackFaderVolume(TK_BASS,.34);
+
+  /* TK_PAD — warm violin swell */
+  synth.loadInstrument('violinNatural', TK_PAD);
+  synth.updateTrack(TK_PAD, { unisonVoices:2, unisonDetune:5, unisonSpread:28,
+    filterEnabled:true, filterType:'lowpass', filterCutoff:1500, filterQ:.32 });
+  synth.updateEnvelope(TK_PAD, { attack:3.0, decay:1.5, sustain:.45, release:6.0 });
+  synth.loadFxPreset(TK_PAD, 'space');
+  synth.setReverbMix(TK_PAD,.92);     synth.setReverbDecay(TK_PAD,.97);
+  synth.setChorusMix(TK_PAD,.28);     synth.setDelayMix(TK_PAD,.14);
+  synth.setTrackFaderVolume(TK_PAD,.20);
+
+  audioReady = true;
+  droneCycle(); padCycle();
+}
+
+/* Melodic loop note — fired every TRIG_STEP radians */
+function playMelodyNote(){
+  const n = PENTA[ MELODY[melodyStep++ % MELODY.length] ];
+  queueId( synth.playNoteByName(n[0], n[1], TK_LEAD, 1.6) );
+  document.getElementById('hud-note').textContent = n[0] + n[1];
+}
+
+/* Arpeggio burst on completed loop */
+function playLoopBurst(){
+  const chord = [['A',3],['C',4],['E',4],['A',4],['C',5]];
+  chord.forEach((n,i) => setTimeout(() => queueId(synth.playNoteByName(n[0],n[1],TK_LEAD,3.2)), i*70));
+}
+
+/* Interactive tap — map ring angle to pentatonic pitch pair */
+function playTapChord(angle){
+  const t  = ((angle + Math.PI) / (Math.PI*2));
+  const ni = Math.floor(t * PENTA.length) % PENTA.length;
+  const n1 = PENTA[ni], n2 = PENTA[(ni+3) % PENTA.length];
+  queueId(synth.playNoteByName(n1[0],n1[1],TK_LEAD,2.2));
+  setTimeout(() => queueId(synth.playNoteByName(n2[0],n2[1],TK_LEAD,2.2)), 80);
+}
+
+const DRONE = [['A',1],['E',2],['D',2],['G',1]];
+let droneStep=0;
+function droneCycle(){
+  const n = DRONE[droneStep++ % DRONE.length];
+  queueId(synth.playNoteByName(n[0],n[1],TK_BASS,18));
+  setTimeout(droneCycle, 15000);
+}
+
+const PAD_CHORDS = [[['A',3],['E',4]],[['C',4],['G',4]],[['D',4],['A',4]],[['E',3],['B',4]]];
+let padStep=0;
+function padCycle(){
+  PAD_CHORDS[padStep++ % PAD_CHORDS.length].forEach((n,i) =>
+    setTimeout(() => queueId(synth.playNoteByName(n[0],n[1],TK_PAD,13)), i*350));
+  setTimeout(padCycle, 11500);
+}
+
+/* ── UI ──────────────────────────────────────────────────────── */
+document.getElementById('btn-start').addEventListener('click', async () => {
+  const el = document.getElementById('start');
+  el.classList.add('hide');
+  setTimeout(() => el.remove(), 1400);
+  document.getElementById('hud').classList.add('show');
+  document.getElementById('hint').classList.add('show');
+  await initAudio();
+});
+
+/* ── Draw helpers ────────────────────────────────────────────── */
+
+function drawBackground(){
+  const g = ctx.createRadialGradient(CX,CY,0, CX,CY,R*1.7);
+  g.addColorStop(0,  'rgba(55,28,5,.22)');
+  g.addColorStop(.45,'rgba(28,13,2,.10)');
+  g.addColorStop(1,  'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+function drawOrbitRing(){
+  ctx.save();
+  // faint orbit track
+  ctx.beginPath();
+  ctx.arc(CX,CY,R,0,Math.PI*2);
+  ctx.strokeStyle = 'rgba(200,150,50,.05)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // 8 tick marks at trigger positions
+  for(let i=0;i<8;i++){
+    const a = -Math.PI/2 + i*TRIG_STEP;
+    const ix=CX+Math.cos(a)*R,      iy=CY+Math.sin(a)*R;
+    const ox=CX+Math.cos(a)*(R+7),  oy=CY+Math.sin(a)*(R+7);
+    ctx.beginPath(); ctx.moveTo(ix,iy); ctx.lineTo(ox,oy);
+    ctx.strokeStyle = 'rgba(200,150,50,.14)';
+    ctx.lineWidth = 1; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCenterSymbol(){
+  const pulse = 0.04 + 0.018*Math.sin(Date.now()*.0009);
+  ctx.save();
+  ctx.font = `${Math.floor(R*.24)}px Georgia,serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = `rgba(232,184,75,${pulse})`;
+  ctx.fillText('∞', CX, CY);
+  ctx.restore();
+}
+
+function drawSnakeBody(){
+  // 3 glow passes + 1 opaque core
+  const passes = [{w:28,a:.08},{w:14,a:.16},{w:7,a:.28},{w:3.2,a:1.0}];
+  for(const {w,a} of passes){
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    let px, py;
+    for(let i=0;i<=N_SEGS;i++){
+      const t  = i / N_SEGS;
+      const ag = headAngle - BODY_ARC*(1-t);
+      const x  = CX + Math.cos(ag)*R;
+      const y  = CY + Math.sin(ag)*R;
+      if(i > 0){
+        ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(x,y);
+        const mt = (i-.5)/N_SEGS;
+        ctx.strokeStyle = bodyRGBA(mt, a*(0.15 + mt*0.85));
+        ctx.lineWidth   = w*(0.25 + mt*0.75);
+        ctx.stroke();
+      }
+      px=x; py=y;
+    }
+    ctx.restore();
+  }
+
+  // Scale marks — short perpendicular ticks every 4 segments
+  ctx.save();
+  for(let i=3;i<N_SEGS;i+=4){
+    const t  = i / N_SEGS;
+    if(t < .04) continue;
+    const ag = headAngle - BODY_ARC*(1-t);
+    // perpendicular unit vector
+    const nx = -Math.sin(ag), ny = Math.cos(ag);
+    const sx  = CX+Math.cos(ag)*R, sy = CY+Math.sin(ag)*R;
+    const sw  = 2.5 + t*3;
+    ctx.beginPath();
+    ctx.moveTo(sx+nx*sw, sy+ny*sw);
+    ctx.lineTo(sx-nx*sw, sy-ny*sw);
+    ctx.strokeStyle = bodyRGBA(t*.5, .28);
+    ctx.lineWidth = .8; ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHead(){
+  const hx = CX+Math.cos(headAngle)*R;
+  const hy = CY+Math.sin(headAngle)*R;
+
+  // Aura glow
+  const aura = ctx.createRadialGradient(hx,hy,0, hx,hy,R*.13);
+  aura.addColorStop(0,  'rgba(255,200,55,.58)');
+  aura.addColorStop(.45,'rgba(240,130,15,.22)');
+  aura.addColorStop(1,  'rgba(255,100,5,0)');
+  ctx.fillStyle = aura;
+  ctx.beginPath(); ctx.arc(hx,hy,R*.13,0,Math.PI*2); ctx.fill();
+
+  // Head
+  ctx.save();
+  ctx.beginPath(); ctx.arc(hx,hy, 7, 0, Math.PI*2);
+  ctx.fillStyle    = '#ffd060';
+  ctx.shadowColor  = '#ff9918';
+  ctx.shadowBlur   = 18;
+  ctx.fill();
+  ctx.restore();
+
+  // Slit eye (perpendicular to travel)
+  const eyeDir = headAngle - Math.PI/2;
+  ctx.beginPath();
+  ctx.arc(hx+Math.cos(eyeDir)*3, hy+Math.sin(eyeDir)*3, 1.8, 0, Math.PI*2);
+  ctx.fillStyle = '#1a0600'; ctx.fill();
+}
+
+function drawMouthGlow(){
+  // Glow in the gap between head and tail — the eating point
+  const tailA = headAngle - BODY_ARC;
+  const tx = CX+Math.cos(tailA)*R, ty = CY+Math.sin(tailA)*R;
+  const hx = CX+Math.cos(headAngle)*R, hy = CY+Math.sin(headAngle)*R;
+  const d  = Math.hypot(hx-tx, hy-ty);
+  const prox = Math.max(0, 1 - d/(R*.5));
+  if(prox <= 0) return;
+
+  const g = ctx.createRadialGradient(tx,ty,0, tx,ty,12+prox*12);
+  g.addColorStop(0, `rgba(255,170,20,${.55*prox})`);
+  g.addColorStop(1, 'rgba(255,100,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(tx,ty, 12+prox*12, 0, Math.PI*2); ctx.fill();
+}
+
+function drawParticles(){
+  ctx.save();
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= .94; p.vy *= .94;
+    p.life -= p.decay;
+    if(p.life <= 0){ particles.splice(i,1); continue; }
+    ctx.globalAlpha = p.life*.8;
+    ctx.beginPath(); ctx.arc(p.x,p.y, p.r*p.life, 0, Math.PI*2);
+    ctx.fillStyle = p.col; ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFlash(){
+  if(flashA <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = flashA;
+  ctx.fillStyle   = 'rgba(240,180,60,1)';
+  ctx.fillRect(0,0,W,H);
+  ctx.restore();
+  flashA = Math.max(0, flashA - .005);
+}
+
+/* ── Main loop ──────────────────────────────────────────────── */
+let lastTs = 0;
+
+function animate(ts){
+  requestAnimationFrame(animate);
+  const dt = Math.min((ts-lastTs)/1000, .05);
+  lastTs = ts;
+
+  // Advance snake
+  headAngle += speed * dt;
+  speed     += (targetSpeed-speed) * .03;
+
+  if(audioReady){
+    // Musical trigger — every TRIG_STEP radians
+    const currTrig = Math.floor(headAngle / TRIG_STEP);
+    if(currTrig !== prevTrig){
+      prevTrig = currTrig;
+      playMelodyNote();
+      spawnParticles(
+        CX+Math.cos(headAngle)*R, CY+Math.sin(headAngle)*R,
+        '#e8b84b', 5, .65
+      );
+    }
+
+    // Cycle completion — every 2π radians
+    const currRev = Math.floor(headAngle / (Math.PI*2));
+    if(currRev !== prevRev){
+      prevRev = currRev;
+      cycleCount++;
+      document.getElementById('hud-cycles').textContent = cycleCount;
+      playLoopBurst();
+      flashA = 0.15;
+      spawnParticles(
+        CX+Math.cos(headAngle)*R, CY+Math.sin(headAngle)*R,
+        '#ffe080', 28, 1.8
+      );
+    }
+
+    document.getElementById('hud-bpm').textContent =
+      Math.round(speed * (240/Math.PI));
+  }
+
+  // ── Render ──────────────────────────────────────────────────
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#050300';
+  ctx.fillRect(0,0,W,H);
+
+  drawBackground();
+  drawCenterSymbol();
+  drawOrbitRing();
+  drawSnakeBody();
+  drawMouthGlow();
+  drawHead();
+  drawParticles();
+  drawFlash();
+}
+
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

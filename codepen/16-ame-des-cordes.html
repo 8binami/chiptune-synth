@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>L'Âme des Cordes — #cpc-string</title>
+<!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  CodePen Challenge: Code Words — Week 1: STRINGS             ║
+  ║                                                              ║
+  ║  L'Âme des Cordes — You ARE the orchestra                    ║
+  ║                                                              ║
+  ║  · A S D F G H J K → choose chord                            ║
+  ║  · Mouse Y → bow the strings (proximity = volume)            ║
+  ║  · Mouse X → timbre (dark ↔ bright)                          ║
+  ║  · Speed → vibrato + tremolo                                 ║
+  ║  · Click → strum all 8 strings                               ║
+  ║  · Space → sustain pedal                                     ║
+  ║                                                              ║
+  ║  Tags: cpc-string  codepenchallenge                          ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Scripts:
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js
+-->
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#010106}
+canvas{display:block;cursor:none}
+
+/* Chord name flash */
+#chordFlash{
+  position:fixed;top:38%;left:50%;transform:translate(-50%,-50%);
+  font-family:Georgia,'Times New Roman',serif;
+  font-size:5rem;font-weight:300;letter-spacing:14px;
+  color:rgba(233,213,255,0);pointer-events:none;
+  text-shadow:0 0 80px var(--aura),0 0 160px var(--aura);
+  transition:none;
+  --aura:rgba(167,139,250,.4);
+}
+#chordFlash.show{
+  color:rgba(233,213,255,.7);
+  transition:color 0s;
+}
+
+/* HUD */
+#hud{
+  position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+  font-family:'Courier New',monospace;text-align:center;pointer-events:none;
+}
+#hud .chord{
+  font-family:Georgia,serif;font-size:1.3rem;font-weight:300;
+  letter-spacing:6px;color:#c4b5fd;
+  text-shadow:0 0 30px var(--aura,rgba(196,181,253,.3));
+  min-height:1.5em;
+}
+#hud .dyn{
+  font-family:Georgia,serif;font-size:.6rem;font-style:italic;
+  letter-spacing:4px;color:rgba(233,213,255,.18);margin-top:2px;
+}
+#hud .help{font-size:.4rem;color:rgba(255,255,255,.08);margin-top:3px;letter-spacing:1.5px}
+#hud .tags{font-size:.36rem;color:rgba(255,255,255,.05);margin-top:2px}
+
+/* Chord selector */
+#chordBar{
+  position:fixed;top:50%;right:12px;transform:translateY(-50%);
+  display:flex;flex-direction:column;gap:6px;pointer-events:none;z-index:10;
+}
+.cb{
+  font-family:Georgia,serif;font-size:.55rem;letter-spacing:2px;
+  color:rgba(255,255,255,.1);padding:5px 10px;
+  border:1px solid rgba(255,255,255,.03);border-radius:6px;
+  background:rgba(6,4,14,.6);transition:all .2s;text-align:center;
+}
+.cb .key{font-family:'Courier New',monospace;font-size:.4rem;color:rgba(255,255,255,.06);display:block;margin-top:1px}
+.cb.on{
+  color:var(--c);border-color:var(--c);
+  background:rgba(6,4,14,.85);
+  box-shadow:0 0 20px color-mix(in srgb,var(--c) 25%,transparent);
+}
+
+#sustainLed{
+  position:fixed;bottom:10px;right:14px;font-family:'Courier New',monospace;
+  font-size:.42rem;letter-spacing:2px;color:rgba(255,255,255,.05);
+  pointer-events:none;transition:all .15s;
+}
+#sustainLed.on{color:#fbbf24;text-shadow:0 0 12px rgba(251,191,36,.5)}
+
+#waveBox{
+  position:fixed;top:10px;right:10px;
+  border:1px solid rgba(255,255,255,.03);border-radius:5px;
+  background:rgba(0,0,0,.3);overflow:hidden;pointer-events:none;
+}
+
+/* Overlay */
+#overlay{
+  position:fixed;inset:0;z-index:999;
+  background:radial-gradient(ellipse at 50% 35%,rgba(18,8,38,.98),rgba(2,1,6,1));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;gap:10px;
+}
+#overlay h1{
+  font-family:Georgia,serif;font-size:2.6rem;color:#e9d5ff;
+  letter-spacing:12px;font-weight:300;
+  text-shadow:0 0 100px rgba(233,213,255,.3),0 0 200px rgba(139,92,246,.15);
+}
+#overlay .sub{font-family:Georgia,serif;font-size:.8rem;color:rgba(255,255,255,.18);
+  letter-spacing:4px;font-style:italic}
+#overlay .desc{
+  font-family:'Courier New',monospace;font-size:.42rem;
+  color:rgba(255,255,255,.09);max-width:480px;text-align:center;
+  line-height:2;letter-spacing:1px;margin-top:6px;
+}
+#overlay .enter{
+  font-family:Georgia,serif;font-size:.7rem;color:#c4b5fd;font-style:italic;
+  border:1px solid rgba(196,181,253,.15);border-radius:14px;
+  padding:14px 44px;margin-top:10px;
+  animation:breathe 3.5s ease-in-out infinite;
+}
+@keyframes breathe{0%,100%{opacity:.3}50%{opacity:1;box-shadow:0 0 50px rgba(196,181,253,.12)}}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div id="chordFlash" style="--aura:rgba(167,139,250,.4)">Am</div>
+
+<div id="chordBar"></div>
+
+<div id="hud">
+  <div class="dyn" id="dynHud">—</div>
+  <div class="chord" id="chordHud">Am</div>
+  <div class="help">A S D F G H J K → accords · souris → archeter · click → strum · espace → sustain</div>
+  <div class="tags">#cpc-string · #codepenchallenge · ChiptuneSynth</div>
+</div>
+
+<div id="sustainLed">SUSTAIN</div>
+<div id="waveBox"><canvas id="cvW" width="100" height="30"></canvas></div>
+
+<div id="overlay">
+  <h1>L'Âme des Cordes</h1>
+  <div class="sub">every string is a string</div>
+  <div class="desc">
+    Vous êtes l'orchestre. Choisissez un accord au clavier (A S D F G H J K),
+    puis archétez les cordes avec la souris. Gauche = sombre, droite = brillant.
+    Vitesse = vibrato. Clic = strum. Espace = sustain.
+  </div>
+  <div class="enter">▶ prendre l'archet</div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   L'ÂME DES CORDES — You ARE the orchestra
+   ════════════════════════════════════════════════════════════ */
+
+const cv = document.getElementById('cv');
+const c  = cv.getContext('2d');
+const N = 8;
+var W, H, RADIUS;
+function resize() {
+  W = cv.width = innerWidth; H = cv.height = innerHeight;
+  RADIUS = H / 12;
+  buildStringY();
+}
+resize(); addEventListener('resize', resize);
+
+const cvW = document.getElementById('cvW').getContext('2d');
+
+/* ═══════════════════════════════════════════════
+   CHORDS — 8 chords, each defines 8 string notes
+   ═══════════════════════════════════════════════ */
+const CHORDS = {
+  Am:   { notes:['A','E','A','C','E','A','C','E'],  octs:[2,2,3,3,3,4,4,4], hue:270, color:'#a78bfa', label:'Am'  },
+  Bdim: { notes:['B','F','B','D','F','B','D','F'],  octs:[2,2,3,3,3,4,4,4], hue:300, color:'#f472b6', label:'Bdim'},
+  C:    { notes:['C','G','C','E','G','C','E','G'],  octs:[2,2,3,3,3,4,4,4], hue:210, color:'#38bdf8', label:'C'   },
+  Dm:   { notes:['D','A','D','F','A','D','F','A'],  octs:[2,2,3,3,3,4,4,4], hue:320, color:'#e879f9', label:'Dm'  },
+  Em:   { notes:['E','B','E','G','B','E','G','B'],  octs:[2,2,3,3,3,4,4,4], hue:160, color:'#34d399', label:'Em'  },
+  F:    { notes:['F','C','F','A','C','F','A','C'],  octs:[2,2,3,3,3,4,4,4], hue:30,  color:'#fb923c', label:'F'   },
+  G:    { notes:['G','D','G','B','D','G','B','D'],  octs:[2,2,3,3,3,4,4,4], hue:130, color:'#4ade80', label:'G'   },
+  E:    { notes:['E','B','E','G#','B','E','G#','B'],octs:[2,2,3,3,3,4,4,4], hue:0,   color:'#f87171', label:'E'   },
+};
+
+const CHORD_KEYS = { 'a':'Am','s':'Bdim','d':'C','f':'Dm','g':'Em','h':'F','j':'G','k':'E',
+                     '1':'Am','2':'Bdim','3':'C','4':'Dm','5':'Em','6':'F','7':'G','8':'E' };
+const CHORD_ORDER = ['Am','Bdim','C','Dm','Em','F','G','E'];
+
+var currentChord = CHORDS.Am;
+var currentChordName = 'Am';
+
+/* Track pan spread */
+const TPAN = [-0.75,-0.50,-0.28,-0.08, 0.08, 0.28, 0.50, 0.75];
+
+/* String colors — derived from chord hue + per-string offset */
+function stringColor(i) {
+  const base = currentChord.hue;
+  const h = (base + i * 12) % 360;
+  return {
+    hue: h,
+    hsl: `hsl(${h},65%,62%)`,
+    rgb: hslRgb(h, 65, 62),
+  };
+}
+function hslRgb(h,s,l) {
+  s/=100;l/=100;
+  const k=n=>(n+h/30)%12;
+  const a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));
+  return [Math.round(f(0)*255),Math.round(f(8)*255),Math.round(f(4)*255)];
+}
+
+/* ═══ String Y positions ═══ */
+var stringY = [];
+function buildStringY() {
+  const mg = H * 0.10;
+  stringY = Array.from({length:N}, (_,i) => mg + (i/(N-1)) * (H - mg*2));
+}
+buildStringY();
+
+/* ═══ Build chord bar (right side) ═══ */
+const chordBarEl = document.getElementById('chordBar');
+const cbEls = {};
+CHORD_ORDER.forEach((name, i) => {
+  const ch = CHORDS[name];
+  const el = document.createElement('div');
+  el.className = 'cb';
+  el.style.setProperty('--c', ch.color);
+  el.innerHTML = `${ch.label}<span class="key">${'ASDFGHJK'[i]}</span>`;
+  chordBarEl.appendChild(el);
+  cbEls[name] = el;
+});
+cbEls['Am'].classList.add('on');
+
+/* ═══ MOUSE ═══ */
+const mouse = {x:0, y:0, speed:0, vy:0};
+var smoothSpd = 0;
+addEventListener('mousemove', e => {
+  const dy = e.clientY - mouse.y;
+  mouse.vy = dy;
+  const dx = e.clientX - mouse.x;
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  mouse.speed = Math.hypot(dx, dy);
+});
+addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.vy = t.clientY - mouse.y;
+  const dx = t.clientX - mouse.x, dy = t.clientY - mouse.y;
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  mouse.speed = Math.hypot(dx, dy);
+}, {passive:false});
+
+/* ═══════════════════════════════════════════════
+   SYNTH ENGINE — 8 tracks = 8 strings
+   ═══════════════════════════════════════════════ */
+
+var synth = new ChiptuneSynth();
+var ready = false, sustainOn = false;
+
+/* Per-string state */
+var intensity = new Float32Array(N);
+var noteState = Array.from({length:N}, () => ({id:null, expiry:0, active:false}));
+
+async function initAudio() {
+  if (ready) return;
+  await synth.init();
+
+  for (let i = 0; i < N; i++) {
+    /* Warm triangle (bass) / sine (soprano) */
+    synth.updateTrack(i, {
+      type:           i < 5 ? 'triangle' : 'sine',
+      dutyCycle:      0.5,
+      volume:         i < 2 ? 0.26 : (i < 5 ? 0.22 : 0.20),
+      pitchEnv:       0,
+      detune:         0,
+      unisonVoices:   3,
+      unisonDetune:   3 + i * 0.5,
+      unisonSpread:   45 + i * 5,
+      filterEnabled:  true,
+      filterType:     'lowpass',
+      filterCutoff:   2500,
+      filterQ:        0.7,
+      filterKeyTrack: 35,
+      glide:          0.08,
+      lfo1Delay:      0.5,
+    });
+
+    synth.updateEnvelope(i, {
+      attack:  i < 2 ? 0.85 : (i < 5 ? 0.65 : 0.45),
+      decay:   0.25,
+      sustain: 0.88,
+      release: i < 2 ? 4.0 : (i < 5 ? 3.5 : 3.0),
+    });
+
+    synth.updateVibrato(i, {
+      rate:  4.0 + i * 0.18,
+      depth: 4 + i * 0.3,
+    });
+
+    /* Cathedral FX */
+    synth.loadFxPreset(i, 'space');
+    synth.setReverbMix(i, 0.60);
+    synth.setReverbDecay(i, 0.92);
+    synth.setDelayTime(i, 0.25 + i * 0.032);
+    synth.setDelayFeedback(i, 0.38);
+    synth.setDelayMix(i, 0.20);
+    synth.setChorusRate(i, 0.5 + i * 0.08);
+    synth.setChorusDepth(i, 0.38);
+    synth.setChorusMix(i, 0.28);
+    synth.setTrackPan(i, TPAN[i]);
+
+    /* EQ by register */
+    synth.setTrackEQ(i, 'eqLow',  i < 2 ? 5 : (i < 5 ? 1 : -1));
+    synth.setTrackEQ(i, 'eqMid',  2);
+    synth.setTrackEQ(i, 'eqHigh', i < 2 ? -2 : (i < 5 ? 0 : 3));
+
+    synth.setTrackCompressorEnabled(i, true);
+    synth.setTrackCompressorThreshold(i, -18);
+    synth.setTrackCompressorRatio(i, 3);
+
+    synth.setTrackFaderVolume(i, 0);
+  }
+
+  synth.setMasterVolume(0.55);
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+  mouse.x = W/2; mouse.y = H/2;
+}
+
+/* ═══ CHORD CHANGE ═══ */
+var chordFlashTime = 0;
+
+function setChord(name) {
+  if (name === currentChordName) return;
+  const ch = CHORDS[name];
+  if (!ch) return;
+
+  /* Update chord bar highlight */
+  cbEls[currentChordName].classList.remove('on');
+  currentChordName = name;
+  currentChord = ch;
+  cbEls[name].classList.add('on');
+
+  /* Stop all active notes — they'll re-trigger with new pitches */
+  for (let i = 0; i < N; i++) {
+    if (noteState[i].id) {
+      synth.stopNote(noteState[i].id);
+      noteState[i].id = null;
+      noteState[i].active = false;
+      noteState[i].expiry = 0;
+    }
+  }
+
+  /* Flash chord name */
+  const flash = document.getElementById('chordFlash');
+  flash.textContent = ch.label;
+  flash.style.setProperty('--aura', ch.color);
+  flash.classList.remove('show');
+  void flash.offsetWidth; // reflow
+  flash.classList.add('show');
+  chordFlashTime = performance.now();
+
+  /* Update HUD */
+  document.getElementById('chordHud').textContent = ch.label;
+  document.getElementById('chordHud').style.setProperty('--aura', ch.color);
+}
+
+/* ═══ BOWING — mouse proximity triggers notes (from pen 13) ═══ */
+var lastFilterTime = 0;
+
+function updateBowing(now) {
+  if (!ready) return;
+
+  /* Filter sweep from X (throttled) */
+  if (now - lastFilterTime > 42) {
+    lastFilterTime = now;
+    const nx = mouse.x / W;
+    const cutoff = 300 + nx * 7700;
+    const q = 0.6 + (1-nx) * 0.8;
+
+    smoothSpd += (mouse.speed - smoothSpd) * 0.12;
+    mouse.speed *= 0.82;
+    const tremDepth = Math.min(smoothSpd * 0.4, 16);
+    const vibBoost = Math.min(smoothSpd * 0.3, 10);
+
+    for (let i = 0; i < N; i++) {
+      synth.updateTrack(i, {
+        filterCutoff: cutoff,
+        filterQ: q,
+        tremoloRate: 5.2 + i * 0.2,
+        tremoloDepth: tremDepth,
+      });
+      synth.updateVibrato(i, {
+        rate: 4.0 + i * 0.18,
+        depth: 4 + i * 0.3 + vibBoost,
+      });
+      synth.updateLiveNotes(i);
+    }
+  }
+
+  /* Per-string proximity bowing */
+  const ch = currentChord;
+  for (let i = 0; i < N; i++) {
+    const dist = Math.abs(mouse.y - stringY[i]);
+    const intens = Math.max(0, 1 - dist / RADIUS);
+    intensity[i] = intens;
+
+    /* Smooth volume fader — respect strum protection */
+    if (now < strumUntil) {
+      /* During strum: only increase, never decrease */
+      const cur = intens * 0.80;
+      /* Don't override strum faders — let them ring */
+    } else {
+      const vol = sustainOn ? Math.max(intens * 0.80, noteState[i].active ? 0.15 : 0)
+                            : intens * 0.80;
+      synth.setTrackFaderVolume(i, vol);
+    }
+
+    const ns = noteState[i];
+    if (intens > 0.04) {
+      /* Trigger note if not active or about to expire */
+      if (!ns.active || now > ns.expiry) {
+        if (ns.id) synth.stopNote(ns.id);
+        ns.id     = synth.playNoteByName(ch.notes[i], ch.octs[i], i, 9.0);
+        ns.expiry = now + 7200;
+        ns.active = true;
+      }
+    } else if (ns.active && !sustainOn) {
+      ns.active = false;
+      /* Don't stopNote — let release tail ring */
+    }
+  }
+}
+
+/* ═══ STRUM (click) ═══ */
+var strumUntil = 0; // protect strum volumes from bowing override
+
+function strum() {
+  if (!ready) return;
+  const ch = currentChord;
+  const goingDown = mouse.vy >= 0;
+  strumUntil = performance.now() + 2500; // 2.5s protection
+
+  for (let s = 0; s < N; s++) {
+    const i = goingDown ? s : (N - 1 - s);
+    const delay = s * 35; // 35ms cascade
+    setTimeout(() => {
+      const ns = noteState[i];
+      if (ns.id) synth.stopNote(ns.id);
+      synth.setTrackFaderVolume(i, 0.85 - s * 0.04);
+      ns.id     = synth.playNoteByName(ch.notes[i], ch.octs[i], i, 3.5);
+      ns.expiry = 0;
+      ns.active = false; // will fade via release
+    }, delay);
+  }
+  addStrumBurst();
+}
+
+/* ═══ SUSTAIN ═══ */
+function setSustain(on) {
+  sustainOn = on;
+  document.getElementById('sustainLed').classList.toggle('on', on);
+}
+
+/* ═══ KEYBOARD ═══ */
+addEventListener('keydown', async e => {
+  if (e.repeat) return;
+  if (!ready) await initAudio();
+  if (e.code === 'Space') { e.preventDefault(); setSustain(true); return; }
+  const k = e.key.toLowerCase();
+  if (k in CHORD_KEYS) { e.preventDefault(); setChord(CHORD_KEYS[k]); }
+});
+addEventListener('keyup', e => {
+  if (e.code === 'Space') { e.preventDefault(); setSustain(false); }
+});
+
+/* Click → strum */
+cv.addEventListener('click', async () => {
+  if (!ready) { await initAudio(); return; }
+  strum();
+});
+document.getElementById('overlay').addEventListener('click', () => {
+  initAudio().catch(e => console.error('initAudio failed:', e));
+});
+
+/* ═══════════════════════════════════════════════
+   VISUALS
+   ═══════════════════════════════════════════════ */
+
+const particles = [];
+const ripples = [];
+const trail = [];
+
+/* Concert spotlights */
+const spots = [];
+for (let i = 0; i < 5; i++) {
+  spots.push({
+    x: W * (0.10 + (i/4)*0.80),
+    phase: Math.random()*Math.PI*2,
+    width: 0.06 + Math.random()*0.05,
+    intensity: 0.5 + Math.random()*0.5,
+  });
+}
+
+function addP(x,y,col,vx,vy,sz,life) {
+  if (particles.length > 550) particles.splice(0,15);
+  particles.push({x,y,vx,vy,col,sz,life,ml:life});
+}
+function addR(x,y,col,mr) { ripples.push({x,y,col,r:2,mr:mr||60,a:1}); }
+
+function addStrumBurst() {
+  const col = currentChord.color;
+  for (let i = 0; i < N; i++) {
+    const sy = stringY[i];
+    for (let k = 0; k < 8; k++) {
+      addP(mouse.x + (Math.random()-.5)*60, sy,
+        col, (Math.random()-.5)*3, -(0.5+Math.random()*3),
+        1+Math.random()*2.5, 0.8+Math.random()*1.2);
+    }
+    addR(mouse.x, sy, col, 50 + Math.random()*70);
+  }
+  /* Big central ripple */
+  for (let r = 0; r < 3; r++)
+    addR(W/2, H*0.42, col, 100 + r*50);
+}
+
+/* ═══════════════════════════════════════════════
+   DRAW
+   ═══════════════════════════════════════════════ */
+var T = 0;
+
+function draw(ts) {
+  requestAnimationFrame(draw);
+  T = ts * 0.001;
+  const now = performance.now();
+
+  const ml = ready ? synth.getMasterLevel() : 0;
+  const chHue = currentChord.hue;
+  const anyActive = intensity.some(v => v > 0.02) || ml > 0.005;
+
+  /* ── Deep background ── */
+  c.fillStyle = `rgba(1,1,6,${anyActive ? 0.72 : 0.82})`;
+  c.fillRect(0, 0, W, H);
+
+  /* ── Chord aura (full-screen tint) ── */
+  if (ml > 0.003) {
+    const ag = c.createRadialGradient(W/2, H*0.4, 0, W/2, H*0.4, H*0.9);
+    ag.addColorStop(0, `hsla(${chHue},40%,25%,${ml * 0.08 + 0.01})`);
+    ag.addColorStop(0.5, `hsla(${chHue},30%,15%,${ml * 0.03})`);
+    ag.addColorStop(1, 'transparent');
+    c.fillStyle = ag;
+    c.fillRect(0, 0, W, H);
+  }
+
+  /* ── Spotlights ── */
+  spots.forEach((sp, si) => {
+    const spx = sp.x + Math.sin(T * 0.25 + sp.phase) * 50;
+    const int = (0.012 + ml * 0.04) * sp.intensity;
+    const sph = (chHue + si * 20) % 360;
+    const grad = c.createRadialGradient(spx, -30, 0, spx, H*0.55, H*0.65);
+    grad.addColorStop(0, `hsla(${sph},40%,50%,${int})`);
+    grad.addColorStop(0.4, `hsla(${sph},30%,35%,${int*0.25})`);
+    grad.addColorStop(1, 'transparent');
+
+    c.save();
+    c.beginPath();
+    c.moveTo(spx - W*sp.width*0.3, -30);
+    c.lineTo(spx - W*sp.width*1.3, H);
+    c.lineTo(spx + W*sp.width*1.3, H);
+    c.lineTo(spx + W*sp.width*0.3, -30);
+    c.closePath(); c.clip();
+    c.fillStyle = grad;
+    c.fillRect(0, 0, W, H);
+    c.restore();
+  });
+
+  /* ── Resonance rings ── */
+  if (ml > 0.004) {
+    const cx = W/2, cy = H*0.40;
+    for (let r = 0; r < 6; r++) {
+      const rad = 35 + r*50 + ml*160 + Math.sin(T*0.55+r*0.7)*10;
+      const a = ml*(0.035 - r*0.005);
+      if (a <= 0) continue;
+      c.beginPath(); c.arc(cx, cy, rad, 0, Math.PI*2);
+      c.strokeStyle = `hsla(${chHue},45%,60%,${a})`;
+      c.lineWidth = 0.6 + ml*1.8;
+      c.stroke();
+    }
+  }
+
+  /* ── 8 STRINGS ── */
+  for (let i = 0; i < N; i++) {
+    const sy = stringY[i];
+    const level = ready ? synth.getTrackLevel(i) : 0;
+    const intens = intensity[i];
+    const glow = Math.min(intens + level * 3, 1);
+    const sc = stringColor(i);
+    const [sr,sg,sb] = sc.rgb;
+
+    /* Emit bowing particles */
+    if (intens > 0.02 && Math.random() < intens * 0.35) {
+      addP(
+        mouse.x + (Math.random()-.5)*50, sy,
+        sc.hsl,
+        (Math.random()-.5)*0.8, -(0.3+Math.random()*level*4),
+        0.6+Math.random()*2, 0.4+Math.random()*0.7
+      );
+      if (mouse.speed > 5)
+        addR(mouse.x, sy, sc.hsl, 20+mouse.speed*1.5);
+    }
+
+    /* Glow halo */
+    if (glow > 0.02) {
+      for (let g = 1; g >= 0; g--) {
+        c.beginPath(); c.moveTo(0, sy); c.lineTo(W, sy);
+        c.strokeStyle = `rgba(${sr},${sg},${sb},${glow*(0.05-g*0.018)})`;
+        c.lineWidth = (g+1)*7*glow;
+        c.shadowBlur = (g+1)*14*glow;
+        c.shadowColor = sc.hsl;
+        c.stroke();
+      }
+      c.shadowBlur = 0;
+    }
+
+    /* String wave */
+    c.beginPath();
+    const amp = level*28 + intens*6 + 1;
+    for (let x = 0; x < W; x += 2) {
+      const bowEnv = Math.exp(-Math.abs(x-mouse.x)*0.003) * intens;
+      const ringEnv = Math.sin((x/W)*Math.PI);
+      const env = Math.max(bowEnv, ringEnv * level * 2);
+      const ph = T*(3.2+i*0.4)+x*0.022;
+      const yy = sy + env*amp*(Math.sin(ph)+0.18*Math.sin(ph*2.5+0.8));
+      x===0 ? c.moveTo(x,yy) : c.lineTo(x,yy);
+    }
+    c.strokeStyle = `rgba(${sr},${sg},${sb},${0.04+glow*0.88})`;
+    c.lineWidth = 0.5+glow*3;
+    c.shadowBlur = glow*18;
+    c.shadowColor = sc.hsl;
+    c.stroke();
+    c.shadowBlur = 0;
+
+    /* Anchor dots */
+    c.fillStyle = `rgba(${sr},${sg},${sb},${0.03+glow*0.65})`;
+    c.shadowBlur = glow*8; c.shadowColor = sc.hsl;
+    c.beginPath(); c.arc(3, sy, 2+glow*3.5, 0, Math.PI*2); c.fill();
+    c.beginPath(); c.arc(W-3, sy, 2+glow*3.5, 0, Math.PI*2); c.fill();
+    c.shadowBlur = 0;
+
+    /* Note label left */
+    if (glow > 0.1) {
+      c.globalAlpha = glow*0.6;
+      c.fillStyle = sc.hsl;
+      c.font = `${Math.round(8+glow*4)}px Georgia`;
+      c.fillText(currentChord.notes[i]+currentChord.octs[i], 12, sy-7);
+      c.globalAlpha = 1;
+    }
+  }
+
+  /* ── Chord flash fade ── */
+  const flashEl = document.getElementById('chordFlash');
+  const flashAge = now - chordFlashTime;
+  if (flashAge > 0 && flashAge < 2500) {
+    const fadeAlpha = Math.max(0, 1 - flashAge/2200);
+    flashEl.style.color = `rgba(233,213,255,${fadeAlpha*0.6})`;
+  } else {
+    flashEl.style.color = 'rgba(233,213,255,0)';
+    flashEl.classList.remove('show');
+  }
+
+  /* ── Ripples ── */
+  for (let k = ripples.length-1; k >= 0; k--) {
+    const rp = ripples[k];
+    rp.r += 2.0; rp.a = Math.pow(1-rp.r/rp.mr, 1.4);
+    if (rp.a <= 0) { ripples.splice(k,1); continue; }
+    c.beginPath(); c.arc(rp.x,rp.y,rp.r,0,Math.PI*2);
+    c.strokeStyle = rp.col; c.globalAlpha = rp.a*0.45;
+    c.lineWidth = 0.8; c.stroke();
+  }
+  c.globalAlpha = 1;
+
+  /* ── Particles ── */
+  for (let k = particles.length-1; k >= 0; k--) {
+    const p = particles[k];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.012; p.vx *= 0.997; p.life -= 0.011;
+    if (p.life <= 0) { particles.splice(k,1); continue; }
+    const a = (p.life/p.ml)**1.8;
+    c.globalAlpha = a*0.85;
+    c.fillStyle = p.col;
+    c.shadowBlur = 3; c.shadowColor = p.col;
+    c.beginPath(); c.arc(p.x,p.y,p.sz*(p.life/p.ml),0,Math.PI*2);
+    c.fill();
+  }
+  c.globalAlpha = 1; c.shadowBlur = 0;
+
+  /* ── Ambient dust ── */
+  if (Math.random() < 0.1 + ml*0.2) {
+    addP(Math.random()*W, H+3,
+      `hsla(${chHue+Math.random()*30},25%,55%,1)`,
+      (Math.random()-.5)*0.2, -(0.1+Math.random()*0.4),
+      0.3+Math.random()*0.8, 3+Math.random()*5);
+  }
+
+  /* ── Baton cursor ── */
+  trail.push({x:mouse.x,y:mouse.y});
+  if (trail.length > 22) trail.shift();
+  for (let i = 1; i < trail.length; i++) {
+    const p = i/trail.length;
+    c.beginPath();
+    c.moveTo(trail[i-1].x, trail[i-1].y);
+    c.lineTo(trail[i].x, trail[i].y);
+    c.strokeStyle = `hsla(40,75%,80%,${p*p*0.3})`;
+    c.lineWidth = p*2;
+    c.stroke();
+  }
+  /* Bow tip */
+  c.beginPath(); c.arc(mouse.x, mouse.y, 3, 0, Math.PI*2);
+  c.fillStyle = 'rgba(255,240,210,.8)';
+  c.shadowBlur = 18; c.shadowColor = 'rgba(255,220,140,.5)';
+  c.fill(); c.shadowBlur = 0;
+  /* Proximity glow */
+  const bg = c.createRadialGradient(mouse.x,mouse.y,0,mouse.x,mouse.y,RADIUS*0.8);
+  bg.addColorStop(0,`rgba(255,230,180,${0.03+ml*0.04})`);
+  bg.addColorStop(1,'transparent');
+  c.fillStyle = bg;
+  c.beginPath(); c.arc(mouse.x,mouse.y,RADIUS*0.8,0,Math.PI*2); c.fill();
+
+  /* ── Dynamic label ── */
+  let totalIntens = 0;
+  for (let i = 0; i < N; i++) totalIntens += intensity[i];
+  const dyn = Math.min(totalIntens / 3, 1);
+  const dynNames = ['ppp','pp','p','mp','mf','f','ff','fff'];
+  const di = Math.min(7, Math.floor(dyn * 8));
+  const dynEl = document.getElementById('dynHud');
+  dynEl.textContent = dyn > 0.02 ? dynNames[di] : '—';
+  dynEl.style.color = `rgba(233,213,255,${0.1+dyn*0.35})`;
+
+  /* ── Mini waveform ── */
+  cvW.fillStyle = 'rgba(0,0,0,0.4)';
+  cvW.fillRect(0,0,100,30);
+  if (ready) {
+    const wd = synth.getWaveformData();
+    if (wd) {
+      cvW.beginPath();
+      cvW.strokeStyle = currentChord.color;
+      cvW.globalAlpha = 0.3 + dyn * 0.5;
+      cvW.lineWidth = 0.9;
+      const step = wd.length / 100;
+      for (let i = 0; i < 100; i++) {
+        const v = wd[Math.floor(i*step)]/128-1;
+        i===0 ? cvW.moveTo(0,15+v*12) : cvW.lineTo(i,15+v*12);
+      }
+      cvW.stroke();
+      cvW.globalAlpha = 1;
+    }
+  }
+
+  /* ── Bowing audio ── */
+  updateBowing(now);
+}
+
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

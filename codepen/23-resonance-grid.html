@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Resonance Grid</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#07080e;overflow:hidden;font-family:sans-serif}
+canvas{display:block;position:fixed;inset:0;cursor:crosshair;touch-action:none}
+#hint{
+  position:fixed;bottom:1.6em;left:50%;transform:translateX(-50%);
+  color:rgba(180,220,255,.30);font-size:.68em;letter-spacing:.22em;
+  text-transform:uppercase;pointer-events:none;z-index:10;white-space:nowrap;
+  transition:opacity 2s ease 4s;
+}
+#hint.fade{opacity:0}
+#nowgpu{
+  display:flex;justify-content:center;align-items:center;
+  height:100vh;background:#07080e;color:#fff;
+  font-family:sans-serif;text-align:center;padding:2rem;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hint">Hover to play &nbsp;·&nbsp; Click for chord &nbsp;·&nbsp; Drag to navigate</div>
+
+<!-- ChiptuneSynth — must load before the ES module -->
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.1.0/chiptune-sound-font.min.js"></script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://unpkg.com/three@0.183.0/build/three.webgpu.js",
+    "three/webgpu":   "https://unpkg.com/three@0.183.0/build/three.webgpu.js",
+    "three/tsl":      "https://unpkg.com/three@0.183.0/build/three.tsl.js",
+    "three/addons/":  "https://unpkg.com/three@0.183.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three/webgpu";
+import {
+  Fn, uniform, storage, instanceIndex,
+  vec2, vec3, vec4, cos, dot, step, min, max,
+  abs, float, fract, floor, positionLocal, select,
+  pass, mrt, output, normalView, Loop,
+  exp, log, negate, sqrt
+} from "three/tsl";
+import { OrbitControls }  from "three/addons/controls/OrbitControls.js";
+import { ao }             from "three/addons/tsl/display/GTAONode.js";
+import { bloom }          from "three/addons/tsl/display/BloomNode.js";
+
+/* ═══════════════════════════════════════════════════════════════
+   WebGPU guard
+   ═══════════════════════════════════════════════════════════════ */
+if(!navigator.gpu){
+  document.body.innerHTML = `<div id="nowgpu"><div><h2>WebGPU not supported</h2>
+    <p style="margin-top:.8em;opacity:.6">Try Chrome 113+ or Edge 113+ on desktop.</p></div></div>`;
+  throw new Error("WebGPU unavailable");
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   NOISE — Simplex 3D (McEwan / Gustavson, Ashima Arts)
+   ═══════════════════════════════════════════════════════════════ */
+const mod289 = x => x.sub(floor(x.mul(1.0/289.0)).mul(289.0));
+const permute = x => mod289(x.mul(34.0).add(10.0).mul(x));
+const taylorInvSqrt = r => float(1.79284291400159).sub(r.mul(0.85373472095314));
+
+const simplexNoise = Fn(([v]) => {
+  const C  = vec2(1.0/6.0, 1.0/3.0);
+  const D  = vec4(0.0, 0.5, 1.0, 2.0);
+  const i  = floor(vec3(v).add(dot(vec3(v), vec3(C.y,C.y,C.y))));
+  const x0 = vec3(v).sub(i).add(dot(i, vec3(C.x,C.x,C.x)));
+  const g  = step(vec3(x0.y,x0.z,x0.x), x0);
+  const l  = vec3(1.0).sub(g);
+  const i1 = min(g, vec3(l.z,l.x,l.y));
+  const i2 = max(g, vec3(l.z,l.x,l.y));
+  const x1 = x0.sub(i1).add(C.x);
+  const x2 = x0.sub(i2).add(C.y);
+  const x3 = x0.sub(0.5);
+  const im = mod289(i);
+  const p  = permute(
+    permute(permute(
+      vec4(im.z,im.z,im.z,im.z).add(vec4(0,i1.z,i2.z,1)))
+      .add(vec4(im.y,im.y,im.y,im.y)).add(vec4(0,i1.y,i2.y,1)))
+      .add(vec4(im.x,im.x,im.x,im.x)).add(vec4(0,i1.x,i2.x,1)));
+  const n_  = float(1.0/7.0);
+  const ns  = vec3(n_.mul(D.w), n_.mul(D.y).sub(1.0), n_.mul(D.z));
+  const j   = p.sub(float(49.0).mul(floor(p.mul(ns.z).mul(ns.z))));
+  const x_  = floor(j.mul(ns.z));
+  const y_  = floor(j.sub(float(7.0).mul(x_)));
+  const gx  = x_.mul(ns.x).add(ns.y);
+  const gy  = y_.mul(ns.x).add(ns.y);
+  const h   = float(1.0).sub(abs(gx)).sub(abs(gy));
+  const b0  = vec4(gx.x,gx.y,gy.x,gy.y);
+  const b1  = vec4(gx.z,gx.w,gy.z,gy.w);
+  const s0  = floor(b0).mul(2.0).add(1.0);
+  const s1  = floor(b1).mul(2.0).add(1.0);
+  const sh  = step(h, vec4(0.0)).negate();
+  const a0  = vec4(b0.x,b0.z,b0.y,b0.w).add(vec4(s0.x,s0.z,s0.y,s0.w).mul(vec4(sh.x,sh.x,sh.y,sh.y)));
+  const a1  = vec4(b1.x,b1.z,b1.y,b1.w).add(vec4(s1.x,s1.z,s1.y,s1.w).mul(vec4(sh.z,sh.z,sh.w,sh.w)));
+  const p0  = vec3(a0.x,a0.y,h.x);
+  const p1  = vec3(a0.z,a0.w,h.y);
+  const p2  = vec3(a1.x,a1.y,h.z);
+  const p3  = vec3(a1.z,a1.w,h.w);
+  const norm = taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  const m   = max(float(0.6).sub(vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3))), 0.0);
+  const m2  = m.mul(m);
+  return float(42.0)
+    .mul(dot(m2.mul(m2), vec4(dot(p0.mul(norm.x),x0),dot(p1.mul(norm.y),x1),dot(p2.mul(norm.z),x2),dot(p3.mul(norm.w),x3))))
+    .mul(0.5).add(0.5);
+});
+
+const makeFBM = (noiseFn, {octaves=6, lacunarity=2.0, gain=0.5}={}) =>
+  Fn(([p]) => {
+    const value = float(0).toVar();
+    const amp   = float(0.5).toVar();
+    const pos   = vec3(p).toVar();
+    Loop(octaves, () => {
+      value.addAssign(noiseFn(pos).mul(amp));
+      pos.mulAssign(lacunarity);
+      amp.mulAssign(gain);
+    });
+    return value;
+  });
+
+const fbmNoise = makeFBM(simplexNoise);
+
+const palette = Fn(([t,a,b,c,d]) => {
+  const _a = a ?? vec3(0.5,0.5,0.5);
+  const _b = b ?? vec3(0.5,0.5,0.5);
+  const _c = c ?? vec3(1.0,1.0,1.0);
+  const _d = d ?? vec3(0.0,0.33,0.67);
+  return _a.add(_b.mul(cos(_c.mul(t).add(_d).mul(6.28318))));
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   SCENE
+   ═══════════════════════════════════════════════════════════════ */
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x07080e);
+scene.fog = new THREE.Fog(0x07080e, 10, 60);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 300);
+camera.position.set(-4, 11, 15);
+camera.lookAt(0, -10, 0);
+
+const renderer = new THREE.WebGPURenderer({ canvas: document.querySelector('#c'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = !/android/i.test(navigator.userAgent);
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.setAnimationLoop(animate);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.enablePan = controls.enableZoom = true;
+controls.enableRotate = false;
+controls.target.set(0, 2, 0);
+
+/* ═══════════════════════════════════════════════════════════════
+   UNIFORMS
+   ═══════════════════════════════════════════════════════════════ */
+const fieldRadiusU     = uniform(9);
+const pylonRadiusU     = uniform(0.31);
+const maxHeightU       = uniform(8);
+const noiseScaleU      = uniform(0.28);
+const noiseOffsetXU    = uniform(1);
+const noiseOffsetYU    = uniform(0);
+const noiseOffsetZU    = uniform(0);
+const circularPatternU = uniform(1);
+
+/* — Shockwave ring (expands from click point) — */
+const swXU   = uniform(0);          // world X of click
+const swZU   = uniform(0);          // world Z of click
+const swRU   = uniform(-999);       // expanding radius (-999 = off)
+const swIU   = uniform(0);          // intensity 0→1→0
+const swHueU = uniform(vec3(0.4, 0.85, 1.0)); // chord colour tint
+
+/* — Mouse hover glow — */
+const mxU = uniform(0);
+const mzU = uniform(0);
+
+/* — Beat pulse — */
+const beatU = uniform(0);
+
+/* ═══════════════════════════════════════════════════════════════
+   GRID
+   ═══════════════════════════════════════════════════════════════ */
+const options = {
+  fieldRadius: 9, pylonRadius: 0.31, maxHeight: 8,
+  noiseScale: 0.28, timeSpeed: 0.22, circularPattern: true,
+  animating: true, noiseType: 'simplex'
+};
+
+function computeGrid(){
+  const MAX = Math.floor(Math.sqrt(200_000));
+  return Math.min(MAX, Math.max(3, Math.round(options.fieldRadius/options.pylonRadius)+1));
+}
+
+let GRID=0, COUNT=0;
+let heightBuffer, colorBuffer, heightStorage, colorStorage;
+let computeNode=null, pylonMesh=null;
+const cyl = new THREE.CylinderGeometry(1,1,1,24,1);
+
+function buildComputeNode(count){
+  return Fn(() => {
+    const idxF = float(instanceIndex);
+    const col  = idxF.mod(float(GRID));
+    const row  = floor(idxF.div(float(GRID)));
+    const nx   = col.div(float(GRID-1)).mul(2.0).sub(1.0);
+    const nz   = row.div(float(GRID-1)).mul(2.0).sub(1.0);
+
+    const inside = nx.mul(nx).add(nz.mul(nz)).lessThanEqual(float(1));
+    const active = inside.or(circularPatternU.lessThan(float(0.5)));
+
+    const noiseIn = vec3(
+      nx.mul(fieldRadiusU).mul(noiseScaleU).add(noiseOffsetXU),
+      noiseOffsetYU,
+      nz.mul(fieldRadiusU).mul(noiseScaleU).mul(0.65).add(noiseOffsetZU)
+    ).toVar();
+    const noiseFn = options.noiseType === 'fbm' ? fbmNoise : simplexNoise;
+    const n = noiseFn(noiseIn.mul(0.5)).pow(2);
+
+    heightStorage.element(instanceIndex).assign(
+      select(active, n.mul(maxHeightU).add(0.04), float(0))
+    );
+
+    /* Base palette — deep teal / amber C418 tones */
+    const t   = fract(n.mul(0.08).mul(maxHeightU).add(0.5));
+    const rgb = palette(
+      t,
+      vec3(0.5, 0.55, 0.5),
+      vec3(0.5),
+      vec3(0.5, 0.4, 0.3),
+      vec3(0.2)
+    ).toVar();
+
+    /* World position of this pylon */
+    const worldX = nx.mul(fieldRadiusU);
+    const worldZ = nz.mul(fieldRadiusU);
+
+    /* ── Shockwave ring ─────────────────────────────── */
+    const swDx   = worldX.sub(swXU);
+    const swDz   = worldZ.sub(swZU);
+    const swDist = sqrt(swDx.mul(swDx).add(swDz.mul(swDz)));
+    const swRing = abs(swDist.sub(swRU));
+    const swGlow = exp(swRing.negate().mul(1.4)).mul(swIU);
+    rgb.addAssign(swHueU.mul(swGlow));
+
+    /* ── Mouse hover proximity glow ─────────────────── */
+    const mDx   = worldX.sub(mxU);
+    const mDz   = worldZ.sub(mzU);
+    const mDist = sqrt(mDx.mul(mDx).add(mDz.mul(mDz)));
+    const mGlow = exp(mDist.negate().mul(0.55)).mul(0.5);
+    rgb.addAssign(vec3(0.25, 0.6, 0.45).mul(mGlow));
+
+    /* ── Beat pulse ──────────────────────────────────── */
+    rgb.addAssign(vec3(beatU.mul(0.18)));
+
+    colorStorage.element(instanceIndex).assign(
+      vec4(select(active, rgb, vec3(0,0,0)), float(1))
+    );
+  })().compute(count);
+}
+
+function buildMaterial(){
+  const mat = new THREE.MeshStandardMaterial({ roughness:0.9, metalness:0.9 });
+  mat.positionNode = Fn(() => {
+    const h   = heightStorage.element(instanceIndex);
+    const pos = positionLocal.toVar();
+    pos.x.assign(pos.x.mul(pylonRadiusU));
+    pos.z.assign(pos.z.mul(pylonRadiusU));
+    pos.y.assign(pos.y.add(0.5).mul(h));
+    return pos;
+  })();
+  mat.colorNode     = Fn(() => colorStorage.element(instanceIndex))();
+  mat.roughnessNode = Fn(() => colorStorage.element(instanceIndex).b.add(.3))();
+  mat.metalnessNode = Fn(() => colorStorage.element(instanceIndex).b.add(.3))();
+  return mat;
+}
+
+function rebuild(){
+  const newGRID = computeGrid();
+  if(newGRID === GRID && pylonMesh){ updateMatrices(); return; }
+  GRID  = newGRID;
+  COUNT = GRID * GRID;
+  heightBuffer  = new THREE.StorageBufferAttribute(COUNT, 1);
+  colorBuffer   = new THREE.StorageBufferAttribute(COUNT, 4);
+  heightStorage = storage(heightBuffer, 'float', COUNT);
+  colorStorage  = storage(colorBuffer,  'vec4',  COUNT);
+  computeNode   = buildComputeNode(COUNT);
+  if(pylonMesh){ scene.remove(pylonMesh); pylonMesh.material.dispose(); }
+  pylonMesh = new THREE.InstancedMesh(cyl, buildMaterial(), COUNT);
+  pylonMesh.castShadow = pylonMesh.receiveShadow = true;
+  pylonMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(pylonMesh);
+  updateMatrices();
+}
+
+function updateMatrices(){
+  if(!pylonMesh) return;
+  const mat = new THREE.Matrix4();
+  for(let i=0; i<COUNT; i++){
+    const col = i % GRID, row = Math.floor(i/GRID);
+    const nx  = (col/(GRID-1))*2-1,  nz = (row/(GRID-1))*2-1;
+    const x   = nx*options.fieldRadius, z = nz*options.fieldRadius;
+    const out = options.circularPattern && Math.sqrt(nx*nx+nz*nz)>1;
+    mat.setPosition(x, out ? -500 : 0, z);
+    pylonMesh.setMatrixAt(i, mat);
+  }
+  pylonMesh.instanceMatrix.needsUpdate = true;
+}
+
+rebuild();
+
+/* ═══════════════════════════════════════════════════════════════
+   GROUND + LIGHTS
+   ═══════════════════════════════════════════════════════════════ */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(400,400),
+  new THREE.MeshStandardMaterial({ color:0x0d0f18, roughness:0.95, metalness:0.05 })
+);
+ground.rotation.x = -Math.PI/2; ground.position.y = -0.005;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const sun = new THREE.DirectionalLight(0xffffff, 9);
+sun.castShadow = true;
+sun.position.set(30,30,42);
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near = 0.05; sun.shadow.camera.far = 1000; sun.shadow.radius = 2;
+['left','right','top','bottom'].forEach((k,i) =>
+  sun.shadow.camera[k] = [-50,50,50,-50][i]);
+sun.shadow.camera.updateProjectionMatrix();
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0x998877, 6.5).translateX(-10).translateY(8).translateZ(-12));
+scene.add(new THREE.AmbientLight(0x223355, 3));
+
+/* ═══════════════════════════════════════════════════════════════
+   POST-PROCESSING
+   ═══════════════════════════════════════════════════════════════ */
+const scenePass   = pass(scene, camera);
+scenePass.setMRT(mrt({ output, normal: normalView }));
+const sceneColor  = scenePass.getTextureNode('output');
+const sceneNormal = scenePass.getTextureNode('normal');
+const sceneDepth  = scenePass.getTextureNode('depth');
+
+const aoEffect = ao(sceneDepth, sceneNormal, camera);
+aoEffect.resolutionScale = 0.5;
+aoEffect.radius.value = 0.5;
+const aoColor     = aoEffect.getTextureNode().r.mul(sceneColor);
+const bloomEffect = bloom(aoColor, 1.1, 0.55, 0.65);
+const postPipe    = new THREE.RenderPipeline(renderer, sceneColor.add(bloomEffect));
+
+/* ═══════════════════════════════════════════════════════════════
+   AUDIO — ChiptuneSynth 3.1.0
+   ═══════════════════════════════════════════════════════════════ */
+const TK_PIANO=0, TK_VPAD=1, TK_DRONE=2, TK_CHORD=3;
+const synth = new ChiptuneSynth();
+let audioReady = false;
+
+/* A minor pentatonic across 2 octaves */
+const SCALE = [
+  ['A',3],['C',4],['D',4],['E',4],['G',4],
+  ['A',4],['C',5],['D',5],['E',5],['G',5]
+];
+
+/* Chord palette (C418-style voicings) */
+const CHORDS = [
+  { name:'Am',    notes:[['A',3],['C',4],['E',4],['A',4]], hue:[0.40,0.60,1.00], pan:-.25 },
+  { name:'Em',    notes:[['E',3],['G',4],['B',4],['E',5]], hue:[0.30,1.00,0.75], pan:-.12 },
+  { name:'Fmaj7', notes:[['F',3],['A',4],['C',5],['E',5]], hue:[0.65,0.45,1.00], pan:  0  },
+  { name:'Cmaj',  notes:[['C',4],['E',4],['G',4],['C',5]], hue:[0.40,1.00,0.55], pan:  0  },
+  { name:'Dm',    notes:[['D',3],['F',4],['A',4],['D',5]], hue:[1.00,0.75,0.30], pan: .12 },
+  { name:'G',     notes:[['G',3],['B',3],['D',4],['G',4]], hue:[1.00,0.92,0.30], pan: .25 }
+];
+
+const DRONE_PROG = [['A',2],['E',2],['D',2],['C',2],['G',2]];
+
+async function initAudio(){
+  if(audioReady) return;
+
+  await synth.init();
+  synth.setMasterVolume(0.38);
+
+  /* TK_PIANO — deep soft piano C418 */
+  synth.loadInstrument('piano', TK_PIANO);
+  synth.updateTrack(TK_PIANO, { unisonVoices:2, unisonDetune:5, unisonSpread:30, filterEnabled:true, filterType:'lowpass', filterCutoff:2200, filterQ:0.35 });
+  synth.updateEnvelope(TK_PIANO, { attack:.02, decay:.60, sustain:.35, release:2.8 });
+  synth.updateVibrato(TK_PIANO,  { rate:3.8, depth:5 });
+  synth.loadFxPreset(TK_PIANO, 'space');
+  synth.setReverbMix(TK_PIANO, .78); synth.setReverbDecay(TK_PIANO, .94);
+  synth.setChorusMix(TK_PIANO, .14); synth.setDelayMix(TK_PIANO, .22);
+  synth.setTrackFaderVolume(TK_PIANO, .52); synth.setTrackPan(TK_PIANO, .15);
+
+  /* TK_VPAD — violinNatural pad */
+  synth.loadInstrument('violinNatural', TK_VPAD);
+  synth.updateTrack(TK_VPAD, { unisonVoices:3, unisonDetune:6, unisonSpread:36, filterEnabled:true, filterType:'lowpass', filterCutoff:1800, filterQ:0.40 });
+  synth.updateEnvelope(TK_VPAD, { attack:2.4, decay:1.2, sustain:.72, release:4.5 });
+  synth.updateVibrato(TK_VPAD,  { rate:4.2, depth:7 });
+  synth.loadFxPreset(TK_VPAD, 'space');
+  synth.setReverbMix(TK_VPAD, .82); synth.setReverbDecay(TK_VPAD, .96);
+  synth.setChorusMix(TK_VPAD, .24); synth.setDelayMix(TK_VPAD, .18);
+  synth.setTrackFaderVolume(TK_VPAD, .24); synth.setTrackPan(TK_VPAD, -.35);
+
+  /* TK_DRONE — contrabass deep */
+  synth.loadInstrument('contrabass', TK_DRONE);
+  synth.updateTrack(TK_DRONE, { unisonVoices:2, unisonDetune:3, unisonSpread:26, filterEnabled:true, filterType:'lowpass', filterCutoff:580, filterQ:0.50 });
+  synth.updateEnvelope(TK_DRONE, { attack:2.8, decay:1.0, sustain:.80, release:5.0 });
+  synth.loadFxPreset(TK_DRONE, 'space');
+  synth.setReverbMix(TK_DRONE, .85); synth.setReverbDecay(TK_DRONE, .96);
+  synth.setTrackFaderVolume(TK_DRONE, .36); synth.setTrackPan(TK_DRONE, -.12);
+
+  /* TK_CHORD — piano wide chord pads */
+  synth.loadInstrument('piano', TK_CHORD);
+  synth.updateTrack(TK_CHORD, { unisonVoices:3, unisonDetune:6, unisonSpread:34, filterEnabled:true, filterType:'lowpass', filterCutoff:3200, filterQ:0.38 });
+  synth.updateEnvelope(TK_CHORD, { attack:.01, decay:.55, sustain:.42, release:3.2 });
+  synth.loadFxPreset(TK_CHORD, 'space');
+  synth.setReverbMix(TK_CHORD, .72); synth.setReverbDecay(TK_CHORD, .92);
+  synth.setChorusMix(TK_CHORD, .16); synth.setDelayMix(TK_CHORD, .20);
+  synth.setTrackFaderVolume(TK_CHORD, .88); synth.setTrackPan(TK_CHORD, 0);
+
+  /* Per-track compressors */
+  [TK_PIANO, TK_VPAD, TK_DRONE, TK_CHORD].forEach(tk => {
+    synth.setTrackCompressorEnabled(tk, true);
+    synth.setTrackCompressorThreshold(tk, -18);
+    synth.setTrackCompressorRatio(tk, 6);
+    synth.setTrackCompressorAttack(tk, 0.003);
+    synth.setTrackCompressorRelease(tk, 0.15);
+  });
+  synth.setTrackCompressorThreshold(TK_CHORD, -14);
+  synth.setTrackCompressorRatio(TK_CHORD, 8);
+
+  audioReady = true;
+  droneLoop();
+  violinLoop();
+  idleLoop();
+}
+
+/* ── Polyphony guard ───────────────────────────────────────── */
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+const MAX_POLY = isSafari ? 6 : 8;
+let allIds = [];
+
+function killNote(id){
+  try{
+    const nd = synth.activeNotes && synth.activeNotes.get(id);
+    if(nd){
+      const now = synth.audioContext.currentTime;
+      if(nd.gainNode){ nd.gainNode.gain.cancelScheduledValues(now); nd.gainNode.gain.setValueAtTime(nd.gainNode.gain.value, now); nd.gainNode.gain.linearRampToValueAtTime(0, now+0.04); }
+      const t = now+0.05;
+      if(nd.oscillators) nd.oscillators.forEach(v => { try{v.stop(t);}catch(e){} });
+      if(nd.lfo) try{nd.lfo.stop(t);}catch(e){}
+    }
+  }catch(e){}
+  try{ synth.stopNote(id); }catch(e){}
+}
+
+function track(id){ allIds.push(id); while(allIds.length > MAX_POLY) killNote(allIds.shift()); }
+
+/* ── Note pools ────────────────────────────────────────────── */
+let pianoPool=[], chordPool=[], vpadPool=[], droneNote=null;
+
+function playPiano(degIdx, vel){
+  if(!audioReady) return;
+  const nn = SCALE[Math.max(0, Math.min(SCALE.length-1, degIdx|0))];
+  const id = synth.playNoteByName(nn[0], nn[1], TK_PIANO, 3.5);
+  pianoPool.push(id); track(id);
+  while(pianoPool.length > 1) killNote(pianoPool.shift());
+}
+
+function playChord(chordIdx, worldX, worldZ){
+  if(!audioReady) return;
+  const c = CHORDS[chordIdx % CHORDS.length];
+  while(chordPool.length) killNote(chordPool.shift());
+  synth.setTrackPan(TK_CHORD, c.pan);
+  c.notes.forEach((n,i) => setTimeout(() => {
+    const id = synth.playNoteByName(n[0], n[1], TK_CHORD, 5.5);
+    chordPool.push(id); track(id);
+    if(chordPool.length > 4) killNote(chordPool.shift());
+  }, i*85));
+  /* Shockwave colour from chord hue */
+  swHueU.value = new THREE.Vector3(...c.hue);
+  triggerShockwave(worldX, worldZ);
+  /* Beat pulse flash */
+  beatU.value = 0.9;
+  setTimeout(() => { beatU.value = 0; }, 120);
+}
+
+let droneStep=0;
+function droneLoop(){
+  if(!audioReady) return;
+  if(droneNote){ killNote(droneNote); droneNote=null; }
+  const n = DRONE_PROG[droneStep++ % DRONE_PROG.length];
+  droneNote = synth.playNoteByName(n[0], n[1], TK_DRONE, 14);
+  track(droneNote);
+  /* Beat pulse on drone change */
+  beatU.value = 0.6;
+  setTimeout(() => { beatU.value = 0; }, 200);
+  setTimeout(droneLoop, 12000);
+}
+
+let vpadStep=0;
+function violinLoop(){
+  if(!audioReady) return;
+  while(vpadPool.length > 2) killNote(vpadPool.shift());
+  const pairs = [[['A',3],['E',4]],[['C',4],['G',4]],[['D',4],['A',4]],[['E',4],['B',4]]];
+  const pair  = pairs[vpadStep++ % pairs.length];
+  pair.forEach((n,i) => setTimeout(() => {
+    const id = synth.playNoteByName(n[0], n[1], TK_VPAD, 11);
+    vpadPool.push(id); track(id);
+  }, i*220));
+  setTimeout(violinLoop, 9500);
+}
+
+let lastMove=performance.now(), idleTimer=null;
+function idleLoop(){
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(function tick(){
+    if(performance.now()-lastMove > 1400 && audioReady){
+      const d = Math.floor(Math.random()*SCALE.length);
+      playPiano(d, 0.2+Math.random()*0.2);
+    }
+    idleTimer = setTimeout(tick, 1100+Math.random()*800);
+  }, 2000);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SHOCKWAVE
+   ═══════════════════════════════════════════════════════════════ */
+let swActive=false, swStart=0;
+const SW_DUR=2000, SW_MAX_R=22;
+
+function triggerShockwave(wx, wz){
+  swXU.value=wx; swZU.value=wz;
+  swRU.value=0;  swIU.value=1;
+  swActive=true; swStart=performance.now();
+}
+
+function updateShockwave(now){
+  if(!swActive) return;
+  const t = (now-swStart)/SW_DUR;
+  if(t>=1){ swActive=false; swIU.value=0; swRU.value=-999; return; }
+  swRU.value = t*SW_MAX_R;
+  swIU.value = 1-t;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOUSE → WORLD (ray→plane Y=0)
+   ═══════════════════════════════════════════════════════════════ */
+const _ray   = new THREE.Raycaster();
+const _plane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+const _hit   = new THREE.Vector3();
+
+function screenToWorld(cx, cy){
+  _ray.setFromCamera(new THREE.Vector2((cx/innerWidth)*2-1, -(cy/innerHeight)*2+1), camera);
+  return _ray.ray.intersectPlane(_plane, _hit) ? _hit.clone() : null;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INPUT
+   ═══════════════════════════════════════════════════════════════ */
+let isDragging=false, dragX=0, dragY=0, velX=0, velY=0;
+let lastNoteTime=0, lastDeg=-1;
+let lastChordTime=0;
+
+window.addEventListener('pointerdown', e => {
+  if(!audioReady){ initAudio(); }
+  isDragging=true; velX=velY=0; dragX=e.clientX; dragY=e.clientY;
+  /* Click chord */
+  const now=performance.now();
+  if(now-lastChordTime < 280) return;
+  lastChordTime=now;
+  const w = screenToWorld(e.clientX, e.clientY);
+  if(!w) return;
+  /* Pick chord based on angle from center */
+  const angle = (Math.atan2(w.z, w.x)+Math.PI)/(Math.PI*2);
+  const idx   = Math.floor(angle*CHORDS.length) % CHORDS.length;
+  playChord(idx, w.x, w.z);
+  document.getElementById('hint').classList.add('fade');
+});
+
+window.addEventListener('pointermove', e => {
+  lastMove = performance.now();
+  const w = screenToWorld(e.clientX, e.clientY);
+  if(w){ mxU.value=w.x; mzU.value=w.z; }
+
+  if(isDragging){
+    const dx=e.clientX-dragX, dy=e.clientY-dragY;
+    dragX=e.clientX; dragY=e.clientY;
+    velX=dx*0.01; velY=dy*0.01;
+    noiseOffsetXU.value -= velX;
+    noiseOffsetZU.value -= velY;
+  }
+
+  /* Hover note */
+  if(!audioReady || !w) return;
+  const now=performance.now();
+  if(now-lastNoteTime < 170) return;
+  const nx   = Math.max(-1, Math.min(1, w.x/options.fieldRadius));
+  const nz   = Math.max(-1, Math.min(1, w.z/options.fieldRadius));
+  const dist = Math.sqrt(nx*nx+nz*nz);
+  if(dist > 1.05) return;
+  const degX = Math.floor(((nx+1)/2)*(SCALE.length-1));
+  const degY = Math.floor(((nz+1)/2)*4);
+  const deg  = Math.max(0, Math.min(SCALE.length-1, degX+degY));
+  if(deg===lastDeg && now-lastNoteTime < 340) return;
+  lastNoteTime=now; lastDeg=deg;
+  const vel = 0.22 + (1-dist)*0.35;
+  playPiano(deg, vel);
+});
+
+window.addEventListener('pointerup',   () => { isDragging=false; });
+
+/* Keyboard — AZERTY (QSDFGH) / QWERTY (ASDFGH) */
+let detectedAzerty=false;
+const _held={};
+addEventListener('keyup', e => delete _held[e.code]);
+addEventListener('keydown', e => {
+  if(!audioReady){ initAudio(); }
+  if(e.repeat || _held[e.code]) return;
+  _held[e.code]=true;
+  const k=e.key.toLowerCase();
+  if(e.code==='KeyA' && k==='q') detectedAzerty=true;
+  if(e.code==='KeyQ' && k==='a') detectedAzerty=false;
+  const map = detectedAzerty
+    ? { KeyA:0, KeyS:1, KeyD:2, KeyF:3, KeyG:4, KeyH:5 }
+    : { KeyA:0, KeyS:1, KeyD:2, KeyF:3, KeyG:4, KeyH:5 };
+  let idx = map[e.code] ?? -1;
+  if(idx===-1 && k>='1'&&k<='6') idx=+k-1;
+  if(idx>=0){
+    const now=performance.now();
+    if(now-lastChordTime<280) return;
+    lastChordTime=now;
+    /* Place shockwave at center for keyboard */
+    playChord(idx, 0, 0);
+    e.preventDefault();
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   ANIMATE
+   ═══════════════════════════════════════════════════════════════ */
+let lastTime=performance.now();
+
+async function animate(){
+  const now   = performance.now();
+  const delta = (now-lastTime)/1000;
+  lastTime    = now;
+
+  if(options.animating) noiseOffsetYU.value += delta*options.timeSpeed;
+
+  if(!isDragging && (velX||velY)){
+    const decay=Math.pow(0.04, delta);
+    velX*=decay; velY*=decay;
+    noiseOffsetXU.value -= velX;
+    noiseOffsetZU.value -= velY;
+  }
+
+  updateShockwave(now);
+  controls.update();
+  if(computeNode) await renderer.computeAsync(computeNode);
+  postPipe.render();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Void Strings — #cpc-string</title>
+<!--
+  ╔══════════════════════════════════════════════════════════╗
+  ║  CodePen Challenge: Code Words — Week 1: STRINGS         ║
+  ║                                                          ║
+  ║  Void Strings — Immersive mouse-driven string instrument ║
+  ║  Powered by ChiptuneSynth (full FX chain)                ║
+  ║                                                          ║
+  ║  · Move Y → bow a string (A minor pentatonic)            ║
+  ║  · Move X → filter sweep (dark ↔ bright)                 ║
+  ║  · Speed  → vibrato intensity + particle burst           ║
+  ║  · Click  → chord explosion on all 8 strings             ║
+  ║                                                          ║
+  ║  ChiptuneSynth FX used per track:                        ║
+  ║    loadFxPreset('space') · setReverbMix · setReverbDecay  ║
+  ║    setDelayTime · setDelayFeedback · setDelayMix          ║
+  ║    setChorusRate · setChorusDepth · setChorusMix          ║
+  ║    setTrackPan · setTrackEQ · setTrackCompressor          ║
+  ║    updateVibrato · updateEnvelope · setTrackFaderVolume   ║
+  ║    updateTrack (tremolo · unison · lfo1Delay · filter)    ║
+  ║    updateLiveNotes · getTrackLevel (audio→visual)         ║
+  ║                                                          ║
+  ║  Tags: cpc-string  codepenchallenge                      ║
+  ╚══════════════════════════════════════════════════════════╝
+
+  CodePen → Settings → JS → External Scripts:
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js
+  https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js
+-->
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
+
+<!-- ═══════════════════════════════════════════
+     ███  CSS  ███
+     ═══════════════════════════════════════════ -->
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#030308}
+canvas{display:block;cursor:none}
+
+#hud{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+  font-family:'Courier New',monospace;text-align:center;pointer-events:none;
+}
+#hud .note-name{
+  font-size:1.2rem;font-weight:700;letter-spacing:3px;
+  text-shadow:0 0 24px currentColor;transition:color .1s;
+}
+#hud .controls{
+  font-size:.5rem;color:rgba(255,255,255,.18);margin-top:5px;letter-spacing:2px;
+}
+#hud .tags{font-size:.42rem;color:rgba(255,255,255,.08);margin-top:2px}
+
+#waveBox{
+  position:fixed;top:14px;right:14px;
+  border:1px solid rgba(255,255,255,.06);border-radius:8px;
+  background:rgba(0,0,0,.5);overflow:hidden;pointer-events:none;
+}
+
+#fxBadge{
+  position:fixed;top:14px;left:14px;
+  font-family:'Courier New',monospace;font-size:.48rem;
+  color:rgba(255,255,255,.18);letter-spacing:1px;pointer-events:none;
+  line-height:1.8;
+}
+
+#overlay{
+  position:fixed;inset:0;z-index:999;
+  background:rgba(2,2,8,.97);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;gap:18px;
+}
+#overlay h1{
+  font-family:'Courier New',monospace;
+  font-size:2.2rem;color:#00f0ff;letter-spacing:6px;
+  text-shadow:0 0 60px rgba(0,240,255,.6);
+}
+#overlay .sub{
+  font-family:'Courier New',monospace;
+  font-size:.75rem;color:rgba(255,255,255,.25);letter-spacing:2px;
+}
+#overlay .engine{
+  font-family:'Courier New',monospace;
+  font-size:.55rem;color:rgba(168,85,247,.6);letter-spacing:1px;
+}
+#overlay .enter{
+  font-family:'Courier New',monospace;font-size:.7rem;color:#a855f7;
+  border:1px solid rgba(168,85,247,.3);border-radius:10px;
+  padding:11px 32px;animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1;box-shadow:0 0 30px rgba(168,85,247,.3)}}
+.hidden{display:none!important}
+</style>
+</head>
+
+<!-- ═══════════════════════════════════════════
+     ███  HTML  ███
+     ═══════════════════════════════════════════ -->
+<body>
+
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div class="note-name" id="noteHud" style="color:#00f0ff">—</div>
+  <div class="controls">move to bow · click to burst</div>
+  <div class="tags">#cpc-string · #codepenchallenge · ChiptuneSynth</div>
+</div>
+
+<div id="waveBox">
+  <canvas id="cvMini" width="130" height="44"></canvas>
+</div>
+
+<div id="fxBadge">
+  reverb · reverbDecay · delay · chorus<br>
+  pan · EQ · compressor · unison 3x<br>
+  tremolo ← speed · lfo1Delay · filter ← X
+</div>
+
+<div id="overlay">
+  <h1>VOID STRINGS</h1>
+  <div class="sub">Every string is a string</div>
+  <div class="engine">ChiptuneSynth · reverb decay · unison 3x · tremolo · lfo1Delay · getTrackLevel</div>
+  <div class="enter">▶ Enter the void</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     ███  JS  ███
+     ═══════════════════════════════════════════ -->
+<script>
+/* ════════════════════════════════════════════════════════
+   VOID STRINGS — ChiptuneSynth Edition
+   ════════════════════════════════════════════════════════ */
+
+/* ─── Canvas ─── */
+const cv  = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W = cv.width  = window.innerWidth;
+let H = cv.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  W = cv.width  = window.innerWidth;
+  H = cv.height = window.innerHeight;
+  buildStringY();
+});
+
+const cvMini = document.getElementById('cvMini');
+const ctxM   = cvMini.getContext('2d');
+
+/* ─── 8-string layout (A minor pentatonic, 8 tracks max) ─── */
+const STRING_DATA = [
+  { note:'A', oct:3, label:'A3', color:'#f472b6', rgb:[244,114,182], pan:-0.72, inst:'cello'  },
+  { note:'C', oct:4, label:'C4', color:'#c084fc', rgb:[192,132,252], pan:-0.50, inst:'cello'  },
+  { note:'E', oct:4, label:'E4', color:'#818cf8', rgb:[129,140,248], pan:-0.26, inst:'violin' },
+  { note:'G', oct:4, label:'G4', color:'#38bdf8', rgb:[56,189,248],  pan:-0.08, inst:'violin' },
+  { note:'A', oct:4, label:'A4', color:'#00f0ff', rgb:[0,240,255],   pan: 0.08, inst:'violin' },
+  { note:'C', oct:5, label:'C5', color:'#34d399', rgb:[52,211,153],  pan: 0.26, inst:'violin' },
+  { note:'E', oct:5, label:'E5', color:'#facc15', rgb:[250,204,21],  pan: 0.50, inst:'violin' },
+  { note:'A', oct:5, label:'A5', color:'#fb923c', rgb:[251,146,60],  pan: 0.72, inst:'violin' },
+];
+const N = STRING_DATA.length; // 8
+
+let stringY = [];
+function buildStringY() {
+  const mg = H * 0.11;
+  stringY = STRING_DATA.map((_, i) => mg + (i / (N - 1)) * (H - mg * 2));
+}
+buildStringY();
+
+const RADIUS = H / (N * 1.5);
+
+/* ─── Mouse ─── */
+const mouse = { x: W/2, y: H/2, px: W/2, py: H/2, vx:0, vy:0, speed:0 };
+
+document.addEventListener('mousemove', e => {
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = e.clientX; mouse.y = e.clientY;
+  mouse.vx = mouse.x - mouse.px; mouse.vy = mouse.y - mouse.py;
+  mouse.speed = Math.hypot(mouse.vx, mouse.vy);
+});
+document.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  mouse.vx = mouse.x - mouse.px; mouse.vy = mouse.y - mouse.py;
+  mouse.speed = Math.hypot(mouse.vx, mouse.vy);
+}, { passive:false });
+
+/* ════════════════════════════════════════════════════════
+   CHIPTUNE SYNTH ENGINE
+   ════════════════════════════════════════════════════════ */
+
+const synth = new ChiptuneSynth();
+let ready = false;
+
+/* ── Note state per track ── */
+const noteState = Array.from({ length: N }, () => ({
+  id: null,
+  expiry: 0,
+  active: false,
+}));
+
+/* ── Current intensity per string (0..1) ── */
+const intensity = new Float32Array(N);
+
+/* ── Init all 8 tracks with full FX chain ── */
+async function initAudio() {
+  if (ready) return;
+
+  await synth.init();
+
+  STRING_DATA.forEach((s, i) => {
+    /* Instrument */
+    synth.loadInstrument(s.inst, i);
+
+    /* Envelope — slow attack, full sustain, long release */
+    synth.updateEnvelope(i, {
+      attack:  0.28,
+      decay:   0.08,
+      sustain: 1.00,
+      release: 1.60,
+    });
+
+    /* Vibrato — per-track slightly different rate for natural chorus
+       lfo1Delay = vibrato onset delay (authentic bowing technique: no vibrato at note start) */
+    synth.updateVibrato(i, {
+      rate:  5.2 + i * 0.18,
+      depth: 7 + i * 0.4,
+    });
+    synth.updateTrack(i, { lfo1Delay: 0.38 });
+
+    /* ── FX chain ── */
+
+    /* Reverb — deep hall with long decay tail */
+    synth.loadFxPreset(i, 'space');
+    synth.setReverbMix(i, 0.52);
+    synth.setReverbDecay(i, 0.75 + i * 0.03); // low strings: 0.75, high: 0.96
+
+    /* Delay — staggered times create depth & movement */
+    synth.setDelayTime(i,     0.18 + i * 0.022);
+    synth.setDelayFeedback(i, 0.42);
+    synth.setDelayMix(i,      0.30);
+
+    /* Chorus — wide ensemble shimmer */
+    synth.setChorusRate(i,  1.4 + i * 0.12);
+    synth.setChorusDepth(i, 0.45 + i * 0.02);
+    synth.setChorusMix(i,   0.32);
+
+    /* Pan — spread strings across stereo field */
+    synth.setTrackPan(i, s.pan);
+
+    /* EQ — body tone shaping per string */
+    const eqLow  = i < 3 ?  3 : i < 5 ?  1 : -1;  // boost bass on low strings
+    const eqMid  = i < 4 ?  1 : i < 6 ?  2 :  3;  // presence boost on high
+    const eqHigh = i < 3 ? -1 : i < 6 ?  1 :  2;  // air on highest strings
+    synth.setTrackEQ(i, 'eqLow',  eqLow);
+    synth.setTrackEQ(i, 'eqMid',  eqMid);
+    synth.setTrackEQ(i, 'eqHigh', eqHigh);
+
+    /* Compressor — gentle glue */
+    synth.setTrackCompressorEnabled(i, true);
+    synth.setTrackCompressorThreshold(i, -22);
+    synth.setTrackCompressorRatio(i, 4);
+
+    /* Unison — 3 voices per track, slightly detuned + spread for richness */
+    synth.updateTrack(i, {
+      unisonVoices: 3,
+      unisonDetune: 7 + i * 1.5,
+      unisonSpread: 50 + i * 5,
+    });
+
+    /* Filter — start open, will be X-controlled in real time */
+    synth.updateTrack(i, {
+      filterEnabled: true,
+      filterType:    'lowpass',
+      filterCutoff:  4000,
+      filterQ:       1.0,
+    });
+
+    /* Start silent */
+    synth.setTrackFaderVolume(i, 0);
+  });
+
+  synth.setMasterVolume(0.75);
+
+  ready = true;
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+/* ── Audio update (called every frame) ── */
+let lastFilterUpdate = 0;
+
+function updateAudio(now) {
+  if (!ready) return;
+
+  /* Filter sweep from X + tremolo from mouse speed (throttled ~25fps) */
+  const shouldUpdateFilter = now - lastFilterUpdate > 40;
+  if (shouldUpdateFilter) {
+    lastFilterUpdate = now;
+    const cutoff = 280 + (mouse.x / W) * 8200; // 280 → 8480 Hz
+    const q = 0.8 + (mouse.x / W) * 1.4;
+    /* Tremolo depth = bowing speed → amplitude modulation like a real bow */
+    const tremoloDepth = Math.min(mouse.speed * 0.55, 20);
+    STRING_DATA.forEach((_, i) => {
+      synth.updateTrack(i, {
+        filterCutoff:  cutoff,
+        filterQ:       q,
+        tremoloRate:   5.8 + i * 0.22,
+        tremoloDepth:  tremoloDepth,
+      });
+      synth.updateLiveNotes(i); // push tremolo changes to active notes
+    });
+  }
+
+  /* Per-string: volume + note triggering */
+  STRING_DATA.forEach((s, i) => {
+    const dist  = Math.abs(mouse.y - stringY[i]);
+    const intens = Math.max(0, 1 - dist / RADIUS);
+    intensity[i] = intens;
+
+    /* Smooth volume (fader) */
+    const targetVol = intens * 0.85;
+    synth.setTrackFaderVolume(i, targetVol);
+
+    const ns = noteState[i];
+    if (intens > 0.04) {
+      /* Trigger note if not active or about to expire */
+      if (!ns.active || now > ns.expiry) {
+        if (ns.id) synth.stopNote(ns.id);
+        ns.id     = synth.playNoteByName(s.note, s.oct, i, 9.0);
+        ns.expiry = now + 7200; // re-trigger 0.8s before end
+        ns.active = true;
+      }
+    } else if (ns.active) {
+      /* Let release envelope handle fade naturally */
+      ns.active = false;
+      /* Don't stopNote — let the release play out */
+    }
+  });
+}
+
+/* ── Chord burst on click ── */
+function triggerBurst() {
+  if (!ready) return;
+  STRING_DATA.forEach((s, i) => {
+    const ns = noteState[i];
+    if (ns.id) synth.stopNote(ns.id);
+    ns.id     = synth.playNoteByName(s.note, s.oct, i, 2.5);
+    ns.expiry = 0; // will re-trigger next cycle
+    ns.active = false;
+    synth.setTrackFaderVolume(i, 0.9);
+  });
+  addExplosion(mouse.x, mouse.y);
+}
+
+/* ════════════════════════════════════════════════════════
+   VISUAL SYSTEMS
+   ════════════════════════════════════════════════════════ */
+
+/* ─── Particles ─── */
+const particles = [];
+
+function addParticle(x, y, color, vx, vy, size, life) {
+  if (particles.length > 380) particles.splice(0, 8);
+  particles.push({ x, y, vx, vy, color, size, life, maxLife: life });
+}
+
+/* ─── Ripples ─── */
+const ripples = [];
+
+function addRipple(x, y, color, maxR) {
+  ripples.push({ x, y, color, r: 3, maxR: maxR || 90, alpha: 1 });
+}
+
+/* ─── Explosion on click ─── */
+function addExplosion(x, y) {
+  for (let k = 0; k < 72; k++) {
+    const angle = (k / 72) * Math.PI * 2;
+    const speed = 1.5 + Math.random() * 7;
+    const sd = STRING_DATA[k % N];
+    addParticle(x, y, sd.color,
+      Math.cos(angle) * speed + (Math.random() - 0.5),
+      Math.sin(angle) * speed + (Math.random() - 0.5),
+      1.5 + Math.random() * 3.5,
+      0.7 + Math.random() * 0.6
+    );
+  }
+  STRING_DATA.forEach(s => addRipple(x, y, s.color, 60 + Math.random() * 100));
+}
+
+/* ─── String activation particles ─── */
+let lastEmitTime = 0;
+function emitStringParticles(i) {
+  const t = performance.now();
+  if (t - lastEmitTime < 28) return;
+  lastEmitTime = t;
+  const s = STRING_DATA[i];
+  addParticle(
+    mouse.x + (Math.random() - 0.5) * 50,
+    stringY[i],
+    s.color,
+    (Math.random() - 0.5) * 1.2,
+    -(0.4 + Math.random() * 2.5),
+    1 + Math.random() * 2.2,
+    0.5 + Math.random() * 0.7
+  );
+  if (mouse.speed > 4) addRipple(mouse.x, stringY[i], s.color, 25 + mouse.speed * 1.8);
+}
+
+/* ─── Trail ─── */
+const trail = [];
+
+/* ════════════════════════════════════════════════════════
+   MAIN DRAW LOOP
+   ════════════════════════════════════════════════════════ */
+let animT = 0;
+const waveArr = new Uint8Array(2048);
+const freqArr = new Uint8Array(512);
+
+function draw(ts) {
+  requestAnimationFrame(draw);
+  animT = ts * 0.001;
+  const now = performance.now();
+
+  /* ─── Background ─── */
+  ctx.fillStyle = 'rgba(3,3,8,0.85)';
+  ctx.fillRect(0, 0, W, H);
+
+  /* Ambient glow from active strings */
+  STRING_DATA.forEach((s, i) => {
+    const intens = intensity[i];
+    if (intens < 0.02) return;
+    const [r,g,b] = s.rgb;
+    const grd = ctx.createRadialGradient(mouse.x, stringY[i], 0, mouse.x, stringY[i], W * 0.55);
+    grd.addColorStop(0, `rgba(${r},${g},${b},${intens * 0.09})`);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+  });
+
+  /* ─── Ripples ─── */
+  for (let k = ripples.length - 1; k >= 0; k--) {
+    const rp = ripples[k];
+    rp.r += 2.8;
+    rp.alpha = Math.pow(1 - rp.r / rp.maxR, 1.6);
+    if (rp.alpha <= 0) { ripples.splice(k, 1); continue; }
+    ctx.beginPath();
+    ctx.arc(rp.x, rp.y, rp.r, 0, Math.PI * 2);
+    ctx.strokeStyle = rp.color;
+    ctx.globalAlpha = rp.alpha * 0.65;
+    ctx.lineWidth   = 1.2;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  /* ─── Strings ─── */
+  STRING_DATA.forEach((s, i) => {
+    const sy     = stringY[i];
+    const intens = intensity[i];
+    const [sr,sg,sb] = s.rgb;
+
+    /* Audio level feedback: brighten string from real RMS signal */
+    const audioLevel = ready ? synth.getTrackLevel(i) : 0;
+    const glow = Math.min(intens + audioLevel * 1.2, 1);
+
+    if (intens > 0.01) emitStringParticles(i);
+
+    /* Glow halo — driven by glow (intens + audioLevel) */
+    if (glow > 0.02) {
+      for (let gl = 2; gl >= 0; gl--) {
+        ctx.beginPath();
+        ctx.moveTo(0, sy); ctx.lineTo(W, sy);
+        ctx.strokeStyle = `rgba(${sr},${sg},${sb},${glow * (0.09 - gl * 0.02)})`;
+        ctx.lineWidth   = (gl + 1) * 5 * glow;
+        ctx.shadowBlur  = (gl + 1) * 12 * glow;
+        ctx.shadowColor = s.color;
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+    }
+
+    /* String wave — amplitude also reacts to audio level */
+    ctx.beginPath();
+    for (let x = 0; x < W; x += 2) {
+      const distX = Math.abs(x - mouse.x);
+      const env   = Math.exp(-distX * 0.0035) * intens;
+      const amp   = env * 22 * (1 + mouse.speed * 0.035) + audioLevel * 14;
+      const phase = animT * (5.5 + s.oct * 0.8 + i * 0.15) + x * 0.038;
+      const y     = sy + Math.sin(phase) * amp + Math.sin(phase * 2.3 + 1.2) * amp * 0.3;
+      x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = `rgba(${sr},${sg},${sb},${0.12 + glow * 0.82})`;
+    ctx.lineWidth   = 0.9 + glow * 2.8;
+    ctx.shadowBlur  = glow * 18;
+    ctx.shadowColor = s.color;
+    ctx.stroke();
+    ctx.shadowBlur  = 0;
+
+    /* End anchors — pulse with audio level */
+    const dotA = 0.1 + glow * 0.75;
+    ctx.fillStyle = `rgba(${sr},${sg},${sb},${dotA})`;
+    ctx.shadowBlur = glow * 10; ctx.shadowColor = s.color;
+    ctx.beginPath(); ctx.arc(0, sy, 3 + glow * 4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W, sy, 3 + glow * 4, 0, Math.PI*2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    /* Note label on right edge */
+    if (glow > 0.12) {
+      ctx.globalAlpha = glow * 0.75;
+      ctx.fillStyle   = s.color;
+      ctx.font        = `${Math.round(9 + glow * 5)}px 'Courier New'`;
+      ctx.fillText(s.label, W - 34, sy - 6);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  /* ─── Trail ─── */
+  trail.push({ x: mouse.x, y: mouse.y });
+  if (trail.length > 42) trail.shift();
+
+  trail.forEach((pt, ti) => {
+    const p = ti / trail.length;
+    const hue = 185 + (mouse.x / W) * 130;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, p * 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${hue},100%,70%,${p * p * 0.55})`;
+    ctx.fill();
+  });
+
+  /* ─── Particles ─── */
+  for (let k = particles.length - 1; k >= 0; k--) {
+    const p = particles[k];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.045; p.vx *= 0.98;
+    p.life -= 0.017;
+    if (p.life <= 0) { particles.splice(k, 1); continue; }
+    const a = (p.life / p.maxLife) ** 2;
+    ctx.globalAlpha = a;
+    ctx.fillStyle   = p.color;
+    ctx.shadowBlur  = 5; ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * (p.life / p.maxLife), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+
+  /* ─── Cursor orb ─── */
+  const hue = 185 + (mouse.x / W) * 130;
+  const orb = `hsl(${hue},100%,70%)`;
+
+  /* Outer glow */
+  const ogrd = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 32 + mouse.speed * 0.6);
+  ogrd.addColorStop(0,   `hsla(${hue},100%,80%,0.18)`);
+  ogrd.addColorStop(0.5, `hsla(${hue},100%,70%,0.07)`);
+  ogrd.addColorStop(1,   'transparent');
+  ctx.fillStyle = ogrd;
+  ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 32 + mouse.speed * 0.6, 0, Math.PI*2); ctx.fill();
+
+  /* Core */
+  ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 3.5 + mouse.speed * 0.08, 0, Math.PI*2);
+  ctx.fillStyle   = orb;
+  ctx.shadowBlur  = 18; ctx.shadowColor = orb;
+  ctx.fill(); ctx.shadowBlur = 0;
+
+  /* Crosshair */
+  ctx.strokeStyle = `hsla(${hue},100%,70%,0.3)`;
+  ctx.lineWidth = 0.7; ctx.setLineDash([4,6]);
+  ctx.beginPath();
+  ctx.moveTo(mouse.x - 14, mouse.y); ctx.lineTo(mouse.x + 14, mouse.y);
+  ctx.moveTo(mouse.x, mouse.y - 14); ctx.lineTo(mouse.x, mouse.y + 14);
+  ctx.stroke(); ctx.setLineDash([]);
+
+  /* ─── HUD note name ─── */
+  let bestI = 0, bestIntens = 0;
+  intensity.forEach((v, i) => { if (v > bestIntens) { bestIntens = v; bestI = i; } });
+  const noteHud = document.getElementById('noteHud');
+  if (bestIntens > 0.05) {
+    noteHud.textContent = STRING_DATA[bestI].label;
+    noteHud.style.color = STRING_DATA[bestI].color;
+  } else {
+    noteHud.textContent = '—';
+    noteHud.style.color = '#00f0ff';
+  }
+
+  /* ─── Mini waveform ─── */
+  ctxM.fillStyle = 'rgba(0,0,0,0.55)';
+  ctxM.fillRect(0, 0, 130, 44);
+  if (ready) {
+    const wd = synth.getWaveformData();
+    if (wd) {
+      ctxM.beginPath();
+      const col = bestIntens > 0.05 ? STRING_DATA[bestI].color : '#00f0ff';
+      ctxM.strokeStyle = col;
+      ctxM.lineWidth   = 1.3;
+      const step = wd.length / 130;
+      for (let i = 0; i < 130; i++) {
+        const v = wd[Math.floor(i * step)] / 128 - 1;
+        const y = 22 + v * 18;
+        i === 0 ? ctxM.moveTo(0, y) : ctxM.lineTo(i, y);
+      }
+      ctxM.stroke();
+    }
+  }
+
+  /* ─── Audio update ─── */
+  updateAudio(now);
+}
+
+/* ─── Click / touch start ─── */
+cv.addEventListener('click', async () => {
+  if (!ready) { await initAudio(); return; }
+  triggerBurst();
+});
+document.addEventListener('touchstart', async e => {
+  if (!ready) { await initAudio(); return; }
+  const t = e.touches[0];
+  mouse.x = t.clientX; mouse.y = t.clientY;
+  triggerBurst();
+}, { passive: true });
+
+document.getElementById('overlay').addEventListener('click', initAudio);
+
+/* ─── Start render loop ─── */
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
