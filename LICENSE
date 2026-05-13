@@ -1,4 +1,4 @@
-ChiptuneSynth — Proprietary Software License
+ChiptuneSynth — Software License
 Copyright (c) 2026 8Binami SAS
 https://8binami.com | https://8bitforge.com | licensing@8binami.com
 
@@ -6,10 +6,12 @@ https://8binami.com | https://8bitforge.com | licensing@8binami.com
 PREAMBLE
 ================================================================================
 
-ChiptuneSynth is a proprietary audio synthesis library developed and owned
-exclusively by 8Binami SAS ("8Binami", "the Licensor"). This software is NOT
-open-source. The distributed files are obfuscated and protected under
-intellectual property law.
+ChiptuneSynth is a source-sealed, freely distributable audio synthesis library
+developed and owned exclusively by 8Binami SAS ("8Binami", "the Licensor").
+
+"Source-sealed" means the distributed files are compiled and obfuscated to
+protect the underlying intellectual property, while remaining free to use,
+embed, and ship in your projects under the terms below.
 
 This license governs all use of the ChiptuneSynth software, its compiled
 output, documentation, and associated materials (collectively, "the Software").
@@ -19,7 +21,7 @@ the terms of this license. If you do not agree, do not use the Software.
 
 
 ================================================================================
-TIER 0 — FREE LICENSE (Non-Commercial & Micro-Indie)
+TIER 0 — FREE LICENSE (Non-Commercial & Indie)
 ================================================================================
 
 The Software may be used at no charge, subject to ALL of the following
@@ -30,13 +32,12 @@ conditions:
    a) NON-COMMERCIAL projects that generate zero revenue:
       - Personal projects, experiments, and learning
       - Educational and academic work (students, teachers, institutions)
-      - Open-source projects (OSI-approved license, non-monetized)
       - Game jams and hackathons, including prize-winning entries
       - Portfolio projects and public demonstrations
       - Internal prototypes and proof-of-concept work
 
-   b) MICRO-INDIE commercial projects where the total gross annual revenue
-      across ALL products using the Software is below $25,000 USD (or
+   b) INDIE commercial projects where the total gross annual revenue
+      across ALL products using the Software is below $100,000 USD (or
       equivalent in any currency, calculated at the date of measurement).
 
       Revenue is measured across the licensee's entire business entity,
@@ -51,13 +52,14 @@ conditions:
 
    Attribution must be human-readable and reasonably prominent. It may not
    be hidden, obfuscated, or placed exclusively in source code comments
-   for end-user-facing commercial releases.
+   for end-user-facing releases.
 
 3. SINGLE ENTITY. The Free License is granted to a single individual or
    organization and may not be shared across separate legal entities.
 
-4. NO SUBLICENSING. You may not redistribute, resell, or grant sub-licenses
-   for the Software to third parties.
+4. DISTRIBUTION. You may ship the Software embedded in your product to
+   end users (players, visitors, customers) without restriction.
+   See Section "DISTRIBUTION & SUBLICENSING" for full terms.
 
 5. NO REVERSE ENGINEERING. Decompiling, deobfuscating, disassembling, or
    attempting to reconstruct the source code of the Software in any form is
@@ -65,18 +67,40 @@ conditions:
 
 6. NO TAMPERING. You may not modify, patch, or tamper with the obfuscated
    distributed files. Extension through the documented public API is
-   permitted.
+   permitted and encouraged.
 
 7. GAME JAM TO COMMERCIAL. Free use is permitted for game jam submissions.
-   If a submission is subsequently commercialized, the $25,000/year revenue
+   If a submission is subsequently commercialized, the $100,000/year revenue
    threshold applies from the date commercial revenue begins.
+
+
+================================================================================
+TIER 0-OSS — OPEN SOURCE EXCEPTION
+================================================================================
+
+Projects released under an OSI-approved open source license and meeting ALL
+of the following criteria qualify for the Open Source Exception:
+
+   - Publicly hosted (GitHub, GitLab, or equivalent)
+   - Source code openly available under an OSI-approved license
+   - Not directly monetized (no paid downloads, no paywalled features)
+     Note: accepting donations does not disqualify a project.
+
+Rights granted under Tier 0-OSS:
+
+   - All Tier 0 rights
+   - Attribution is OPTIONAL — no credit required
+   - Unlimited contributors within the project
+
+To claim this exception, include a note in your project's README referencing
+this license clause. No registration required.
 
 
 ================================================================================
 TIER 1 — INDIE PRO LICENSE
 ================================================================================
 
-   Eligible revenue:  Up to $100,000 USD gross / year (entire legal entity)
+   Eligible revenue:  Up to $500,000 USD gross / year (entire legal entity)
    Annual price:      $149 USD / year
    Perpetual price:   $299 USD one-time *
 
@@ -92,16 +116,17 @@ Rights granted under Indie Pro:
    - Email support (response within 5 business days)
    - All Software updates within the licensed major version
    - Covers a single legal entity (individual or incorporated company)
-   - End-user sublicensing permitted; developer sublicensing is not
+   - End-user distribution permitted (see "DISTRIBUTION & SUBLICENSING")
+   - Developer redistribution is not permitted without an OEM license
 
-Upgrade to Studio required within 30 days of exceeding $100,000/year.
+Upgrade to Studio required within 30 days of exceeding $500,000/year.
 
 
 ================================================================================
 TIER 2 — STUDIO LICENSE
 ================================================================================
 
-   Eligible revenue:  Up to $1,000,000 USD gross / year (entire legal entity)
+   Eligible revenue:  Up to $2,000,000 USD gross / year (entire legal entity)
    Annual price:      $499 USD / year
    Perpetual price:   $999 USD one-time *
 
@@ -110,11 +135,11 @@ TIER 2 — STUDIO LICENSE
 Rights granted under Studio (all Indie Pro rights, plus):
 
    - Priority email support (response within 2 business days)
-   - Covers up to 10 developers within the same legal entity
+   - Covers up to 15 developers within the same legal entity
    - Use across multiple simultaneous products
    - Dedicated licensing contact at 8Binami
 
-Upgrade to Enterprise required within 30 days of exceeding $1,000,000/year.
+Upgrade to Enterprise required within 30 days of exceeding $2,000,000/year.
 
 
 ================================================================================
@@ -131,7 +156,8 @@ Rights granted under Enterprise (all Studio rights, plus):
    - Dedicated support channel (Slack or Discord)
    - Monthly check-in call available on request
    - Custom contractual terms and SLA available
-   - Source code escrow available (on request, additional fee)
+   - Source code escrow (see "CONTINUITY GUARANTEE")
+   - Read-only source access available under NDA (on request)
    - White-label and OEM use negotiable
    - Multi-year agreements available at discounted rates
 
@@ -139,62 +165,97 @@ Contact licensing@8binami.com for Enterprise proposals.
 
 
 ================================================================================
-WHAT IS INCLUDED IN ALL PAID LICENSES (TIERS 1–3)
+DISTRIBUTION & SUBLICENSING
 ================================================================================
 
-   - ChiptuneSynth v3+ — 8-track synthesis engine
-   - 170+ instrument presets via ChiptuneSoundFont
-   - Per-track effects chain: distortion, chorus, delay, reverb, bitcrusher
-   - Mixer console: pan, 3-band EQ, per-track compressor, solo/mute
-   - Master brick-wall limiter
-   - Arpeggiator: BPM-synced, multi-octave, 4 modes
-   - Full Web MIDI: velocity, CC, pitch bend, mod wheel
-   - CDN-hosted builds: cdn.8binami.com/chiptune-synth/
-   - All updates within the licensed major version
-   - Access to the 8BitForge interactive demo and full documentation
+END-USER DISTRIBUTION (all tiers):
+   You may embed and ship the Software within your finished product to
+   end users — players, visitors, subscribers, or customers — without
+   restriction and without requiring those end users to obtain a separate
+   license. This covers games, web applications, mobile apps, and SaaS
+   products.
+
+DEVELOPER REDISTRIBUTION (not permitted without OEM license):
+   You may NOT redistribute the Software as a standalone library, SDK,
+   plugin, or as part of a game engine, framework, middleware, or
+   developer tool — whether free or commercial — without a separate
+   OEM license from 8Binami. Contact licensing@8binami.com.
+
+CLIENT WORK:
+   Agencies and freelancers may use the Software in work delivered to
+   clients. The license covers the licensee (the agency/freelancer),
+   not the client. Clients receiving a finished product are considered
+   end users and do not require a separate license.
+
+
+================================================================================
+CONTINUITY GUARANTEE
+================================================================================
+
+8Binami is committed to the long-term availability of ChiptuneSynth.
+In the event that 8Binami SAS ceases operations or permanently
+discontinues ChiptuneSynth:
+
+1. All perpetual license holders (Tiers 1–3) are automatically granted
+   an irrevocable, royalty-free, worldwide license to continue using the
+   version(s) they have licensed, for the lifetime of their existing
+   products, with no further obligation to 8Binami.
+
+2. The last stable release of each major version will be deposited with
+   a trusted third-party escrow service. Enterprise clients may request
+   source code escrow under a separate escrow agreement.
+
+3. Annual license holders retain usage rights for the duration of their
+   last paid term. No automatic renewal obligation arises.
+
+This guarantee does not grant rights to new versions, updates, or
+support beyond what was included in the original license.
 
 
 ================================================================================
 LICENSE VERIFICATION & ENFORCEMENT
 ================================================================================
 
-1. SELF-REPORTING. Revenue tiers operate on an honor system. 8Binami reserves
-   the right to request reasonable revenue verification (e.g., platform
-   dashboards, financial filings) for accounts suspected of tier
-   misrepresentation.
+1. SELF-REPORTING. Revenue tiers operate on an honor system. 8Binami
+   reserves the right to request reasonable revenue verification (e.g.,
+   platform dashboards, financial filings) for accounts suspected of
+   tier misrepresentation.
 
 2. AUDIT RIGHT. 8Binami may audit compliance with 7 days written notice,
    once per calendar year per licensee. Audits are conducted via document
    review; no access to internal systems is required.
 
-3. GRACE PERIOD. Licensees have 30 days from the date their revenue exceeds
-   their current tier to upgrade. No retroactive fees are charged within
-   the grace period if the licensee upgrades within this window.
+3. GRACE PERIOD. Licensees have 30 days from the date their revenue
+   exceeds their current tier to upgrade. No retroactive fees are charged
+   within the grace period if the licensee upgrades within this window.
 
 4. TERMINATION. 8Binami may terminate any license immediately and without
    refund upon:
       - Material breach of this license
       - Attempted reverse engineering of the Software
-      - Persistent non-payment of license fees after 30-day notice
+      - Persistent non-payment after 30-day written notice
       - Deliberate misrepresentation of revenue tier
 
    Upon termination, the licensee must cease all use of the Software and
    remove it from all active products within 30 days.
+   Perpetual license holders in good standing retain rights under the
+   Continuity Guarantee above.
 
 5. LICENSE TRANSFER. Licenses are not transferable to a different legal
    entity (e.g., upon acquisition or merger) without prior written consent
-   from 8Binami. Transfer requests will be evaluated within 15 business days.
+   from 8Binami. Transfer requests will be evaluated within 15 business
+   days. Reasonable transfer fees may apply for Tier 1 and Tier 2.
 
-6. REFUND POLICY. Annual licenses are refundable within 14 days of purchase
-   if the Software has not been used in a released product. Perpetual
-   licenses are non-refundable after 30 days.
+6. REFUND POLICY. Annual licenses are refundable within 14 days of
+   purchase if the Software has not been used in a released product.
+   Perpetual licenses are non-refundable after 30 days.
 
 
 ================================================================================
 INTELLECTUAL PROPERTY
 ================================================================================
 
-The Software — including all obfuscated code, audio synthesis algorithms,
+The Software — including all compiled code, audio synthesis algorithms,
 instrument presets, sound design, and documentation — is the exclusive
 intellectual property of 8Binami SAS.
 
@@ -202,8 +263,8 @@ No ownership or intellectual property rights of any kind are transferred
 under any license tier. All rights not expressly granted are reserved.
 
 "ChiptuneSynth", "8BitForge", and "8Binami" are trademarks of 8Binami SAS.
-Use of these trademarks in any commercial context requires prior written
-permission.
+Use of these trademarks requires prior written permission, except in factual
+references to the Software (e.g., "built with ChiptuneSynth").
 
 
 ================================================================================
@@ -221,7 +282,8 @@ SUBSTITUTE GOODS OR SERVICES) ARISING IN ANY WAY OUT OF THE USE OR INABILITY
 TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 
 MAXIMUM AGGREGATE LIABILITY IS LIMITED TO THE AMOUNT PAID BY THE LICENSEE
-TO 8BINAMI IN THE 12 MONTHS PRECEDING THE CLAIM.
+TO 8BINAMI IN THE 12 MONTHS PRECEDING THE CLAIM, OR $100 USD FOR FREE
+LICENSE USERS, WHICHEVER IS GREATER.
 
 
 ================================================================================
@@ -235,6 +297,10 @@ of the competent courts of Paris, France.
 If any provision of this license is held unenforceable, the remaining
 provisions continue in full force and effect.
 
+For licensees domiciled outside the European Union who cannot reasonably
+submit to French jurisdiction, disputes may alternatively be resolved by
+binding arbitration under ICC Rules, conducted in English, seated in Paris.
+
 
 ================================================================================
 CONTACT & LICENSING
@@ -243,7 +309,18 @@ CONTACT & LICENSING
    Pricing & purchase:   https://8binami.com/pricing
    Licensing inquiries:  licensing@8binami.com
    Support:              https://8binami.com/support
-   Documentation:        https://8bitforge.com
+   Documentation:        https://chiptune-synth.8binami.com
 
    8Binami SAS — Paris, France
    https://8binami.com
+
+================================================================================
+SUMMARY (non-binding)
+================================================================================
+
+   Free forever if your revenue stays under $100k/year.
+   Open source projects: always free, no attribution needed.
+   Paid tiers start at $149/year when you're ready to grow.
+   Ship it in your product. Keep the source yours. We keep ours.
+
+================================================================================
