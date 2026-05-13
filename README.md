@@ -435,7 +435,7 @@ ChiptuneSynth is **proprietary software** developed by [8Binami](https://8binami
 Free for non-commercial use with attribution: `"Audio powered by ChiptuneSynth — 8Binami.com"`
 
 Commercial licenses are available for Indie, Studio and Enterprise use.
-See [8binami.com/pricing](https://8binami.com/pricing) or contact [licensing@8binami.com](mailto:licensing@8binami.com).
+See [8binami.com/pricing](https://8binami.com/pricing) or contact [hello@8binami.com](mailto:hello@8binami.com).
 
 See [LICENSE](LICENSE) for full terms.
 
