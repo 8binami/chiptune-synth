@@ -33,8 +33,9 @@
     .rk label { font-size:9px; color:#666; display:flex; justify-content:space-between; align-items:center; }
     .rk label span { color:#aaa; font-family:monospace; font-size:9px; }
     .rk input[type=range] { width:100%; }
-    .ru select { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); color:#ccc; border-radius:4px; font-size:10px; padding:2px 4px; width:100%; cursor:pointer; }
-    .ru select:focus { outline:none; border-color:var(--cs-cyan); }
+    .ru select { background:#0e0e1a; border:1px solid rgba(0,240,255,0.25); color:var(--cs-cyan); border-radius:4px; font-size:10px; padding:2px 4px; width:100%; cursor:pointer; appearance:none; -webkit-appearance:none; }
+    .ru select:focus { outline:none; border-color:var(--cs-cyan); box-shadow:0 0 0 2px rgba(0,240,255,0.15); }
+    .ru select option { background:#0e0e1a; color:var(--cs-cyan); }
 
     /* ══ KNOBS ══ */
     .knob-wrap { display:flex; flex-direction:column; align-items:center; gap:1px; cursor:ns-resize; user-select:none; -webkit-user-select:none; touch-action:none; }
