@@ -66,7 +66,7 @@ if ($hasI18n && !empty($path)) {
         $currentLang = $segments[0];
         $path = $segments[1] ?? '';
     } elseif ($path !== '' && $path !== 'index' && $path !== 'index.html' && $path !== 'index.php'
-              && !preg_match('#^(examples|src|codepen|assets|ico\.)#', $path)) {
+              && !preg_match('#^(examples|src|assets|ico\.)#', $path)) {
         // Bare page slug without language prefix → redirect to default lang
         header('Location: ' . $baseUrl . '/' . $defaultLang . '/' . $path, true, 301);
         exit;
@@ -194,6 +194,23 @@ if (stripos($html, 'nav.css') === false) {
     $navCssTag  = '<link rel="stylesheet" href="' . BASE_URL . '/src/nav.css?v=' . $navCssVer . '">';
     $html = str_replace('</head>', $navCssTag . "\n" . '</head>', $html);
 }
+
+// ── Localize Bootstrap (CDN → vendor) ─────────────────────
+$html = str_replace(
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
+    BASE_URL . '/src/vendor/bootstrap.min.css',
+    $html
+);
+$html = str_replace(
+    'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css',
+    BASE_URL . '/src/vendor/bootstrap-icons.min.css',
+    $html
+);
+$html = str_replace(
+    'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js',
+    BASE_URL . '/src/vendor/bootstrap.bundle.min.js',
+    $html
+);
 
 // ── Translation pipeline (non-English, server-only) ─────
 if ($hasI18n && $currentLang !== $defaultLang) {

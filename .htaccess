@@ -12,8 +12,8 @@ RewriteEngine On
 # Proprietary engine: redirect source → obfuscated dist
 RewriteRule ^src/chiptune-synth\.js$ dist/chiptune-synth.min.js [L,R=301]
 
-# Dist + Codepen folders: serve directly (standalone HTML + built assets)
-RewriteRule ^(dist|codepen)/ - [L]
+# Dist folder: serve directly (built assets)
+RewriteRule ^dist/ - [L]
 
 # Static assets: serve directly (CSS, JS, images, fonts, audio, etc.)
 RewriteCond %{REQUEST_FILENAME} -f
