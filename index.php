@@ -40,21 +40,19 @@ if (strpos($path, $baseUrl) === 0) {
 $path = trim($path, '/');
 
 // ── Serve .server/ static files (robots.txt, llms.txt, sitemap) ──
-if ($hasI18n) {
-    if ($path === 'robots.txt' && file_exists($serverDir . '/robots.txt')) {
-        header('Content-Type: text/plain; charset=utf-8');
-        readfile($serverDir . '/robots.txt');
-        exit;
-    }
-    if ($path === 'llms.txt' && file_exists($serverDir . '/llms.txt')) {
-        header('Content-Type: text/plain; charset=utf-8');
-        readfile($serverDir . '/llms.txt');
-        exit;
-    }
-    if ($path === 'sitemap.xml' && file_exists($serverDir . '/sitemap.php')) {
-        include $serverDir . '/sitemap.php';
-        exit;
-    }
+if ($path === 'robots.txt' && file_exists($serverDir . '/robots.txt')) {
+    header('Content-Type: text/plain; charset=utf-8');
+    readfile($serverDir . '/robots.txt');
+    exit;
+}
+if ($path === 'llms.txt' && file_exists($serverDir . '/llms.txt')) {
+    header('Content-Type: text/plain; charset=utf-8');
+    readfile($serverDir . '/llms.txt');
+    exit;
+}
+if ($path === 'sitemap.xml' && file_exists($serverDir . '/sitemap.php')) {
+    include $serverDir . '/sitemap.php';
+    exit;
 }
 
 // ── Extract language prefix from URL ────────────────────
