@@ -339,7 +339,7 @@
     <div class="ru" id="dutyRu">
       <div class="ru-title">PWM</div>
       <div class="rk"><label>Duty <span id="vDuty">0.50</span></label>
-        <input id="dutyCycle" type="range" min="0.1" max="0.9" step="0.01" value="0.5"
+        <input type="range" min="0.1" max="0.9" step="0.01" value="0.5"
           oninput="P('dutyCycle',+this.value);sv('vDuty',this.value,2)"></div>
     </div>
     <div class="sep-v" id="dutySep"></div>
@@ -347,10 +347,10 @@
     <div class="ru">
       <div class="ru-title">Level</div>
       <div class="rk"><label>Volume <span id="vVol">0.30</span></label>
-        <input id="volume" type="range" min="0" max="1" step="0.01" value="0.3"
+        <input type="range" min="0" max="1" step="0.01" value="0.3"
           oninput="P('volume',+this.value);sv('vVol',this.value,2)"></div>
       <div class="rk"><label>Glide <span id="vGlide">0.00s</span></label>
-        <input id="glide" type="range" min="0" max="2" step="0.01" value="0"
+        <input type="range" min="0" max="2" step="0.01" value="0"
           oninput="P('glide',+this.value);sv('vGlide',this.value,2)"></div>
     </div>
     <div class="sep-v"></div>
@@ -358,10 +358,10 @@
     <div class="ru">
       <div class="ru-title">Tune</div>
       <div class="rk"><label>Octave <span id="vOct">0</span></label>
-        <input id="octOffset" type="range" min="-3" max="3" step="1" value="0" style="accent-color:var(--cs-violet)"
+        <input type="range" min="-3" max="3" step="1" value="0" style="accent-color:var(--cs-violet)"
           oninput="P('octaveOffset',+this.value);sv('vOct',this.value,0)"></div>
       <div class="rk"><label>Semi <span id="vSemi">0</span></label>
-        <input id="semiOffset" type="range" min="-12" max="12" step="1" value="0" style="accent-color:var(--cs-violet)"
+        <input type="range" min="-12" max="12" step="1" value="0" style="accent-color:var(--cs-violet)"
           oninput="P('semitoneOffset',+this.value);sv('vSemi',this.value,0)"></div>
       <div class="rk"><label>Detune <span id="vDetune">0¢</span></label>
         <input type="range" min="-100" max="100" step="1" value="0" style="accent-color:var(--cs-blue)"
@@ -399,7 +399,7 @@
     <div class="ru">
       <div class="ru-title">Attack</div>
       <div class="rk"><label>Time <span id="vA">10ms</span></label>
-        <input id="attack" type="range" min="0.001" max="2" step="0.001" value="0.01"
+        <input type="range" min="0.001" max="2" step="0.001" value="0.01"
           oninput="E('attack',+this.value);document.getElementById('vA').textContent=fmtT(this.value)"></div>
     </div>
     <div class="sep-v"></div>
@@ -407,7 +407,7 @@
     <div class="ru">
       <div class="ru-title">Decay</div>
       <div class="rk"><label>Time <span id="vD">100ms</span></label>
-        <input id="decay" type="range" min="0.001" max="2" step="0.001" value="0.1"
+        <input type="range" min="0.001" max="2" step="0.001" value="0.1"
           oninput="E('decay',+this.value);document.getElementById('vD').textContent=fmtT(this.value)"></div>
     </div>
     <div class="sep-v"></div>
@@ -415,7 +415,7 @@
     <div class="ru">
       <div class="ru-title">Sustain</div>
       <div class="rk"><label>Level <span id="vS">0.70</span></label>
-        <input id="sustain" type="range" min="0" max="1" step="0.01" value="0.7"
+        <input type="range" min="0" max="1" step="0.01" value="0.7"
           oninput="E('sustain',+this.value);sv('vS',this.value,2)"></div>
     </div>
     <div class="sep-v"></div>
@@ -423,7 +423,7 @@
     <div class="ru">
       <div class="ru-title">Release</div>
       <div class="rk"><label>Time <span id="vR">300ms</span></label>
-        <input id="release" type="range" min="0.01" max="4" step="0.01" value="0.3"
+        <input type="range" min="0.01" max="4" step="0.01" value="0.3"
           oninput="E('release',+this.value);document.getElementById('vR').textContent=fmtT(this.value)"></div>
     </div>
   </div>
@@ -436,7 +436,7 @@
     <div class="ru">
       <div class="ru-title">Voices</div>
       <div class="rk"><label>Count <span id="vUniV">1</span></label>
-        <input id="unisonVoices" type="range" min="1" max="8" step="1" value="1" style="accent-color:var(--cs-green)"
+        <input type="range" min="1" max="8" step="1" value="1" style="accent-color:var(--cs-green)"
           oninput="P('unisonVoices',+this.value);sv('vUniV',this.value,0)"></div>
     </div>
     <div class="sep-v"></div>
@@ -444,10 +444,10 @@
     <div class="ru">
       <div class="ru-title">Spread</div>
       <div class="rk"><label>Detune ¢ <span id="vUniD">0</span></label>
-        <input id="unisonDetune" type="range" min="0" max="50" step="1" value="0" style="accent-color:var(--cs-green)"
+        <input type="range" min="0" max="50" step="1" value="0" style="accent-color:var(--cs-green)"
           oninput="P('unisonDetune',+this.value);sv('vUniD',this.value,0)"></div>
       <div class="rk"><label>Pan <span id="vUniS">0</span></label>
-        <input id="unisonSpread" type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-green)"
+        <input type="range" min="0" max="100" step="1" value="0" style="accent-color:var(--cs-green)"
           oninput="P('unisonSpread',+this.value);sv('vUniS',this.value,0)"></div>
     </div>
 
@@ -470,10 +470,10 @@
     <div class="ru">
       <div class="ru-title">Cutoff &amp; Resonance</div>
       <div class="rk"><label>Cutoff <span id="vFCut">20kHz</span></label>
-        <input id="filterCutoff" type="range" min="20" max="20000" step="10" value="20000"
+        <input type="range" min="20" max="20000" step="10" value="20000"
           oninput="P('filterCutoff',+this.value);P('filterEnabled',+this.value<20000);document.getElementById('vFCut').textContent=fmtHz(this.value)"></div>
       <div class="rk"><label>Q <span id="vFQ">0.1</span></label>
-        <input id="filterQ" type="range" min="0.1" max="20" step="0.1" value="0.1" style="accent-color:var(--cs-violet)"
+        <input type="range" min="0.1" max="20" step="0.1" value="0.1" style="accent-color:var(--cs-violet)"
           oninput="P('filterQ',+this.value);sv('vFQ',this.value,1)"></div>
     </div>
   </div>
@@ -635,8 +635,8 @@
 </div><!-- /container -->
 </section>
 
-<script src="../dist/3.1.0/chiptune-synth.min.js"></script>
-<script src="../dist/3.1.0/chiptune-sound-font.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-synth.min.js"></script>
+<script src="https://cdn.chiptune-synth.8binami.com/3.0.0/chiptune-sound-font.min.js"></script>
 <script>
 var synth=null, kbOctave=4;
 var harmonics=[1,.5,.33,.25,.2,.16,.14,.12,.1,.08,.06,.04];
