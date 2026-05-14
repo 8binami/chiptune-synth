@@ -3,5 +3,5 @@ node_modules/
 Thumbs.db
 *.log
 
-# Server-only — deployed separately, never committed
-.server/
+# Cache généré à runtime
+.server/cache/

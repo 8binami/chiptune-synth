@@ -1,0 +1,51 @@
+# ChiptuneSynth — AI-Friendly Summary
+
+> Zero-dependency 8-bit chiptune synthesizer for the browser. Pure Web Audio API.
+
+## About
+
+ChiptuneSynth is an open-source browser-native chiptune synthesizer built with the Web Audio API. Zero dependencies, works in any modern browser. Created by 8Binami.
+
+## Features
+
+- 4 tracks with independent controls
+- 12 instruments: square, sine, triangle, sawtooth, pulse, noise, metallic, bass, lead, pad, arp, custom
+- 10 SFX presets: coin, jump, powerup, hit, laser, explosion, select, pause, gameover, levelup
+- ADSR envelopes per instrument
+- Vibrato / LFO modulation
+- MIDI input support
+- Arpeggiator with multiple patterns
+- Unison and filter controls
+
+## Installation
+
+```bash
+npm install @8bitforge/chiptune-synth
+```
+
+## Quick Start
+
+```javascript
+import { ChiptuneSynth } from '@8bitforge/chiptune-synth';
+
+const synth = new ChiptuneSynth();
+synth.playPreset('coin');
+```
+
+## Technical
+
+- 100% browser-native (Web Audio API)
+- Zero dependencies
+- ES module compatible
+- TypeScript declarations included
+
+## Languages
+
+English, Spanish, Chinese, Portuguese, Japanese, German, French, Korean, Italian, Russian
+
+## Links
+
+- Live demo: https://chiptune-synth.8binami.com
+- GitHub: https://github.com/8Binami/chiptune-synth
+- npm: https://www.npmjs.com/package/@8bitforge/chiptune-synth
+- Parent: https://8binami.com

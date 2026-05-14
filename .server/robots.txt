@@ -1,0 +1,26 @@
+User-agent: *
+Allow: /
+Disallow: /.server/
+Disallow: /.php/
+Disallow: /codepen/
+
+Sitemap: https://chiptune-synth.8binami.com/sitemap.xml
+
+# AI Crawlers
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
