@@ -145,9 +145,7 @@ if ($hasI18n && !empty($i18nConfig['cache_dir'])) {
     $sourceTime = max(array_map('filemtime', array_filter($sourceFiles, 'file_exists')));
 
     if (file_exists($cacheFile) && filemtime($cacheFile) >= $sourceTime) {
-        // ── Cache HIT ── serve instantly
-        $matomoFile = __DIR__ . '/../_matomo.php';
-        if (file_exists($matomoFile)) { include $matomoFile; }
+        // ── Cache HIT ── serve instantly (Matomo already baked in)
         readfile($cacheFile);
         exit;
     }
@@ -235,6 +233,13 @@ if (file_exists($serverDir . '/HtmlMinifier.php')) {
     $html = $minifier->minify($html);
 }
 
+// ── Analytics — inject before cache save so every page has it ────
+$matomoSiteId = '3';
+$matomoFile = __DIR__ . '/../_matomo.php';
+if (file_exists($matomoFile)) {
+    include $matomoFile;
+}
+
 // ── Save to cache ──────────────────────────────────────
 if ($cacheFile !== null) {
     $cacheDir = dirname($cacheFile);
@@ -242,13 +247,6 @@ if ($cacheFile !== null) {
         mkdir($cacheDir, 0755, true);
     }
     file_put_contents($cacheFile, $html);
-}
-
-// ── Analytics (server-side only, not in repo) ─────────
-$matomoSiteId = '3';
-$matomoFile = __DIR__ . '/../_matomo.php';
-if (file_exists($matomoFile)) {
-    include $matomoFile;
 }
 
 echo $html;
