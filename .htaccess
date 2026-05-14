@@ -4,6 +4,8 @@
   Header set Cross-Origin-Resource-Policy "cross-origin"
 </IfModule>
 
+DirectoryIndex index.php
+
 RewriteEngine On
 # No hardcoded RewriteBase — Apache auto-detects from .htaccess location:
 #   production (root vhost)  → base = /
