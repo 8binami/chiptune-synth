@@ -1,0 +1,59 @@
+# chiptune-synth.8binami.com: a static site. When the server also holds the
+# PHP layer (index.php + .server/, not in the repository), pages go through it
+# and are translated under /en/, /fr/…; otherwise the files are served as-is.
+Options -Indexes -MultiViews
+DirectoryIndex index.html
+ErrorDocument 404 /404.html
+
+RewriteEngine On
+
+# Hidden files and folders (.git, .server, .htaccess…) are never served
+RewriteRule (^|/)\. - [F]
+
+# Build and publishing tools, and dependencies, stay off the web
+RewriteRule ^(tools|node_modules)(/|$) - [F]
+
+# Is the PHP layer here? $1 is the request relative to this folder, so what
+# the request URI has before it (%1) is this folder's address.
+RewriteCond %{REQUEST_URI}::$1 ^(/.*?)(.*)::\2$
+RewriteCond %{DOCUMENT_ROOT}%1index.php -f
+RewriteRule ^(.*)$ - [E=CS_PHP:1]
+
+# ── With the PHP layer ──────────────────────────────────────────────────────
+# robots.txt, sitemap.xml and llms.txt are generated
+RewriteCond %{ENV:CS_PHP} =1
+RewriteRule ^(robots\.txt|sitemap\.xml|llms\.txt)$ index.php [L]
+
+# Under a language prefix, assets are the same files (/fr/assets/nav.js)
+RewriteCond %{ENV:CS_PHP} =1
+RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)/(.+\.(js|css|svg|png|jpe?g|gif|webp|ico|woff2?|ttf|json|map|mp3|wav|ogg))$ $2 [L]
+
+# CodePen demos and plain files are served as they are
+RewriteCond %{ENV:CS_PHP} =1
+RewriteRule ^codepen/ - [L]
+RewriteCond %{ENV:CS_PHP} =1
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteCond %{REQUEST_URI} !\.html$
+RewriteRule ^ - [L]
+
+# Everything else is a page
+RewriteCond %{ENV:CS_PHP} =1
+RewriteRule ^ index.php [L]
+
+# ── Static site ─────────────────────────────────────────────────────────────
+# Addresses with a language prefix (from the translated site) go to English
+RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)/?$ / [R=301,L]
+RewriteRule ^(en|fr|ja|de|es|zh|pt|it|ko|ru)/(.+)$ /$2 [R=301,L]
+
+# Clean URLs: /examples/basic serves examples/basic.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.+)$ $1.html [L]
+
+# The engine is loaded from other sites (CDN usage, AudioWorklet)
+<IfModule mod_headers.c>
+  <FilesMatch "\.js$">
+    Header set Access-Control-Allow-Origin "*"
+    Header set Cross-Origin-Resource-Policy "cross-origin"
+  </FilesMatch>
+</IfModule>

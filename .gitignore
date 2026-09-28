@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Server only: the PHP layer that translates the site and writes its SEO
+# (index.php + .server/), and the CodePen demo sources
+index.php
+.php/
+.server/
+codepen/

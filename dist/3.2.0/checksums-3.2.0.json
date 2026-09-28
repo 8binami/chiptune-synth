@@ -1,0 +1,10 @@
+{
+    "version": "3.2.0",
+    "algorithm": "sha256",
+    "generated": "2026-09-24T14:09:00+00:00",
+    "files": {
+        "chiptune-synth.min.js": "2f45a035997023670bc14c957fe6ba89639278c4eff672501d08b92f8642d597",
+        "chiptune-sound-font.min.js": "147bc9376f2c246b0341bc905ba0b04d8a4fb1694d9b294068da3de6a895758d",
+        "bitcrusher-worklet.js": "4bae7f09fd1fcaf6974d58d1c5033e118f27c332486ec0ca522c5c824d96b257"
+    }
+}

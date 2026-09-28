@@ -1,0 +1,3 @@
+# Released builds must stay byte-for-byte what their checksums describe:
+# no line-ending conversion, ever.
+dist/** -text

@@ -1,0 +1,64 @@
+{
+    "name": "@8bitforge/chiptune-synth",
+    "version": "3.2.0",
+    "description": "Ultimate 8-bit chiptune synthesizer: 8 tracks, 170+ instruments, effects chain (distortion/chorus/delay/reverb/bitcrusher), mixer console, arpeggiator, master limiter, MIDI. Zero dependencies.",
+    "main": "src/chiptune-synth.js",
+    "browser": "src/chiptune-synth.js",
+    "files": [
+        "src/chiptune-synth.js",
+        "src/chiptune-sound-font.js",
+        "src/bitcrusher-worklet.js",
+        "LICENSE",
+        "README.md"
+    ],
+    "scripts": {
+        "build": "node tools/build.js"
+    },
+    "keywords": [
+        "chiptune",
+        "synthesizer",
+        "8bit",
+        "8-bit",
+        "retro",
+        "web-audio",
+        "webaudio",
+        "synth",
+        "sound",
+        "music",
+        "gamedev",
+        "game-audio",
+        "sfx",
+        "sound-effects",
+        "preset",
+        "audio",
+        "oscillator",
+        "nes",
+        "gameboy",
+        "midi",
+        "instruments",
+        "filter",
+        "lfo",
+        "unison",
+        "mixer",
+        "effects",
+        "reverb",
+        "delay",
+        "distortion",
+        "arpeggiator",
+        "bitcrusher",
+        "compressor"
+    ],
+    "author": "8Binami <contact@8binami.com>",
+    "license": "AGPL-3.0-or-later",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/8binami/chiptune-synth.git"
+    },
+    "homepage": "https://chiptune-synth.8binami.com",
+    "bugs": {
+        "url": "https://github.com/8binami/chiptune-synth/issues"
+    },
+    "devDependencies": {
+        "terser": "^5.51.2"
+    }
+}

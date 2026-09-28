@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /codepen/
+
+Sitemap: https://chiptune-synth.8binami.com/sitemap.xml
