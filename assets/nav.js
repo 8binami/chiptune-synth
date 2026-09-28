@@ -1,5 +1,5 @@
 /**
- * ChiptuneSynth demo site: top bar, mobile drawer, CDN and Open Source modals.
+ * ChiptuneSynth demo site: top bar, mobile drawer and the CDN window.
  *
  * Loaded right after <body> on every page of the site:
  *     <script src="assets/nav.js"></script>        (from the home page)
@@ -124,7 +124,6 @@
         + desktop
         + '</div>'
         + '<div class="cs-nav-btns" translate="no">'
-        + '<button type="button" class="cs-btn cs-btn-oss" data-oss-open title="' + esc(t('ChiptuneSynth is now open source')) + '"><span class="cs-oss-dot" aria-hidden="true"></span><span>' + esc(t('Open Source')) + '</span></button>'
         + '<button type="button" class="cs-btn cs-btn-cdn" data-cdn-open>' + CDN_ICON + '<span>CDN</span></button>'
         + '<a href="https://github.com/8binami/chiptune-synth" class="cs-btn cs-btn-github" target="_blank" rel="noopener">' + GITHUB_ICON + '<span>GitHub</span></a>'
         + '<a href="https://www.npmjs.com/package/@8bitforge/chiptune-synth" class="cs-btn cs-btn-npm" target="_blank" rel="noopener">' + NPM_ICON + '<span>npm</span></a>'
@@ -135,7 +134,7 @@
 
         + '<div class="cs-mobile-nav" id="csMobileNav"><div class="cs-mobile-nav-inner">'
         + '<a href="' + home + '" class="cs-mobile-direct' + (page === 'index' ? ' active' : '') + '">' + esc(t('Main Demo')) + '</a>'
-        + '<button type="button" class="cs-mobile-direct cs-mobile-oss" data-oss-open><span class="cs-oss-dot" aria-hidden="true"></span> ' + esc(t('ChiptuneSynth is now open source')) + '</button>'
+        + '<a href="https://github.com/8binami/chiptune-synth" class="cs-mobile-direct" target="_blank" rel="noopener">GitHub</a>'
         + mobile
         + langMobile
         + '</div></div>'
@@ -150,25 +149,7 @@
         + '<div class="cs-modal-block"><div class="cs-modal-label">' + esc(t('Synth Engine')) + '</div>' + cdnLine('cdnLine1', 'chiptune-synth.min.js') + '</div>'
         + '<div class="cs-modal-block"><div class="cs-modal-label">' + esc(t('Sound Font')) + ' <span style="color:#666">(' + esc(t('170+ instruments')) + ')</span></div>' + cdnLine('cdnLine2', 'chiptune-sound-font.min.js') + '</div>'
         + '<button class="cs-copy-all-btn" data-copy-all>' + COPY_ICON.replace('<svg ', '<svg width="14" height="14" ') + ' ' + esc(t('Copy all')) + '</button>'
-        + '</div></div>'
-
-        + '<div class="oss-modal" id="ossModal" hidden role="dialog" aria-modal="true" aria-labelledby="ossModalTitle" aria-describedby="ossModalDesc">'
-        + '<div class="oss-modal-backdrop" data-oss-close></div><div class="oss-modal-card">'
-        + '<button type="button" class="oss-modal-close" data-oss-close aria-label="' + esc(t('Close')) + '">&times;</button>'
-        + '<div class="oss-modal-head"><span class="oss-modal-badge">' + esc(t('Now available')) + '</span><span class="oss-modal-overline">' + esc(t('A new chapter')) + '</span>'
-        + '<h2 id="ossModalTitle">' + esc(t('8BitForge & ChiptuneSynth')) + '<br>' + esc(t('are now')) + ' <span class="oss-modal-highlight">' + esc(t('Open Source')) + '</span></h2>'
-        + '<p id="ossModalDesc" class="oss-modal-lead">' + esc(t('Both are free software under the GNU AGPL-3.0. The 8BitForge studio runs entirely on your machine, with no account, no server and no cloud, and the ChiptuneSynth engine is yours to read, fork and improve.')) + '</p></div>'
-        + '<div class="oss-modal-grid">'
-        + '<div class="oss-tile"><span class="oss-tile-icon oss-tile-icon-green" aria-hidden="true" translate="no">&lt;/&gt;</span><h3>' + esc(t('Open Source')) + '</h3><p>' + esc(t('The full source code, app and engine, released under the GNU AGPL-3.0. Read it, fork it, improve it.')) + '</p></div>'
-        + '<div class="oss-tile"><span class="oss-tile-icon oss-tile-icon-cyan" aria-hidden="true" translate="no">&#9632;&#9632;</span><h3>' + esc(t('100% Local')) + '</h3><p>' + esc(t('Your projects, presets and exports stay on your computer. Works offline, forever.')) + '</p></div>'
-        + '<div class="oss-tile"><span class="oss-tile-icon oss-tile-icon-violet" aria-hidden="true" translate="no">&#9654;</span><h3>' + esc(t('New Engine')) + '</h3><p>' + esc(t('Rebuilt on Node.js and Electron for Windows, macOS and Linux.')) + '</p></div>'
-        + '</div>'
-        + '<code class="oss-modal-term" translate="no" aria-hidden="true"><span class="oss-term-prompt">&gt;</span> engine.start({ local: true, open: true }) <span class="oss-term-note">// &#9835; AGPL-3.0</span><span class="oss-cursor"></span></code>'
-        + '<p class="oss-modal-note">' + esc(t('The npm package and the CDN stay available.')) + '</p>'
-        + '<div class="oss-modal-actions">'
-        + '<a href="https://github.com/8binami/chiptune-synth" target="_blank" rel="noopener" class="oss-btn oss-btn-primary">' + esc(t('View on GitHub')) + '</a>'
-        + '<button type="button" class="oss-btn oss-btn-secondary" data-oss-close>' + esc(t('Continue to the demo')) + '</button>'
-        + '</div></div></div>';
+        + '</div></div>';
 
     if (script) script.insertAdjacentHTML('afterend', html);
     else document.body.insertAdjacentHTML('afterbegin', html);
@@ -210,47 +191,6 @@
             setTimeout(function () { all.innerHTML = saved; all.style.background = ''; }, 1800);
         });
     });
-
-    // Open Source announcement: once per visitor, ?oss=1 forces it.
-    (function () {
-        var modal = $('ossModal');
-        var KEY = 'cs_oss_announce_v2';
-        var forced = new URLSearchParams(location.search).get('oss') === '1';
-        var dismissed = false;
-        try { dismissed = localStorage.getItem(KEY) === '1'; } catch (e) { /* storage blocked */ }
-        var lastFocus = null;
-        var remember = function () { try { localStorage.setItem(KEY, '1'); } catch (e) { /* storage blocked */ } };
-        function onKey(e) { if (e.key === 'Escape') close(); }
-        function open() {
-            lastFocus = document.activeElement;
-            modal.hidden = false;
-            document.body.style.overflow = 'hidden';
-            void modal.offsetWidth; // reflow so the transition runs
-            modal.classList.add('oss-visible');
-            var c = modal.querySelector('.oss-modal-close'); if (c) c.focus();
-            document.addEventListener('keydown', onKey);
-        }
-        function close() {
-            remember();
-            modal.classList.remove('oss-visible');
-            document.body.style.overflow = '';
-            document.removeEventListener('keydown', onKey);
-            setTimeout(function () { modal.hidden = true; }, 300);
-            if (lastFocus && lastFocus.focus) lastFocus.focus();
-        }
-        modal.querySelectorAll('[data-oss-close]').forEach(function (el) { el.addEventListener('click', close); });
-        modal.querySelectorAll('a[href]').forEach(function (a) { a.addEventListener('click', remember); });
-        document.querySelectorAll('[data-oss-open]').forEach(function (el) {
-            el.addEventListener('click', function (e) {
-                e.preventDefault();
-                var drawer = $('csMobileNav');
-                if (drawer && drawer.classList.contains('open')) $('csHamburger').click();
-                open();
-            });
-        });
-        if (dismissed && !forced) return;
-        setTimeout(open, forced ? 200 : 1200);
-    })();
 
     // Desktop mega menu: open on hover or click, close on leave, outside click or Escape.
     (function () {
