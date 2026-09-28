@@ -15,7 +15,7 @@
  * languages. Without it the English is shown as it is. Keep each t() string
  * on one line, in single quotes, so it can be found.
  *
- * Copyright (C) 2026 8Binami SAS
+ * Copyright (C) 2026 8Binami
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 (function () {

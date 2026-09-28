@@ -15,7 +15,7 @@
  *     changes (browsers and Cloudflare keep it a year). --force overrides.
  * Then v<major>/ (e.g. v3/) is pointed at the latest <major>.x.y of dist/.
  *
- * Copyright (C) 2026 8Binami SAS
+ * Copyright (C) 2026 8Binami
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 if (PHP_SAPI !== 'cli') {

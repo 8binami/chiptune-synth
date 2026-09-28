@@ -4,7 +4,7 @@
  *
  * @author 8Binami / 8BitForge
  * @license AGPL-3.0-or-later
- * Copyright (C) 2026 8Binami SAS
+ * Copyright (C) 2026 8Binami
  * SPDX-License-Identifier: AGPL-3.0-or-later
  * Free software: you can redistribute it and/or modify it under the terms of
  * the GNU Affero General Public License, version 3 or later. See LICENSE.

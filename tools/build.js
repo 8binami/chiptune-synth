@@ -14,7 +14,7 @@
  *     bitcrusher-worklet.js         the AudioWorklet, loaded by the engine from its own folder
  *     checksums-<version>.json      SHA-256 of the three, same format as the 8BitForge downloads
  *
- * Copyright (C) 2026 8Binami SAS
+ * Copyright (C) 2026 8Binami
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 'use strict';
@@ -34,7 +34,7 @@ const FILES = [
     ['bitcrusher-worklet.js', 'bitcrusher-worklet.js'],
 ];
 
-const banner = (what) => `/*! ChiptuneSynth ${version}${what} | (C) 2026 8Binami SAS | GNU AGPL-3.0-or-later | https://github.com/8binami/chiptune-synth */\n`;
+const banner = (what) => `/*! ChiptuneSynth ${version}${what} | (C) 2026 8Binami | GNU AGPL-3.0-or-later | https://github.com/8binami/chiptune-synth */\n`;
 
 async function main() {
     if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`package.json version "${version}" is not x.y.z`);
